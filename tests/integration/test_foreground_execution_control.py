@@ -579,6 +579,110 @@ class BudgetArithmeticTests(ForegroundFixture):
 
         self.assertEqual(execution.allowance(execution_id), before)
 
+    def test_a_budget_refusal_is_visible_on_a_subsequent_status_call(self) -> None:
+        """The persistence gap this milestone closes: before this fix, a
+        refusal left no trace once the one-shot response was gone. Now a
+        later `status()` on the same execution still shows it.
+        """
+        registry = self.registry(ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH)
+        execution = self.execution_service(registry)
+        execution_id = self.start(
+            execution,
+            (LOCAL_STEP, LOCAL_STEP),
+            budget=ResearchAutonomyBudget(
+                max_step_advances=1,
+                max_network_operations=0,
+                max_llm_operations=0,
+                max_seconds=60.0,
+            ),
+        )
+        self.advance(execution, execution_id)
+
+        refused = self.advance(execution, execution_id)
+        self.assertFalse(refused.success)
+        self.assertIsNotNone(refused.research_plan_execution)
+        assert refused.research_plan_execution is not None
+        self.assertEqual(
+            refused.research_plan_execution.advance_refusal_step_id, "step-2"
+        )
+
+        status = self.status(execution, execution_id)
+
+        assert status.research_plan_execution is not None
+        self.assertEqual(
+            status.research_plan_execution.advance_refusal_step_id, "step-2"
+        )
+        self.assertIn("Advance refused on step-2", status.message)
+        # Still exactly as advanceable as before the refusal: nothing was
+        # blocked, nothing was stranded.
+        self.assertIs(
+            status.research_plan_execution.status,
+            ResearchPlanExecutionStatus.RUNNING,
+        )
+        self.assertIs(
+            status.research_plan_execution.steps[1].status,
+            ResearchPlanStepStatus.PENDING,
+        )
+
+    def test_a_budget_refusal_does_not_strand_the_execution(self) -> None:
+        """The safety proof for this milestone: recording a refusal must never
+        reuse `block_step`/`BLOCKED`, because that status has no path back to
+        RUNNING for a step that was never attempted. Prove the execution
+        stays exactly as advanceable as before, and a later advance with
+        sufficient allowance succeeds normally.
+        """
+        registry = self.registry(ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH)
+        execution = self.execution_service(registry)
+        execution_id = self.start(
+            execution,
+            (LOCAL_STEP, LOCAL_STEP),
+            budget=ResearchAutonomyBudget(
+                max_step_advances=1,
+                max_network_operations=0,
+                max_llm_operations=0,
+                max_seconds=60.0,
+            ),
+        )
+        self.advance(execution, execution_id)
+
+        refused = self.advance(execution, execution_id)
+        self.assertFalse(refused.success)
+
+        state = execution._executions[execution_id]
+        self.assertIs(state.status, ResearchPlanExecutionStatus.RUNNING)
+        self.assertFalse(state.status.terminal)
+        self.assertEqual(state.next_pending_step_id, "step-2")
+        self.assertIs(state.steps[1].status, ResearchPlanStepStatus.PENDING)
+
+        # Simulate an operator approving more budget: the execution was never
+        # blocked, so an ordinary wider allowance is all that is needed.
+        current = execution.allowance(execution_id)
+        assert current is not None
+        execution._allowances[execution_id] = ResearchExecutionAllowance(
+            budget=ResearchAutonomyBudget(
+                max_step_advances=2,
+                max_network_operations=0,
+                max_llm_operations=0,
+                max_seconds=60.0,
+            ),
+            spend=current.spend,
+        )
+
+        retried = self.advance(execution, execution_id)
+
+        self.assertTrue(retried.success, retried.message)
+        self.assertEqual(
+            self.operations[ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH].runs,
+            2,
+        )
+        assert retried.research_plan_execution is not None
+        self.assertIs(
+            retried.research_plan_execution.status,
+            ResearchPlanExecutionStatus.COMPLETED,
+        )
+        # The refusal reason is cleared now that the step actually started.
+        self.assertIsNone(retried.research_plan_execution.advance_refusal_step_id)
+
     def test_a_failed_attempt_is_not_refunded(self) -> None:
         registry = self.registry(
             ResearchPlanStepCapability.SOURCE_DISCOVERY,
@@ -593,6 +697,69 @@ class BudgetArithmeticTests(ForegroundFixture):
         assert allowance is not None
         self.assertEqual(allowance.spend.step_advances, 1)
         self.assertEqual(allowance.spend.network_operations, 1)
+
+    def test_exhausted_failed_execution_returns_refusal_without_mutation(self) -> None:
+        registry = self.registry(
+            ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH, succeeded=False
+        )
+        execution = self.execution_service(registry)
+        execution_id = self.start(
+            execution,
+            (LOCAL_STEP, LOCAL_STEP),
+            budget=ResearchAutonomyBudget(max_step_advances=1),
+        )
+        self.advance(execution, execution_id)
+        before = execution.live_execution(execution_id)
+        allowance = execution.allowance(execution_id)
+        response = self.advance(execution, execution_id)
+        self.assertFalse(response.success)
+        self.assertEqual(execution.live_execution(execution_id), before)
+        self.assertEqual(execution.allowance(execution_id), allowance)
+        self.assertEqual(
+            self.operations[ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH].runs, 1
+        )
+
+    def test_concurrent_budget_refusal_does_not_supersede_running_attempt(self) -> None:
+        capability = ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH
+        registry = self.registry(capability)
+        execution = self.execution_service(registry, persist=True)
+        execution_id = self.start(
+            execution,
+            (LOCAL_STEP, LOCAL_STEP),
+            budget=ResearchAutonomyBudget(max_step_advances=1),
+        )
+        operation = self.operations[capability]
+        original_run = operation.run
+        concurrent_responses = []
+
+        def reentrant_run(
+            step: object, context: object
+        ) -> ResearchPlanStepOperationResult:
+            before = execution.live_execution(execution_id)
+            concurrent_responses.append(self.advance(execution, execution_id))
+            self.assertEqual(execution.live_execution(execution_id), before)
+            return original_run(step, context)
+
+        operation.run = reentrant_run  # type: ignore[method-assign]
+        response = self.advance(execution, execution_id)
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(len(concurrent_responses), 1)
+        self.assertFalse(concurrent_responses[0].success)
+        state = execution.live_execution(execution_id)
+        assert state is not None
+        self.assertIs(state.steps[0].status, ResearchPlanStepStatus.COMPLETED)
+        self.assertIs(state.steps[1].status, ResearchPlanStepStatus.PENDING)
+        self.assertIsNone(state.running_step_id)
+        self.assertIsNone(state.advance_refusal_step_id)
+        self.assertEqual(operation.runs, 1)
+        allowance = execution.allowance(execution_id)
+        assert allowance is not None
+        self.assertEqual(allowance.spend.step_advances, 1)
+        restored = self.execution_service(registry, persist=True).restored_execution(
+            execution_id
+        )
+        assert restored is not None
+        self.assertIs(restored.steps[0].status, ResearchPlanStepStatus.COMPLETED)
 
     def test_cancelling_does_not_refund_spent_budget(self) -> None:
         registry = self.registry(ResearchPlanStepCapability.SOURCE_DISCOVERY)
@@ -675,6 +842,81 @@ class CancelTests(ForegroundFixture):
 
 
 class RestartTests(ForegroundFixture):
+    def test_budget_refusal_survives_reload_status_and_rebind(self) -> None:
+        registry = self.registry(ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH)
+        execution = self.execution_service(registry, persist=True)
+        execution_id = self.start(
+            execution,
+            (LOCAL_STEP, LOCAL_STEP),
+            budget=ResearchAutonomyBudget(
+                max_step_advances=1,
+                max_network_operations=0,
+                max_llm_operations=0,
+                max_seconds=60.0,
+            ),
+        )
+        self.advance(execution, execution_id)
+        refused = self.advance(execution, execution_id)
+        assert refused.research_plan_execution is not None
+        detail = refused.research_plan_execution.advance_refusal_detail
+        allowance = execution.allowance(execution_id)
+        plan = execution.live_plan(execution_id)
+        assert plan is not None
+        approvals = self.approvals.authorizations()
+
+        reopened = self.execution_service(registry, persist=True)
+        self.assertIn(detail, self.status(reopened, execution_id).message)
+        self.assertFalse(self.advance(reopened, execution_id).success)
+        reopened.rebind_restored(plan, self.run_id, execution_id)
+        self.assertIn(detail, self.status(reopened, execution_id).message)
+        self.assertEqual(reopened.allowance(execution_id), allowance)
+        self.assertEqual(self.approvals.authorizations(), approvals)
+        self.assertFalse(self.advance(reopened, execution_id).success)
+        self.assertEqual(reopened.allowance(execution_id), allowance)
+        self.assertEqual(
+            self.operations[ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH].runs, 1
+        )
+        reloaded = self.execution_service(registry, persist=True)
+        self.assertIn(detail, self.status(reloaded, execution_id).message)
+
+    def test_rebound_refusal_clears_only_when_step_starts(self) -> None:
+        registry = self.registry(ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH)
+        execution = self.execution_service(registry, persist=True)
+        execution_id = self.start(execution, (LOCAL_STEP,))
+        plan = execution.live_plan(execution_id)
+        assert plan is not None
+        # Seed historical metadata independently of allowance arithmetic. No
+        # new allowance or approval is granted during recovery or advance.
+        state = execution._executions[execution_id]
+        execution._executions[execution_id] = state.refuse_advance(
+            "step-1", "Recorded budget refusal"
+        )
+        execution._persist(execution_id)
+        allowance = execution.allowance(execution_id)
+        approvals = self.approvals.authorizations()
+        reopened = self.execution_service(registry, persist=True)
+        reopened.rebind_restored(plan, self.run_id, execution_id)
+        self.assertIn(
+            "Recorded budget refusal", self.status(reopened, execution_id).message
+        )
+        self.assertEqual(reopened.allowance(execution_id), allowance)
+        self.assertEqual(self.approvals.authorizations(), approvals)
+        response = self.advance(reopened, execution_id)
+        self.assertTrue(response.success, response.message)
+        assert response.research_plan_execution is not None
+        self.assertIsNone(response.research_plan_execution.advance_refusal_step_id)
+        self.assertEqual(response.research_plan_execution.advance_refusal_detail, "")
+        final = self.execution_service(registry, persist=True).restored_execution(
+            execution_id
+        )
+        assert final is not None
+        self.assertIsNone(final.advance_refusal_step_id)
+        self.assertEqual(final.advance_refusal_detail, "")
+        assert allowance is not None and final.allowance is not None
+        self.assertEqual(final.allowance.budget, allowance.budget)
+        self.assertEqual(final.allowance.spend.step_advances, 1)
+        self.assertEqual(self.approvals.authorizations(), approvals)
+
     def test_spent_budget_survives_a_restart(self) -> None:
         registry = self.registry(ResearchPlanStepCapability.SOURCE_DISCOVERY)
         execution = self.execution_service(registry, persist=True)

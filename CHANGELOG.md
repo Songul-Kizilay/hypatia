@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.402] - 2026-09-22
+
+### Added
+
+- A bounded, durable record for a refused `Advance` caused by insufficient
+  approved allowance. The record names the exact pending step and a bounded
+  literal reason, so a later execution-status refresh and a restored
+  execution can show what occurred without treating the refusal as work,
+  authority, a budget grant, or an execution-state transition.
+- `ResearchPlanExecutionState.refuse_advance(...)` and its optional snapshot
+  codec representation. The additive `advance_refusal` document member is
+  strictly validated when present and legacy snapshots without it decode as
+  no recorded refusal; no legacy state is inferred or backfilled.
+
+### Changed
+
+- The two pre-attempt affordability refusal paths now retain that explanatory
+  record through the ordinary execution commit/persistence path and attach
+  the execution state to the immediate response. The execution remains
+  `RUNNING`, its refused step remains `PENDING`, and the next approved
+  allowance may advance it normally. Starting that exact step clears the
+  record, so an old refusal cannot be presented as still applicable.
+
+No authority, scope, capability, cumulative-budget accounting, provider,
+retry, claim, evidence, or execution-lifecycle rule changed.
+
 ## [0.3.401] - 2026-09-22
 
 ### Added

@@ -204,6 +204,11 @@ def encode_execution_snapshot(
         document["mission_request_id"] = snapshot.mission_request_id
     if snapshot.mission_stop_reason is not None:
         document["mission_stop_reason"] = snapshot.mission_stop_reason.value
+    if snapshot.advance_refusal_step_id is not None:
+        document["advance_refusal"] = {
+            "step_id": snapshot.advance_refusal_step_id,
+            "detail": snapshot.advance_refusal_detail,
+        }
     return document
 
 
@@ -212,7 +217,31 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
 
     ``mission_stop_reason`` is optional and only valid beside recorded mission
     recovery state.  Its absence decodes as no recorded stop, never as a guess.
+
+    ``advance_refusal`` is optional and independent of every other field: a
+    budget refusal can occur on any execution, mission-scoped or not.  It is
+    stripped and decoded first, before any other optional-field handling, so
+    it can coexist with any of the combinations below without needing its own
+    combinatorial entry in ``_EXECUTION_FIELDS_WITH_*``.  Its absence decodes
+    as no recorded refusal, never as a guess.
     """
+    if isinstance(document, dict) and "advance_refusal" in document:
+        refusal_value = document["advance_refusal"]
+        if not isinstance(refusal_value, dict) or set(refusal_value) != {
+            "step_id",
+            "detail",
+        }:
+            raise ResearchError("Execution snapshot advance refusal is invalid.")
+        base = {
+            key: value for key, value in document.items() if key != "advance_refusal"
+        }
+        return replace(
+            decode_execution_snapshot(base),
+            advance_refusal_step_id=_text(
+                refusal_value["step_id"], "advance refusal step ID"
+            ),
+            advance_refusal_detail=_detail(refusal_value["detail"]),
+        )
     if isinstance(document, dict) and "mission_stop_reason" in document:
         if set(document) - {"mission_stop_reason"} not in (
             _EXECUTION_FIELDS_WITH_MISSION_RECOVERY,

@@ -37,6 +37,17 @@ class ResearchPlanExecutionState:
     status: ResearchPlanExecutionStatus
     steps: tuple[ResearchPlanStepState, ...]
     detail: str = ""
+    #: The step and reason an advance was refused before any attempt was
+    #: made (e.g. an approved budget that does not cover the next step's
+    #: cost). Deliberately NOT `block_step`/`BLOCKED`: a refused step was
+    #: never attempted and can never reach the `PERFORMED_RESULT_UNKNOWN`
+    #: resolution `recover_blocked_step` requires, so reusing that
+    #: mechanism would permanently strand the execution. Set only by
+    #: `refuse_advance`, cleared the next time that exact step
+    #: successfully starts. Purely explanatory bookkeeping: never
+    #: authority, budget, or a status signal for any other code path.
+    advance_refusal_step_id: str | None = None
+    advance_refusal_detail: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.plan_id, str) or not self.plan_id.strip():
@@ -70,8 +81,38 @@ class ResearchPlanExecutionState:
             > 1
         ):
             raise ResearchError("Research plan execution allows only one running step.")
+        if self.advance_refusal_step_id is not None and (
+            not isinstance(self.advance_refusal_step_id, str)
+            or not self.advance_refusal_step_id.strip()
+            or self.advance_refusal_step_id.strip() not in step_ids
+        ):
+            raise ResearchError(
+                "Research plan execution advance refusal step ID is invalid."
+            )
+        if not isinstance(self.advance_refusal_detail, str):
+            raise ResearchError(
+                "Research plan execution advance refusal detail must be text."
+            )
+        advance_refusal_detail = self.advance_refusal_detail.strip()
+        if len(advance_refusal_detail) > MAX_RESEARCH_PLAN_EXECUTION_DETAIL_CHARACTERS:
+            raise ResearchError(
+                "Research plan execution advance refusal detail is too long."
+            )
+        if self.advance_refusal_step_id is None and advance_refusal_detail:
+            raise ResearchError(
+                "Research plan execution advance refusal detail requires a step ID."
+            )
+        if self.advance_refusal_step_id is not None and not advance_refusal_detail:
+            raise ResearchError(
+                "Research plan execution advance refusal requires a reason."
+            )
         object.__setattr__(self, "plan_id", self.plan_id.strip())
         object.__setattr__(self, "detail", detail)
+        if self.advance_refusal_step_id is not None:
+            object.__setattr__(
+                self, "advance_refusal_step_id", self.advance_refusal_step_id.strip()
+            )
+        object.__setattr__(self, "advance_refusal_detail", advance_refusal_detail)
 
     @classmethod
     def prepare(cls, plan: ResearchPlan) -> ResearchPlanExecutionState:
@@ -142,15 +183,28 @@ class ResearchPlanExecutionState:
         self._require_running()
         if self.running_step_id is not None:
             raise ResearchError("Research plan execution already has a running step.")
-        if self.next_pending_step_id != self._normalized(step_id):
+        normalized = self._normalized(step_id)
+        if self.next_pending_step_id != normalized:
             raise ResearchError(
                 "Research plan execution must start the next pending step."
             )
-        return self._replace_step(
+        started = self._replace_step(
             step_id,
             ResearchPlanStepStatus.RUNNING,
             operation=operation,
         )
+        # A refusal recorded against this exact step is no longer applicable
+        # once it actually starts; it never applies to a different step, so a
+        # non-matching refusal (there should never be one, since only the
+        # next pending step can carry a refusal) is left untouched rather
+        # than guessed away.
+        if self.advance_refusal_step_id == normalized:
+            return replace(
+                started,
+                advance_refusal_step_id=None,
+                advance_refusal_detail="",
+            )
+        return started
 
     def complete_step(
         self,
@@ -403,6 +457,41 @@ class ResearchPlanExecutionState:
             for step in self.steps
         )
         return replace(self, steps=steps, status=status, detail="")
+
+    def refuse_advance(
+        self,
+        step_id: str,
+        detail: str,
+    ) -> ResearchPlanExecutionState:
+        """Record a refusal to advance the next pending step, without blocking it.
+
+        This is deliberately NOT `block_step`. Blocking moves the whole
+        execution to `BLOCKED`, and the only way back, `recover_blocked_step`,
+        accepts only a step whose resolution is `PERFORMED_RESULT_UNKNOWN` — a
+        refused step was never attempted and can never reach that resolution,
+        so reusing `block_step` here would permanently strand the execution
+        even once more budget is approved. The step and the execution stay
+        exactly as advanceable as they were before the refusal; only the
+        explanatory reason becomes durable state, and it is cleared
+        automatically the next time this same step successfully starts.
+        """
+        self._require_running()
+        current = self._step(step_id)
+        if current.status is not ResearchPlanStepStatus.PENDING:
+            raise ResearchError(
+                "Research plan execution can record an advance refusal only "
+                "for a pending step."
+            )
+        if self.next_pending_step_id != self._normalized(step_id):
+            raise ResearchError(
+                "Research plan execution can record an advance refusal only "
+                "for the next pending step."
+            )
+        return replace(
+            self,
+            advance_refusal_step_id=self._normalized(step_id),
+            advance_refusal_detail=detail,
+        )
 
     def block_step(
         self,

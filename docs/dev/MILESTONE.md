@@ -14,11 +14,162 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
-| Milestone | Desktop wiring for source revalidation |
-| Base SHA | ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4 |
-| Status | planned |
-| Specialists | hypatia-runtime (draft type + controller/desktop wiring, single owner — no runtime/authority-layer change needed, `SourceRevalidationStepOperation`/`SourceRevalidationStepBinding`/`ResearchRunManager` all reused byte-for-byte); hypatia-security and hypatia-qa independently after implementation; hypatia-release last |
+| Milestone | Persist budget-refusal reasons across a status refresh |
+| Base SHA | 32d8376fc18a09d5f4beaa60a0fa9e230cbe529c |
+| Status | release |
+| Specialists | hypatia-runtime (state method + call-site wiring + codec/schema + tests, single owner — this is squarely execution-state/persistence territory); hypatia-security and hypatia-qa independently after implementation; hypatia-release last |
 | Blockers | none |
+
+Rationale (repository archaeology, 2026-09-22): two candidates were
+investigated fresh and in parallel before this milestone was chosen.
+
+**Candidate A (chosen): budget-refusal-reason persistence.** Confirmed
+still accurate against current code (hypatia-runtime): in
+`ResearchPlanExecutionApplicationService.process_advance()`, the two
+budget-refusal branches (`research_plan_execution_budget_refused`, lines
+1293 and 1331) never call `state.block_step` or any other durable-state
+mutation before returning — the refusal reason exists only in that one
+response's `.message`, built from ephemeral in-memory data (the live
+allowance). A subsequent `research_plan_execution_status` refresh on the
+same execution shows the step still `pending` with no trace an advance
+was attempted and declined. Zero existing test coverage of this gap
+(confirmed by grep across `tests/` for `budget_refused`/"advance
+refused" — the two existing tests that exercise this path,
+`tests/integration/test_foreground_execution_control.py::test_an_exhausted_advance_budget_attempts_nothing`
+and `::test_a_refusal_before_the_attempt_charges_nothing`, only assert
+the one-shot response and allowance numbers, never a subsequent
+`status()` call).
+
+**Critical design correction found during investigation**: the naive fix
+(reuse the existing `block_step`/`BLOCKED` mechanism genuine capability
+failures already use) would be UNSAFE, not merely redundant. `block_step`
+sets both the step AND the whole execution to `BLOCKED`, and the only
+recovery path, `recover_blocked_step`, accepts exclusively a step whose
+`resolution` is `PERFORMED_RESULT_UNKNOWN` — a budget refusal's step
+never reaches that resolution (it was never attempted), so reusing
+`block_step` would permanently strand the execution with no way back to
+`RUNNING`, even after more budget is approved. This is a real behavioral
+regression the milestone must not introduce. The correct shape is a NEW,
+narrower, additive mechanism that records a step id + reason string
+without touching `status`/`step.status` at all, so `_require_running()`
+and `next_pending_step_id` keep working exactly as today and the very
+next approved allowance lets the step proceed normally.
+
+**Candidate B (investigated, not chosen this cycle): richer
+replanning/continuation diff.** Confirmed real but narrower and lower
+blast-radius (hypatia-epistemics): a genuinely honest "diff" can only
+ever be flat, same-field juxtaposition (`ResearchMissionContinuationProposal`'s
+own docstring: "cites... nothing else" — no structural diff primitive
+exists anywhere, `plan_digest` is a pure content hash, not a comparator).
+Worse, nothing durably records that a new mission originated from a
+given proposal — `_use_continuation_proposal_question` is deliberately a
+pure client-side `StringVar` mutation with no Brain/persistence call
+(v0.3.400's own design), so a genuinely useful "diff" is only honestly
+derivable in a SESSION-SCOPED form (juxtapose already-live origin and
+new-mission data immediately after the operator completes
+preview -> authorize -> start in the same desktop session). A durable
+"find it later" comparison would need one new citation-only field on
+`ResearchPlanExecutionSnapshot` — confirmed a separate prerequisite
+milestone, not something to fold into a "pure presentation, no schema
+change" scope without misrepresenting its size/risk. Recorded as
+residual/future work below, not discarded.
+
+Also re-confirmed excluded, unchanged since the last check: Evaluate ->
+Adapt v2 (still blocked on human cross-mission authority/budget design);
+Tool registry + policy engine (still authority-adjacent per
+`docs/Roadmap/Master_Roadmap.md`'s "Default development order").
+
+Scope: a new state-transition method on `ResearchPlanExecutionState`
+(e.g. `refuse_advance(step_id, detail)`) that records a bounded reason
+string tied to the exact step and capability that was refused, WITHOUT
+changing `status` or `step.status` — the execution stays exactly as
+advanceable as it was before the refusal. A new optional field on
+`ResearchPlanExecutionSnapshot` (and the matching field on
+`ResearchPlanExecutionState`) following the exact `None`-default /
+`.get(key, default)` legacy-load pattern already used for
+`mission_stop_reason`/`revalidation_plan_digest` — no schema-version
+bump needed, matching this codebase's established convention that
+purely-additive-optional fields don't require one. The two budget-refusal
+branches in `process_advance()` (lines 1293, 1331 at time of archaeology
+— re-locate exact current lines before editing) call the new method
+through the same commit/persist plumbing `_blocked()` already uses, and
+attach `research_plan_execution=state` to the response (mirroring
+`research_plan_execution_status`) so the retained reason renders on the
+next status refresh. The field is cleared on the next successful
+`start_step` so it never reads as stale. No desktop changes needed: the
+existing `_append_response`/transcript path already renders whatever
+`research_plan_execution_status.message` composes, so the retained
+reason appears automatically once the response layer includes it.
+
+Non-goals: no change to `block_step`/`BLOCKED`/`recover_blocked_step`
+semantics; no change to how genuine capability-failure blocks behave;
+does NOT extend to the broader, heterogeneous `research_plan_execution_rejected`
+call sites (mission-authority mismatch, scope refusal, delivery-ready
+refusal, interrupted-step refusal, no-pending-step) — several of those
+fire BEFORE a step is even resolved, so "attach to a step" doesn't apply
+uniformly, and deciding whether plan-level refusals belong on the
+execution record vs. a step record is a separate, larger design question
+explicitly deferred, not silently generalized into this milestone; no
+new budget/authority/target/credential semantics of any kind; no change
+to allowance accounting, `next_pending_step_id`, or the interrupted-step
+replay-refusal check; does not implement Candidate B (session-scoped or
+durable), which remains residual/future work.
+
+Acceptance criteria: a test proving that BEFORE this fix,
+`tests/integration/test_foreground_execution_control.py`'s existing
+budget-refusal tests show no persisted trace of the refusal on a
+subsequent `status()` call (characterizing the gap), and AFTER this fix,
+the same subsequent `status()` call shows the retained reason; a test
+proving the field is correctly `None`/absent on legacy snapshots that
+predate it (no backfill, no inference); a test proving the field is
+cleared on the next successful `start_step`; a test proving `status`
+after a refusal remains exactly as advanceable as before (the step is
+still `pending`, `next_pending_step_id` still resolves it, a subsequent
+approved-allowance advance still succeeds normally) — this is the
+regression test for the "would strand the execution" risk the naive fix
+would have introduced; a restart/reload test proving the field survives
+a `restored()` pass unchanged (or is reasonably cleared, matching
+whichever behavior is chosen and documented) without affecting step
+status reinterpretation; full canonical gates green.
+
+Security implications: the critical property to verify is that this
+field can NEVER be read as authority, budget, or a status signal by any
+other code path — it must be provably inert metadata. Confirm nothing
+downstream (recovery logic, replay logic, another consumer) branches on
+its presence/absence in a way that could change what executes.
+
+Epistemic implications: none — this is execution-state bookkeeping, not
+research/evidence/provenance semantics; the reason string must remain a
+literal citation of the refusal that occurred (capability, step id,
+shortfall), never an inferred narrative about why the mission overall
+failed or what should be done next.
+
+Persistence implications: one new optional field, additive-only, no
+schema-version bump per established convention; encode/decode follows
+the exact pattern already used for `mission_stop_reason`.
+
+Replay/restart implications: none — confirmed by construction: the new
+field carries no status transition, so `restored()`'s existing
+RUNNING-becomes-INTERRUPTED reinterpretation and all budget/allowance
+accounting are completely unaffected. This is the one property every
+review pass must re-verify independently, since the entire safety case
+for the milestone rests on it.
+
+Authority/budget/target/credential implications: none — no primitive of
+any kind is created, restored, or altered. A refused advance remains
+exactly as un-executed after this fix as before it; only the explanatory
+record of the refusal becomes durable.
+
+Product-direction compatibility: this record explains an execution refusal;
+it is not an epistemic completion decision. Resource limits do not establish
+evidence sufficiency or research saturation. Delegated continuation, source
+independence, primary-source preference, contradiction analysis and uncertainty
+remain existing or future concerns outside this milestone's locked scope.
+
+## Historical scope: v0.3.401 (delivered)
+
+The following retained scope is historical context, not part of the current
+budget-refusal milestone.
 
 Rationale (repository archaeology, 2026-09-22): v0.3.400's own residual list
 named this as the strongest remaining candidate. Confirmed fresh, not
@@ -144,6 +295,8 @@ plan-step network/budget slot is reused exactly as `SourceRevalidationStepBindin
 already declares (`declared_cost=ResearchOperationCost(network_operations=1)`,
 subject to the existing cumulative allowance, never a separate budget).
 
+## Historical scope: v0.3.400 (delivered)
+
 Rationale (repository archaeology, 2026-09-22): with Evaluate -> Adapt v1,
 Phase 7 hardening and v0.3.399 all settled (see the prior documentation
 reconciliation commit `f5710aa`), the roadmap's own "Default development
@@ -245,6 +398,8 @@ of any kind; the only executable path remains the existing, unmodified
 authorization chain, reached only through the operator's own explicit
 manual walk-through, exactly as today.
 
+## Historical scope: v0.3.399 (delivered)
+
 Rationale (repository archaeology, 2026-09-22): Master_Roadmap.md was
 reconciled at v0.3.395 and is stale relative to v0.3.396-398. Two apparent
 "next in order" candidates were investigated and ruled out with evidence
@@ -327,29 +482,32 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.400: desktop wiring for Evaluate -> Adapt v1 continuation proposals |
-| SHA | ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4 |
-| Linux desktop CI (exact-SHA) | success (run 35744718371) |
-| Windows desktop CI (exact-SHA) | success (run 35744722897) |
+| Milestone | v0.3.401: desktop wiring for source revalidation |
+| SHA | 32d8376fc18a09d5f4beaa60a0fa9e230cbe529c |
+| Linux desktop CI (exact-SHA) | success (run 35754274521) |
+| Windows desktop CI (exact-SHA) | success (run 35754278750) |
 | Status | delivered |
-| PR | #379, MERGED 2026-09-22T15:17:44Z, standard merge commit `d648044c8e82176e6c4d3796bfed6092c39fd804` |
-| origin/main reachability | verified: `git merge-base --is-ancestor ec1a6f0 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #380, MERGED 2026-09-22T16:40:39Z, standard merge commit `a39f78cdcc0ee459b7ee756df1be8809cca94092` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 32d8376 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-22, hypatia-lead): PR #379 base `main`,
+Post-merge verification (2026-09-22, hypatia-lead): PR #380 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 2 commits (v0.3.400 plus the prior documentation-reconciliation
-commit `f5710aa`, also confirmed reachable from `origin/main`), 13 files,
-`mergeStateStatus: CLEAN`, both PR-triggered checks `SUCCESS`. Merged with
-`gh pr merge 379 --merge --subject "..."` — no interactive confirmation
-prompt, consistent with the guard's narrowed auto-allow proven on the
-previous milestone. Author/committer identity on both carried commits
-confirmed unchanged (Songül Kızılay via GitHub noreply email). Working
-tree clean after merge except this ledger edit.
+exactly 1 commit (v0.3.401), 14 files, `mergeStateStatus: CLEAN`, both
+PR-triggered checks `SUCCESS`. Merged with
+`gh pr merge 380 --merge --subject "..."` — no interactive confirmation
+prompt. Author/committer identity on the carried commit confirmed
+unchanged (Songül Kızılay via GitHub noreply email). Working tree clean
+after merge except this ledger edit. Note: the release agent dispatched
+both exact-SHA CI runs and ended its turn before they finished;
+hypatia-lead independently polled both to completion (Linux `35754274521`,
+Windows `35754278750`, both `success`) and verified the conclusions before
+proceeding — no partial or unverified state was carried forward.
 
-Note: v0.3.399 (SHA `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398
-(SHA `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
+Note: v0.3.400 (SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399
+(SHA `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
+`3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.400 (this row), which is now the
+`origin/main` as ancestors of v0.3.401 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not

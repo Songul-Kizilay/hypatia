@@ -442,6 +442,116 @@ authority. If source revalidation becomes reachable through this seam in a
 future milestone, it must continue through its normal explicit approval,
 authority, budget, provenance, and replay-safety path — never a shortcut.
 
+### Future direction: bounded delegated research & evidence-quality
+completion (recorded 2026-09-22, product-direction only — not scoped,
+not authorized, not started)
+
+This is long-term product direction, not a locked milestone. It extends
+Evaluate -> Adapt's existing "propose, never auto-execute" discipline
+toward a broader model: an operator explicitly delegates *bounded*
+continuation once, rather than approving every routine step, and research
+completion becomes evidence-quality-driven rather than a fixed source
+count or step quota. It touches Phase 2 (mission runtime), Phase 3
+(authority/budget), Phase 4 (evidence/provenance), and Phase 10
+(explainability); it does not introduce a new phase number so phase
+ordering and existing cross-references stay intact.
+
+**A. Bounded delegated research continuation** — `[ ]`, **requires human
+authority-policy design before any implementation**. An explicit "continue
+researching this topic" instruction from the operator should be able to
+authorize routine continuation (further source lookups, comparisons,
+revalidation steps, contradiction checks) within the scope/budget/target
+already approved, without a fresh approval for each one — returning to
+the operator only at a genuinely new decision boundary (material scope
+change, new target, new credential authority, new execution authority).
+This is explicitly NOT an autonomous loop: it must stay inside one
+bounded, already-authorized budget and scope, matching this file's
+existing "Do not create an autonomous planning loop" constraint above and
+CLAUDE.md's "restart != fresh authority" family of invariants. Existing
+partial support: `ResearchAutonomyApplicationService`'s bounded advance
+loop (Phase 2, `[x]`) already runs multiple steps inside one approval
+without per-step re-authorization — this direction is a further-bounded
+extension of that existing pattern, not a new mechanism from scratch, but
+deciding exactly what counts as "routine" vs. a "new decision boundary"
+is itself a policy question requiring explicit human design and sign-off,
+not an autonomous inference. No implementation may begin here without
+that sign-off.
+
+**B. Evidence quality over source count** — `[ ]`. Research completion
+logic should weigh evidence quality/independence/contradiction state
+over a fixed source or step quota. Existing partial support: `[x]`
+"Unknown source independence" already defaults to `UNKNOWN`
+(`ResearchSourceIndependence`) rather than assuming independence, and
+`[x]` "Two URLs != independent corroboration" (`SourceIdentity.identity_of`/
+`same_resource`) already prevents literal duplicate-URL double-counting.
+Genuinely absent: automatic detection that multiple *different* URLs
+share a common upstream/original source (so N sites repeating one wire
+report don't read as N independent confirmations) — this would need new,
+carefully-bounded content/citation analysis, not merely URL comparison,
+and must preserve "same content != same observation" and "never infer
+provenance from text" (existing permanent invariants) rather than
+guessing common ancestry from prose similarity.
+
+**C. Epistemic (not numeric) source comparison** — `[ ]`. When sources
+disagree, comparison should be able to consider primary-vs-secondary
+status, publication/update date, methodology, sample/population, scope,
+and directness of evidence — not simply which position has more URLs.
+Existing partial support: `[x]` operator-authored comparison notes and
+reviews already exist (Phase 4/6 territory) and already preserve
+unresolved disagreement rather than forcing a winner (`[x]` "possible
+agreement != supported comparison"). Genuinely absent: any structured
+field for methodology/sample/primary-vs-secondary/directness — today
+only a flat operator-authored `information_trust` label exists. Adding
+these as new *operator-authored* fields (citation, not inference) would
+fit the existing discipline; auto-*inferring* source quality from text
+would not, and must not be built without a separate, explicit design
+pass on where the line is.
+
+**D. Confidence and uncertainty made visible** — `[~]` partially covered
+by existing capability. `ResearchMissionGoalExplanation`'s
+`reasons`/`caveats` and the teaching report (both Phase 10-adjacent,
+`[x]` per prior archaeology) already explain what's supported, what's
+uncertain, and why a mission stopped, in plain typed terms — desktop-
+reachable today (v0.3.400/401 archaeology). Genuinely absent: a
+structured "what additional evidence would materially change this
+conclusion" projection, and any numeric confidence score. Per this
+file's own existing discipline (`model confidence != evidence`), do not
+introduce fabricated numerical percentages without a defensible model
+for them — prefer explainable typed evidence state over cosmetic scores,
+exactly as the existing claim-calibration and goal-explanation types
+already do.
+
+**E. Research saturation / evidence saturation / epistemic completeness**
+— `[ ]`, name not yet committed. A future concept where research may
+continue while new searches still yield meaningful information gain, and
+approach completion when new searches mostly rediscover already-known
+evidence, no new independent source or contradiction appears, and major
+claims already have adequate independent support or clearly recorded
+uncertainty. "All sources found" is explicitly not a valid claim this
+concept could ever produce; it must reason in terms of practical,
+bounded diminishing-return signals over the evidence this run has
+actually gathered, never global/exhaustive coverage. This is a genuinely
+new evaluation concept — no existing type computes anything like it
+today — and depends on (B) and (C) above being real before "saturation"
+can mean anything beyond "ran out of budget."
+
+**F. Internal budget stays a safety rail, not the epistemic definition of
+"done"** — `[ ]` as a product-terminology/framing direction, not a
+technical change. `ResearchAutonomyBudget`/`ResearchExecutionAllowance`
+(Phase 3, `[x]`, unchanged by this direction) remain exactly the
+fail-safe resource limits they are today — this direction does not
+propose removing or weakening them. It proposes that user-facing framing
+increasingly prefer understandable terms (research progress, evidence
+coverage, remaining uncertainty) over exposing raw budget/authority
+counters as if exhausting them meant a question was answered. Consuming
+a budget must never be presented as, or conflated with, reaching truth.
+
+None of A–F is scoped, authorized, or started. A is explicitly blocked on
+a human authority-policy decision per this file's stop-condition
+discipline; B, C and E require their own separate design/scoping passes
+before any implementation; D and F are the closest to being incremental
+extensions of already-existing, already-reviewed capability.
+
 ## Phase 7 — Runtime hardening
 
 Persistence/concurrency:

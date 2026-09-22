@@ -1486,6 +1486,11 @@ class ResponseComposer:
             )
         if state.detail:
             lines.append(f"Detail: {state.detail}")
+        if state.advance_refusal_step_id is not None:
+            lines.append(
+                f"Advance refused on {state.advance_refusal_step_id}: "
+                f"{state.advance_refusal_detail}"
+            )
         interrupted = [
             step.step_id
             for step in state.steps
@@ -3317,6 +3322,11 @@ class ResponseComposer:
             lines.append(
                 "Automatic mission recovery stopped safely: " f"{recovery_reason}"
             )
+        if snapshot.advance_refusal_step_id is not None:
+            lines.append(
+                f"Advance refused on {snapshot.advance_refusal_step_id}: "
+                f"{snapshot.advance_refusal_detail}"
+            )
         lines.extend(
             (
                 "Restored from durable state; this execution is not running.",
@@ -3391,12 +3401,16 @@ class ResponseComposer:
         plan_id: str,
         capability: str,
         allowance: ResearchExecutionAllowance,
+        state: ResearchPlanExecutionState,
     ) -> BrainResponse:
         """Report an advance refused before anything was attempted or charged.
 
         Not a failure. The step was never begun, so nothing spent a network
         call, nothing ran, and the budget below is exactly what it was before
-        the request arrived.
+        the request arrived. ``state`` is attached to the response (mirroring
+        `research_plan_execution_status`) so the refusal reason just recorded
+        into it is visible on this same response and on any later status
+        refresh, without changing what is advanceable.
         """
         lines = [
             "Research plan execution was not advanced.",
@@ -3415,6 +3429,7 @@ class ResponseComposer:
             intent="research_plan_execution",
             memory_count=0,
             success=False,
+            research_plan_execution=state,
         )
 
     def research_plan_execution_unauthorized(
