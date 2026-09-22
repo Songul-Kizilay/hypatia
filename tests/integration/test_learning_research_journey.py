@@ -33,7 +33,6 @@ from research.JsonFileResearchExecutionStore import JsonFileResearchExecutionSto
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchAutonomyResult import AutonomyStopReason
-from research.ResearchCapabilityCost import cost_for
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceCompletionEvaluation import (
@@ -4020,8 +4019,13 @@ class LearningResearchJourneyTests(unittest.TestCase):
     def test_prior_spending_exhausts_same_allowance_before_model(self):
         def exhaust(plan_id):
             allowance = self.execution.allowance(plan_id)
-            cost = cost_for(Cap.SEMANTIC_EVIDENCE_COMPARISON)
-            self.execution._allowances[plan_id] = allowance.charged(cost).charged(cost)
+            self.execution._allowances[plan_id] = replace(
+                allowance,
+                spend=replace(
+                    allowance.spend,
+                    llm_operations=allowance.budget.max_llm_operations,
+                ),
+            )
 
         with self.before_first_comparison(exhaust):
             response = self.start()
