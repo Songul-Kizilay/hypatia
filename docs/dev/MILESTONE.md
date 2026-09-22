@@ -14,11 +14,135 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
-| Milestone | Desktop wiring for Evaluate -> Adapt v1 continuation proposals |
-| Base SHA | f5710aad85c7d9598dd04026e0d13c6daaf8a748 |
+| Milestone | Desktop wiring for source revalidation |
+| Base SHA | ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4 |
 | Status | planned |
-| Specialists | hypatia-runtime (intent + controller + desktop UI, single sequential owner — no new epistemic type needed since `ResearchMissionContinuationProposal`/`proposal_for` are reused byte-for-byte); hypatia-security and hypatia-qa independently after implementation; hypatia-release last |
+| Specialists | hypatia-runtime (draft type + controller/desktop wiring, single owner — no runtime/authority-layer change needed, `SourceRevalidationStepOperation`/`SourceRevalidationStepBinding`/`ResearchRunManager` all reused byte-for-byte); hypatia-security and hypatia-qa independently after implementation; hypatia-release last |
 | Blockers | none |
+
+Rationale (repository archaeology, 2026-09-22): v0.3.400's own residual list
+named this as the strongest remaining candidate. Confirmed fresh, not
+assumed: `SourceRevalidationStepBinding(...)` is still constructed nowhere
+in `src/` outside its own module and three test files (grep re-run against
+current HEAD) — the v0.3.393 `source_revalidation` capability remains
+genuinely, completely unreachable from the desktop.
+
+A dedicated read-only investigation (hypatia-runtime) resolved the one real
+open question before scoping: source revalidation is not "one more step in
+an in-progress multi-step plan draft" — it is a bounded, standalone,
+single-purpose plan/approval/execution authored AFTER a source is already
+accepted (by any earlier means), bound by `research_run_id` to that
+pre-existing run, naming the source's real `observation_id`. This is
+directly proven by `tests/integration/test_bounded_source_revalidation.py`'s
+own scenario shape (accept a source into an existing run, then author a
+SEPARATE one-step revalidation plan/approval/execution against that same
+run). Critically, this is not a new mechanism to invent: the desktop
+already does exactly this shape of work for a different capability — the
+existing "Acquisition" feature (`src/desktop/AcquisitionResearchDraft.py`,
+`src/research/ResearchAcquisitionBatchDraft.py::preview_acquisition_batch`)
+already builds a new plan of steps bound to an already-existing,
+already-populated run, and the generic four-call desktop flow
+(`preview_research_plan_draft` -> `preview_plan_authorization` ->
+`confirm_plan_authorization` -> `start_authorized_execution`, all in
+`DesktopController.py`) already threads an explicit `research_run_id`
+end-to-end and already accepts a typed `opening_draft` object to carry
+richer `ResearchPlanStepDraftInput` values the free-text "Plan draft"
+editor cannot express (confirmed: its legacy tuple format caps at 6
+positional fields, `MAX_LEGACY_DRAFT_TUPLE_LENGTH = 6` in
+`ResearchPlanStepDraftInput.py`, short of `source_revalidation_binding`).
+
+Other v0.3.400 residuals were re-considered and not chosen: the
+budget-refusal-reason-persistence gap touches execution state transitions
+and needs more care about idempotency/restart-safety than this milestone's
+budget allows; a richer "replanning diff" beyond already-shown proposal
+provenance is a smaller, less user-visible increment; Evaluate -> Adapt v2
+remains blocked on a human cross-mission authority/budget design decision
+(unchanged since the last check); Tool registry + policy engine remains
+authority-adjacent (unchanged since the last check, per
+`docs/Roadmap/Master_Roadmap.md`'s "Default development order" item 3).
+
+Scope: mirror `AcquisitionResearchDraft.py`'s exact shape for a new
+`src/desktop/RevalidationResearchDraft.py` — a frozen, self-validating
+dataclass built from `(run, prior_observation_id)` that revalidates itself
+against canonical state via `plan_digest` equality (so a stale draft
+against a run whose source count changed since preview is rejected, not
+silently over-authorized) and exposes the single-step
+`ResearchPlanStepDraftInput(capability="source_revalidation",
+source_revalidation_binding=SourceRevalidationStepBinding(run.run_id,
+prior_observation_id, requested_url, max_sources=len(run.sources) + 1))`.
+A small pure builder analogous to `preview_acquisition_batch`. Mechanical
+widening of the `QuestionResearchDraft | AcquisitionResearchDraft` union
+to include the new draft type at its few call sites in
+`DesktopController.py`/`TkinterDesktopWindow.py`. Desktop UI: an
+eligible-source picker over the run's existing accepted-sources catalog
+(`self._research_source_catalog`), filtering out any `ResearchSourceRecord`
+with `observation_id is None` or `requested_url is None` (legacy/back-compat
+records — binding them would fail `SourceRevalidationStepBinding`'s own
+validation, so the UI pre-filters rather than surfacing an opaque refusal),
+feeding the chosen source into the existing preview -> authorize -> start
+sequence unchanged. The UI surfaces `SourceRevalidationStepBinding.lines()`'s
+existing, already-reviewed wording verbatim ("one explicitly approved
+re-fetch only", "not a freshness conclusion") rather than inventing new
+copy.
+
+Non-goals: no change to `SourceRevalidationStepOperation`,
+`SourceRevalidationStepBinding`, `ResearchRunManager`, or any
+authority/budget/execution semantics — all reused byte-for-byte; no
+cross-run revalidation (same-run-only stays a hard structural constraint,
+unchanged); no automatic or scheduled revalidation; no new eligibility
+rule beyond the existing binding validation and the desktop's own
+legacy-record pre-filter; no change to Evaluate -> Adapt, cancellation, or
+persistence-store code; does not implement the budget-refusal-reason
+persistence gap or a richer replanning diff (both remain residual/future
+work, not discarded).
+
+Acceptance criteria: the new draft type's `.metadata(...)` output produces
+a `ResearchPlanStepDraftInput` that, when threaded through the existing
+authorization/execution chain, behaves identically to a hand-constructed
+one in `test_bounded_source_revalidation.py` (equality-tested at the
+binding/step level); a stale draft (source count or observation state
+changed since preview) is rejected via `plan_digest` mismatch, mirroring
+`AcquisitionResearchDraft`'s own self-check; the eligible-source picker
+never offers a source with a null `observation_id`/`requested_url`; the
+desktop path performs a genuine end-to-end revalidation reachable only
+through the full manual preview -> authorize -> start chain — no
+convenience action skips or shortcuts approval; cross-run attempts (a
+binding naming a different run than the one currently selected) are
+refused by the existing, unchanged `SourceRevalidationStepOperation.run()`
+check, exercised through the new desktop path; full canonical gates green.
+
+Security implications: this is the first desktop feature that lets an
+operator directly select a specific PRIOR OBSERVATION to bind into a new
+plan step (as opposed to picking a fresh discovery candidate) — the
+critical property to verify is that the desktop draft cannot construct a
+binding naming an observation/run the operator didn't actually select
+(source-identity substitution), and that the entire flow still requires
+the full manual authorize/start walk, never auto-executing a revalidation
+merely because a source was selected in a picker.
+
+Epistemic implications: none new — revalidation's existing "content
+relation, not a freshness conclusion" discipline
+(`SourceRevalidationStepBinding.lines()`, `SourceRevalidationStepOperation`'s
+own docstring) is unchanged and must be preserved verbatim in any new UI
+copy, not paraphrased into something that could read as a freshness
+verdict.
+
+Persistence implications: none — no new store, no schema change; the
+existing `source_revalidations()`/`recorded_revalidation(...)` durable
+record path is unchanged and reused as-is.
+
+Replay/restart implications: none new — `SourceRevalidationStepOperation`'s
+existing `recorded_result` idempotency (a restarted execution recognizes
+its own already-committed revalidation without refetching) is unchanged
+and untouched by this milestone; the desktop draft itself is ephemeral,
+nothing persisted.
+
+Authority/budget/target/credential implications: none — no new primitive;
+same-run-only enforcement is unchanged and structural (three independent
+existing layers, per the prior milestone's archaeology); the ordinary
+plan-step network/budget slot is reused exactly as `SourceRevalidationStepBinding`
+already declares (`declared_cost=ResearchOperationCost(network_operations=1)`,
+subject to the existing cumulative allowance, never a separate budget).
 
 Rationale (repository archaeology, 2026-09-22): with Evaluate -> Adapt v1,
 Phase 7 hardening and v0.3.399 all settled (see the prior documentation
@@ -203,30 +327,29 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.399: mission audit traceability view — in-app provenance graph browsing |
-| SHA | 650bfe486bb326635ea8aa4dd9c3b80dbc746c5b |
-| Linux desktop CI (exact-SHA) | success (run 35717168075) |
-| Windows desktop CI (exact-SHA) | success (run 35717170758) |
+| Milestone | v0.3.400: desktop wiring for Evaluate -> Adapt v1 continuation proposals |
+| SHA | ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4 |
+| Linux desktop CI (exact-SHA) | success (run 35744718371) |
+| Windows desktop CI (exact-SHA) | success (run 35744722897) |
 | Status | delivered |
-| PR | #378, MERGED 2026-09-22T10:53:55Z, standard merge commit `bfc7fd82eb7588211816515f40f2c38c15d861a7` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 650bfe4 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #379, MERGED 2026-09-22T15:17:44Z, standard merge commit `d648044c8e82176e6c4d3796bfed6092c39fd804` |
+| origin/main reachability | verified: `git merge-base --is-ancestor ec1a6f0 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-22, hypatia-lead): PR #378 base `main`,
+Post-merge verification (2026-09-22, hypatia-lead): PR #379 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 3 commits (v0.3.399 plus the two already-reviewed prior dev-infra
-guard-narrowing commits `2d7005b`/`b1c0354`, both also confirmed reachable
-from `origin/main`), 17 files, `mergeStateStatus: CLEAN`, both PR-triggered
-checks `SUCCESS`. Merged with `gh pr merge 378 --merge --subject "..."` —
-the guard's narrowed auto-allow accepted this exact routine shape with no
-interactive confirmation prompt, the first live test of that permission
-change, and it passed. Author/committer identity on all three carried
-commits confirmed unchanged (Songül Kızılay via GitHub noreply email).
-Working tree clean after merge except this ledger edit.
+exactly 2 commits (v0.3.400 plus the prior documentation-reconciliation
+commit `f5710aa`, also confirmed reachable from `origin/main`), 13 files,
+`mergeStateStatus: CLEAN`, both PR-triggered checks `SUCCESS`. Merged with
+`gh pr merge 379 --merge --subject "..."` — no interactive confirmation
+prompt, consistent with the guard's narrowed auto-allow proven on the
+previous milestone. Author/committer identity on both carried commits
+confirmed unchanged (Songül Kızılay via GitHub noreply email). Working
+tree clean after merge except this ledger edit.
 
-Note: this row previously recorded v0.3.398 as last delivered. v0.3.398
-(SHA `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`) and v0.3.397 (SHA
-`aeff7713a8fea7efd247892272c78a80b9d16176`) both remain reachable from
-`origin/main` as ancestors of v0.3.399 (this row), which is now the
+Note: v0.3.399 (SHA `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398
+(SHA `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
+`aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
+`origin/main` as ancestors of v0.3.400 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not

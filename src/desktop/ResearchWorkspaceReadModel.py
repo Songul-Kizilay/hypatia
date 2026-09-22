@@ -271,6 +271,23 @@ class ResearchWorkspaceReadModel:
             if source.document_id not in represented_source_ids
         )
 
+    @staticmethod
+    def revalidation_eligible_sources(
+        sources: tuple[ResearchSourceRecord, ...],
+    ) -> tuple[ResearchSourceRecord, ...]:
+        """Keep only sources a revalidation binding could actually name.
+
+        A legacy record without a recorded observation identity or requested
+        URL predates that provenance and is never inferred here: offering it
+        would only surface an opaque refusal from
+        `SourceRevalidationStepBinding`'s own validation later.
+        """
+        return tuple(
+            source
+            for source in sources
+            if source.observation_id is not None and source.requested_url is not None
+        )
+
     @classmethod
     def source_catalog_summary_text(cls, run: ResearchRun) -> str:
         """Summarize complete source coverage independent of the local view."""
