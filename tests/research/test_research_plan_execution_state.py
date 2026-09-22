@@ -256,5 +256,148 @@ class ResearchPlanExecutionStateTests(unittest.TestCase):
             )
 
 
+class ResearchPlanExecutionAdvanceRefusalTests(unittest.TestCase):
+    """`refuse_advance` records a reason without blocking or stranding."""
+
+    def test_refuse_advance_records_step_and_reason(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        refused = state.refuse_advance("step-1", "budget does not cover this step")
+
+        self.assertEqual(refused.advance_refusal_step_id, "step-1")
+        self.assertEqual(
+            refused.advance_refusal_detail, "budget does not cover this step"
+        )
+
+    def test_refuse_advance_does_not_change_execution_or_step_status(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        refused = state.refuse_advance("step-1", "insufficient allowance")
+
+        self.assertIs(refused.status, ResearchPlanExecutionStatus.RUNNING)
+        self.assertIs(refused.steps[0].status, ResearchPlanStepStatus.PENDING)
+        self.assertEqual(refused.steps[0].detail, "")
+
+    def test_refuse_advance_requires_a_running_plan(self) -> None:
+        ready = ResearchPlanExecutionState.prepare(build_plan())
+
+        with self.assertRaises(ResearchError):
+            ready.refuse_advance("step-1", "reason")
+
+    def test_refuse_advance_requires_a_pending_step(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        state = state.start_step("step-1")
+
+        with self.assertRaises(ResearchError):
+            state.refuse_advance("step-1", "reason")
+
+    def test_refuse_advance_rejects_an_unknown_step(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        with self.assertRaises(ResearchError):
+            state.refuse_advance("step-9", "reason")
+
+    def test_refuse_advance_rejects_a_later_pending_step(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        with self.assertRaises(ResearchError):
+            state.refuse_advance("step-2", "reason")
+
+    def test_refusal_is_cleared_when_the_same_step_next_starts(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        state = state.refuse_advance("step-1", "insufficient allowance")
+
+        started = state.start_step("step-1")
+
+        self.assertIsNone(started.advance_refusal_step_id)
+        self.assertEqual(started.advance_refusal_detail, "")
+
+    def test_refusal_survives_starting_a_different_step(self) -> None:
+        """Defensive: a refusal never applies to a step other than its own."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        refused = state.refuse_advance("step-1", "insufficient allowance")
+        # Force-construct a state whose next pending step differs from the
+        # refused one, to exercise the scoping guard in isolation from the
+        # sequential-plan invariant that normally prevents this shape.
+        detached = ResearchPlanExecutionState(
+            plan_id=refused.plan_id,
+            status=refused.status,
+            steps=tuple(
+                (
+                    step.with_status(
+                        ResearchPlanStepStatus.COMPLETED,
+                        work_performed=True,
+                        operation="x",
+                    )
+                    if step.step_id == "step-1"
+                    else step
+                )
+                for step in refused.steps
+            ),
+            advance_refusal_step_id=refused.advance_refusal_step_id,
+            advance_refusal_detail=refused.advance_refusal_detail,
+        )
+
+        started = detached.start_step("step-2")
+
+        self.assertEqual(started.advance_refusal_step_id, "step-1")
+        self.assertEqual(started.advance_refusal_detail, "insufficient allowance")
+
+    def test_refusal_does_not_strand_the_execution(self) -> None:
+        """The safety proof: a refusal never removes the path back to running."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        refused = state.refuse_advance("step-1", "budget does not cover this step")
+
+        self.assertIs(refused.status, ResearchPlanExecutionStatus.RUNNING)
+        self.assertFalse(refused.status.terminal)
+        self.assertEqual(refused.next_pending_step_id, "step-1")
+        self.assertIs(refused.steps[0].status, ResearchPlanStepStatus.PENDING)
+
+        # A later, ordinary advance (as if more budget had been approved)
+        # succeeds exactly as it would have before the refusal.
+        started = refused.start_step("step-1")
+        completed = started.complete_step(
+            "step-1", "found it", work_performed=True, operation="search"
+        )
+
+        self.assertIs(completed.steps[0].status, ResearchPlanStepStatus.COMPLETED)
+
+    def test_advance_refusal_detail_is_bounded(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        with self.assertRaises(ResearchError):
+            state.refuse_advance("step-1", "x" * 501)
+
+    def test_advance_refusal_requires_a_reason(self) -> None:
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionState(
+                plan_id="plan-1",
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(ResearchPlanStepState(step_id="step-1"),),
+                advance_refusal_step_id="step-1",
+                advance_refusal_detail="",
+            )
+
+    def test_advance_refusal_detail_requires_a_step_id(self) -> None:
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionState(
+                plan_id="plan-1",
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(ResearchPlanStepState(step_id="step-1"),),
+                advance_refusal_detail="stray reason",
+            )
+
+    def test_advance_refusal_must_name_a_known_step(self) -> None:
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionState(
+                plan_id="plan-1",
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(ResearchPlanStepState(step_id="step-1"),),
+                advance_refusal_step_id="step-9",
+                advance_refusal_detail="reason",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

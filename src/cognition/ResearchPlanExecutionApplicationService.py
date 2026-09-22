@@ -536,6 +536,8 @@ class ResearchPlanExecutionApplicationService:
                     for step in snapshot.steps
                 ),
                 detail=snapshot.detail,
+                advance_refusal_step_id=snapshot.advance_refusal_step_id,
+                advance_refusal_detail=snapshot.advance_refusal_detail,
             )
             context = ResearchPlanExecutionContext(
                 research_run_id=research_run_id,
@@ -1289,13 +1291,13 @@ class ResearchPlanExecutionApplicationService:
             if followup.status is ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED:
                 if allowance is not None and not allowance.affords(cost):
                     self._events.budget_refused(plan_id, step_id, step.capability.value)
-                    return (
-                        self._response_composer.research_plan_execution_budget_refused(
-                            request,
-                            plan_id,
-                            step.capability.value,
-                            allowance,
-                        )
+                    return self._advance_refused(
+                        request,
+                        plan_id,
+                        state,
+                        step_id,
+                        step.capability.value,
+                        allowance,
                     )
                 return self._response_composer.research_plan_execution_rejected(
                     request,
@@ -1328,9 +1330,11 @@ class ResearchPlanExecutionApplicationService:
             # Refused before the attempt, so nothing is charged and no
             # operation runs. Pressing the button again cannot get past this.
             self._events.budget_refused(plan_id, step_id, step.capability.value)
-            return self._response_composer.research_plan_execution_budget_refused(
+            return self._advance_refused(
                 request,
                 plan_id,
+                state,
+                step_id,
                 step.capability.value,
                 allowance,
             )
@@ -1738,6 +1742,51 @@ class ResearchPlanExecutionApplicationService:
         return self._response_composer.research_plan_execution_status(
             request,
             blocked,
+        )
+
+    def _advance_refused(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+        state: ResearchPlanExecutionState,
+        step_id: str,
+        capability: str,
+        allowance: ResearchExecutionAllowance,
+    ) -> BrainResponse:
+        """Record a budget refusal durably, without blocking the step.
+
+        Deliberately NOT `_blocked`: `block_step` would move the whole
+        execution to `BLOCKED`, and the only recovery path,
+        `recover_blocked_step`, accepts only a step whose resolution is
+        `PERFORMED_RESULT_UNKNOWN` — a refused step was never attempted and
+        can never reach that resolution, so reusing `block_step` here would
+        permanently strand the execution even after more budget is approved.
+        The step stays pending and the execution stays running; only the
+        explanatory reason becomes durable, through the same commit/persist
+        plumbing `_blocked` uses.
+        """
+        if (
+            state.status is not ResearchPlanExecutionStatus.RUNNING
+            or state.running_step_id is not None
+        ):
+            return self._response_composer.research_plan_execution_budget_refused(
+                request, plan_id, capability, allowance, state
+            )
+        detail = (
+            f"Advance refused for step '{step_id}' (capability '{capability}'): "
+            "the approved allowance does not cover this step's cost. Nothing "
+            "was attempted or charged."
+        )
+        refused = state.refuse_advance(step_id, detail)
+        if not self._commit_outcome(plan_id, state, refused):
+            return self._superseded(request, plan_id, step_id, "budget_refused")
+        self._persist(plan_id)
+        return self._response_composer.research_plan_execution_budget_refused(
+            request,
+            plan_id,
+            capability,
+            allowance,
+            refused,
         )
 
     @staticmethod

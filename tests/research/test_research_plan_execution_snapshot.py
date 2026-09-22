@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import sys
 import unittest
 from datetime import UTC, datetime
@@ -10,7 +11,12 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import ResearchError
+from research.ResearchAutonomyResult import AutonomyStopReason
+from research.ResearchDisclosure import ResearchDisclosure
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchMissionScope import SEMANTIC_POLICY, ResearchMissionScope
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanExecutionCodec import (
     decode_execution_snapshot,
     encode_execution_snapshot,
@@ -24,6 +30,7 @@ from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.SemanticMissionPolicy import SemanticMissionPolicy
 
 RECORDED_AT = datetime(2026, 8, 23, tzinfo=UTC)
 QUESTION = "Does the ring system have a measured age?"
@@ -80,6 +87,20 @@ class ExecutionSnapshotCaptureTests(unittest.TestCase):
         self.assertIs(
             snapshot.steps[1].capability,
             ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING,
+        )
+
+    def test_capture_derives_advance_refusal_from_state(self) -> None:
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .refuse_advance("step-1", "budget does not cover this step")
+        )
+
+        snapshot = capture(state)
+
+        self.assertEqual(snapshot.advance_refusal_step_id, "step-1")
+        self.assertEqual(
+            snapshot.advance_refusal_detail, "budget does not cover this step"
         )
 
     def test_capture_preserves_work_and_operation_identity(self) -> None:
@@ -155,6 +176,29 @@ class ExecutionSnapshotRestoreTests(unittest.TestCase):
 
         self.assertEqual(once, once.restored())
 
+    def test_advance_refusal_survives_restore_unchanged(self) -> None:
+        """A refusal never coexists with a `RUNNING` step, so `restored()` has
+        nothing to reinterpret about it; it is carried through exactly as
+        recorded, which is the documented, deliberate choice for this field.
+        """
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .refuse_advance("step-1", "budget does not cover this step")
+        )
+
+        restored = capture(state).restored()
+
+        self.assertEqual(restored.advance_refusal_step_id, "step-1")
+        self.assertEqual(
+            restored.advance_refusal_detail, "budget does not cover this step"
+        )
+        # Step-status reinterpretation is completely unaffected: nothing was
+        # running, so nothing becomes interrupted.
+        self.assertIs(restored.status, ResearchPlanExecutionStatus.RUNNING)
+        for step in restored.steps:
+            self.assertIs(step.status, ResearchPlanStepStatus.PENDING)
+
     def test_blocked_and_interrupted_are_distinct_and_non_terminal(self) -> None:
         self.assertIsNot(
             ResearchPlanStepStatus.BLOCKED,
@@ -195,6 +239,124 @@ class ExecutionSnapshotCodecTests(unittest.TestCase):
 
         self.assertIsNone(decoded.research_run_id)
         self.assertEqual(decoded, snapshot)
+
+    def test_round_trip_preserves_advance_refusal(self) -> None:
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .refuse_advance("step-1", "budget does not cover this step")
+        )
+        snapshot = capture(state)
+
+        decoded = decode_execution_snapshot(encode_execution_snapshot(snapshot))
+
+        self.assertEqual(decoded.advance_refusal_step_id, "step-1")
+        self.assertEqual(
+            decoded.advance_refusal_detail, "budget does not cover this step"
+        )
+        self.assertEqual(decoded, snapshot)
+
+    def test_legacy_document_decodes_advance_refusal_as_absent(self) -> None:
+        """No ``advance_refusal`` key at all: the pre-existing document shape.
+
+        Decodes as no recorded refusal -- never inferred, never backfilled --
+        mirroring how a legacy document with no ``mission_stop_reason`` key
+        decodes as no recorded stop.
+        """
+        snapshot = capture(ResearchPlanExecutionState.prepare(plan()).start())
+        document = encode_execution_snapshot(snapshot)
+
+        self.assertNotIn("advance_refusal", document)
+
+        decoded = decode_execution_snapshot(document)
+
+        self.assertIsNone(decoded.advance_refusal_step_id)
+        self.assertEqual(decoded.advance_refusal_detail, "")
+
+    def test_advance_refusal_coexists_with_mission_stop_reason(self) -> None:
+        """The two independent optional singleton keys decode together.
+
+        Exercises the ordering fix this milestone required: stripping
+        ``advance_refusal`` first, then recursing, so it never has to be
+        enumerated alongside every mission-recovery field combination.
+        """
+        mission_plan = ResearchPlan(
+            plan_id="mission-plan-1",
+            question=QUESTION,
+            steps=plan_steps(),
+            created_at=RECORDED_AT,
+        )
+        scope = ResearchMissionScope(
+            ResearchDiscoveryProviderName.CROSSREF,
+            source_policy=SEMANTIC_POLICY,
+            max_sources=3,
+            semantic_policy=SemanticMissionPolicy(
+                "http://127.0.0.1:11434/v1/chat/completions",
+                "fixture",
+                ResearchDisclosure.LOCAL_ONLY,
+            ),
+        )
+        state = (
+            ResearchPlanExecutionState.prepare(mission_plan)
+            .start()
+            .refuse_advance("step-1", "budget does not cover this step")
+        )
+        snapshot = ResearchPlanExecutionSnapshot.capture(
+            state,
+            QUESTION,
+            plan_steps(),
+            RECORDED_AT,
+            mission_plan_digest=plan_digest(mission_plan),
+            mission_scope=scope,
+            mission_disclosure=ResearchDisclosure.LOCAL_ONLY,
+            mission_stop_reason=AutonomyStopReason.ADVANCE_REFUSED,
+        )
+        document = encode_execution_snapshot(snapshot)
+
+        self.assertIn("advance_refusal", document)
+        self.assertIn("mission_stop_reason", document)
+
+        decoded = decode_execution_snapshot(document)
+
+        self.assertEqual(decoded, snapshot)
+        self.assertEqual(decoded.advance_refusal_step_id, "step-1")
+        self.assertIs(decoded.mission_stop_reason, AutonomyStopReason.ADVANCE_REFUSED)
+
+    def test_malformed_advance_refusal_documents_are_rejected(self) -> None:
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .refuse_advance("step-1", "budget does not cover this step")
+        )
+        valid = encode_execution_snapshot(capture(state))
+
+        for mutate in (
+            lambda d: d.update({"advance_refusal": {"step_id": "step-1"}}),
+            lambda d: d.update(
+                {"advance_refusal": {"step_id": "", "detail": "reason"}}
+            ),
+            lambda d: d.update(
+                {"advance_refusal": {"step_id": "step-9", "detail": "reason"}}
+            ),
+            lambda d: d.update({"advance_refusal": "not-a-dict"}),
+            lambda d: d.update(
+                {
+                    "advance_refusal": {
+                        "step_id": "step-1",
+                        "detail": "x" * 501,
+                    }
+                }
+            ),
+        ):
+            with self.subTest(mutate=mutate):
+                document = copy.deepcopy(valid)
+                mutate(document)
+                with self.assertRaises(ResearchError):
+                    decode_execution_snapshot(document)
+
+        self.assertEqual(
+            decode_execution_snapshot(valid).advance_refusal_step_id, "step-1"
+        )
 
     def test_document_carries_no_authored_content_beyond_the_question(self) -> None:
         state = ResearchPlanExecutionState.prepare(plan()).start().start_step("step-1")
@@ -302,6 +464,56 @@ class ExecutionSnapshotCodecTests(unittest.TestCase):
                 status=ResearchPlanExecutionStatus.RUNNING,
                 steps=(step,),
                 recorded_at=datetime(2026, 8, 23),
+            )
+
+    def test_advance_refusal_requires_a_reason(self) -> None:
+        step = ResearchPlanExecutionStepSnapshot(
+            step_id="step-1",
+            capability=ResearchPlanStepCapability.NONE,
+            status=ResearchPlanStepStatus.PENDING,
+        )
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionSnapshot(
+                plan_id="plan-1",
+                question=QUESTION,
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(step,),
+                recorded_at=RECORDED_AT,
+                advance_refusal_step_id="step-1",
+                advance_refusal_detail="",
+            )
+
+    def test_advance_refusal_detail_requires_a_step_id(self) -> None:
+        step = ResearchPlanExecutionStepSnapshot(
+            step_id="step-1",
+            capability=ResearchPlanStepCapability.NONE,
+            status=ResearchPlanStepStatus.PENDING,
+        )
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionSnapshot(
+                plan_id="plan-1",
+                question=QUESTION,
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(step,),
+                recorded_at=RECORDED_AT,
+                advance_refusal_detail="stray reason",
+            )
+
+    def test_advance_refusal_must_name_a_known_step(self) -> None:
+        step = ResearchPlanExecutionStepSnapshot(
+            step_id="step-1",
+            capability=ResearchPlanStepCapability.NONE,
+            status=ResearchPlanStepStatus.PENDING,
+        )
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionSnapshot(
+                plan_id="plan-1",
+                question=QUESTION,
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(step,),
+                recorded_at=RECORDED_AT,
+                advance_refusal_step_id="step-9",
+                advance_refusal_detail="reason",
             )
 
 

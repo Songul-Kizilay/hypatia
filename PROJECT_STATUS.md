@@ -2,10 +2,23 @@
 
 ## Runtime Version
 
-`v0.3.401 (Genesis)`
+`v0.3.402 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.402 preserves a bounded explanation when an `Advance` is
+refused before any attempt because the approved allowance cannot cover the
+next step. The execution state and its durable snapshot now carry the exact
+pending step ID and a bounded literal reason; the same reason is visible in
+the immediate response, a later status refresh, and after restore. This is
+not a block: the execution stays `RUNNING`, the step stays `PENDING`, no work
+is charged or performed, and a later approved allowance can start the same
+step normally. Starting that exact step clears the old explanation. The
+optional snapshot field is strict when present and absent legacy snapshots
+remain an honest “no recorded refusal,” with no backfill or inference. No
+authority, scope, capability, budget accounting, lifecycle, evidence, or
+claim semantics changed.
 
 Version v0.3.401 wires source revalidation into the desktop: an operator can
 now, from the "2 Sources & evidence" panel, select one of a research run's

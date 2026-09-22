@@ -115,6 +115,13 @@ class ResearchPlanExecutionSnapshot:
     #: source-revalidation authority, so a restart cannot rebind a different
     #: prior observation.  Absent for every other execution.
     revalidation_plan_digest: str | None = None
+    #: The step and reason an advance was refused before any attempt was
+    #: made, mirrored from `ResearchPlanExecutionState.advance_refusal_*`.
+    #: Absent for legacy snapshots and for any execution that has never had
+    #: an advance refused.  Purely explanatory bookkeeping — never authority,
+    #: budget, or a status signal for any other code path.
+    advance_refusal_step_id: str | None = None
+    advance_refusal_detail: str = ""
 
     def __post_init__(self) -> None:
         if self.revalidation_plan_digest is not None and (
@@ -192,6 +199,27 @@ class ResearchPlanExecutionSnapshot:
         step_ids = tuple(step.step_id for step in self.steps)
         if len(step_ids) != len(set(step_ids)):
             raise ResearchError("Execution snapshot has duplicate step IDs.")
+        if self.advance_refusal_step_id is not None and (
+            not isinstance(self.advance_refusal_step_id, str)
+            or not self.advance_refusal_step_id.strip()
+            or self.advance_refusal_step_id.strip() not in step_ids
+        ):
+            raise ResearchError(
+                "Execution snapshot advance refusal step ID is invalid."
+            )
+        if not isinstance(self.advance_refusal_detail, str):
+            raise ResearchError("Execution snapshot advance refusal detail is invalid.")
+        advance_refusal_detail = self.advance_refusal_detail.strip()
+        if len(advance_refusal_detail) > MAX_SNAPSHOT_DETAIL_CHARACTERS:
+            raise ResearchError(
+                "Execution snapshot advance refusal detail is too long."
+            )
+        if self.advance_refusal_step_id is None and advance_refusal_detail:
+            raise ResearchError(
+                "Execution snapshot advance refusal detail requires a step ID."
+            )
+        if self.advance_refusal_step_id is not None and not advance_refusal_detail:
+            raise ResearchError("Execution snapshot advance refusal requires a reason.")
         if (
             not isinstance(self.recorded_at, datetime)
             or self.recorded_at.utcoffset() is None
@@ -207,6 +235,11 @@ class ResearchPlanExecutionSnapshot:
         object.__setattr__(self, "plan_id", self.plan_id.strip())
         object.__setattr__(self, "question", self.question.strip())
         object.__setattr__(self, "detail", self.detail.strip())
+        if self.advance_refusal_step_id is not None:
+            object.__setattr__(
+                self, "advance_refusal_step_id", self.advance_refusal_step_id.strip()
+            )
+        object.__setattr__(self, "advance_refusal_detail", advance_refusal_detail)
         if run_id is not None:
             object.__setattr__(self, "research_run_id", run_id.strip())
         if self.mission_request_id is not None:
@@ -239,6 +272,8 @@ class ResearchPlanExecutionSnapshot:
             question=question,
             status=state.status,
             detail=state.detail,
+            advance_refusal_step_id=state.advance_refusal_step_id,
+            advance_refusal_detail=state.advance_refusal_detail,
             research_run_id=research_run_id,
             allowance=allowance,
             target_plan_digest=target_plan_digest,
@@ -275,6 +310,12 @@ class ResearchPlanExecutionSnapshot:
         operation actually did is unknown. It becomes interrupted, never
         completed, and its `work_performed` flag is left exactly as recorded
         rather than inferred.
+
+        `advance_refusal_step_id`/`advance_refusal_detail` are left untouched
+        here by construction. A refusal concerns the next pending step; a
+        concurrent predecessor may still be running and must become interrupted.
+        The recorded refusal remains explanatory metadata and survives either
+        case exactly as written, without affecting status reinterpretation.
         """
         from dataclasses import replace
 
