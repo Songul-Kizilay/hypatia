@@ -87,6 +87,12 @@ from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchMissionAuditExport import ResearchMissionAuditExportPreview
+from research.ResearchMissionAuditTraceabilityGraph import (
+    ResearchMissionAuditTraceabilityGraph,
+    TraceabilityEdge,
+    TraceabilityNodeKind,
+    TraceabilityNodeRef,
+)
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
@@ -94,6 +100,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
+from research.ResearchRunMarkdownRenderer import _clean_text
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
@@ -410,6 +417,492 @@ def _initial_window_size(
     )
 
 
+#: Bounds one rendered traceability field so an unbounded external string
+#: (a source title or URL, in the worst case) cannot grow the tree without
+#: limit. The graph itself never truncates; only this display layer does.
+_MAX_TRACEABILITY_TEXT_CHARACTERS = 300
+
+
+def _traceability_text(value: object) -> str:
+    """Bound and normalize one already-known field for safe Treeview display.
+
+    Reuses `research.ResearchRunMarkdownRenderer`'s `_clean_text` -- the
+    exact safety normalization `ResearchMissionAudit.render_mission_audit_markdown`
+    already applies to every field it displays, untrusted or not (source
+    titles, URLs, recorded IDs, timestamps) -- to strip directional-override
+    and other unsafe control characters and collapse whitespace, then bounds
+    the result to a fixed maximum length.  This is the only text-safety path
+    the new provenance widget uses; nothing here re-implements or weakens it.
+
+    Unlike `_inline` (which `_clean_text` feeds into for the Markdown
+    export), this deliberately does NOT apply `_escape_markdown`: this is a
+    plain-text `ttk.Treeview` label, not Markdown, so backslash-escaping
+    `` \\ ` * _ { } [ ] < > `` would show literal backslashes to the operator
+    for no safety benefit.
+    """
+    if value is None:
+        return "unavailable"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    text = " ".join(_clean_text(str(value)).split())
+    if len(text) > _MAX_TRACEABILITY_TEXT_CHARACTERS:
+        return text[:_MAX_TRACEABILITY_TEXT_CHARACTERS] + "…[truncated]"
+    return text
+
+
+class _MissionAuditTraceabilityTreeBuilder:
+    """Populate one read-only `ttk.Treeview` from an already-computed graph.
+
+    Every row is already-known data from `graph`: nothing here reads a
+    store, calls a provider or model, or infers a relation `graph` does not
+    already carry.  An edge the graph itself reports unresolved is rendered
+    as an explicit unresolved leaf naming the exact unresolved ID, never
+    silently dropped and never pointed at a fabricated node.  A shared
+    evidence node reached from several claims/reviews/contradictions/
+    goal-basis notes is inserted once per citing parent (each citer's own
+    tree row), which is why children are found by filtering `graph.edges`
+    for the parent's own node reference rather than assuming a fixed
+    edge-per-citer count.
+    """
+
+    def __init__(
+        self,
+        tree: ttk.Treeview,
+        graph: ResearchMissionAuditTraceabilityGraph,
+    ) -> None:
+        self._tree = tree
+        self._graph = graph
+        self._details: dict[str, str] = {}
+        self._counter = 0
+        self._edges_by_source: dict[TraceabilityNodeRef, list[TraceabilityEdge]] = {}
+        for edge in graph.edges:
+            self._edges_by_source.setdefault(edge.source, []).append(edge)
+        self._evidence_by_id = {node.evidence_id: node for node in graph.evidence}
+        self._sources_by_id = {node.node_id: node for node in graph.source_observations}
+        self._candidates_by_id = {
+            node.node_id: node for node in graph.discovery_candidates
+        }
+        self._revalidation_observations_by_id = {
+            node.node_id: node for node in graph.revalidation_observations
+        }
+
+    def details(self) -> dict[str, str]:
+        """Map every inserted row's ID to the full detail text for selection."""
+        return self._details
+
+    def _iid(self, prefix: str) -> str:
+        self._counter += 1
+        return f"{prefix}-{self._counter}"
+
+    def _insert(self, parent: str, prefix: str, text: str, detail: str) -> str:
+        iid = self._iid(prefix)
+        self._tree.insert(parent, "end", iid=iid, text=text)
+        self._details[iid] = detail
+        return iid
+
+    def _insert_caveat(self, parent: str, prefix: str, text: str) -> str:
+        """Insert a static epistemic-tentativeness caveat as a child leaf.
+
+        `text` is a literal string this module writes, never data recorded
+        by a research run, so it is inserted as-is rather than through
+        `_traceability_text`. The leading "Note:" prefix is the visual
+        convention that distinguishes it from recorded rows in this tree
+        (a `ttk.Treeview` has no per-row font styling equivalent to the
+        `Hint.TLabel` style used elsewhere in this module for the same
+        purpose).
+        """
+        return self._insert(parent, prefix, text, text)
+
+    def build(self) -> None:
+        self._build_claims()
+        self._build_reviews()
+        self._build_contradictions()
+        self._build_goal_basis()
+        self._build_revalidations()
+
+    def _build_claims(self) -> None:
+        if not self._graph.claims:
+            return
+        root = self._insert(
+            "",
+            "claims",
+            f"Claims ({len(self._graph.claims)})",
+            "Claims recorded in this run.",
+        )
+        for claim in self._graph.claims:
+            status = "current" if claim.current else "superseded"
+            label = (
+                f"Claim {_traceability_text(claim.claim_id)} "
+                f"({_traceability_text(claim.epistemic_state)}, {status})"
+            )
+            detail_lines = [
+                f"Claim ID: {_traceability_text(claim.claim_id)}",
+                f"Epistemic state: {_traceability_text(claim.epistemic_state)}",
+                f"Current: {_traceability_text(claim.current)}",
+                "Supersedes claim: " + _traceability_text(claim.supersedes_claim_id),
+                "Source documents: "
+                + (
+                    ", ".join(
+                        _traceability_text(value) for value in claim.source_document_ids
+                    )
+                    or "none"
+                ),
+            ]
+            if claim.unrecorded_evidence_ids:
+                detail_lines.append(
+                    "Unrecorded evidence (not in this run): "
+                    + ", ".join(
+                        _traceability_text(value)
+                        for value in claim.unrecorded_evidence_ids
+                    )
+                )
+            claim_iid = self._insert(root, "claim", label, "\n".join(detail_lines))
+            claim_ref = TraceabilityNodeRef(TraceabilityNodeKind.CLAIM, claim.claim_id)
+            self._insert_evidence_children(claim_iid, claim_ref, "claim_evidence")
+            self._insert_supersession_leaf(
+                claim_iid, claim_ref, "claim_supersession", "claim"
+            )
+
+    def _build_reviews(self) -> None:
+        if not self._graph.comparison_reviews:
+            return
+        root = self._insert(
+            "",
+            "reviews",
+            f"Comparison reviews ({len(self._graph.comparison_reviews)})",
+            "Operator comparison reviews recorded in this run.",
+        )
+        for review in self._graph.comparison_reviews:
+            status = "current" if review.current else "superseded"
+            label = (
+                f"Review {_traceability_text(review.review_id)} "
+                f"({_traceability_text(review.decision)}, {status})"
+            )
+            detail_lines = [
+                f"Review ID: {_traceability_text(review.review_id)}",
+                f"Note ID: {_traceability_text(review.note_id)}",
+                f"Decision: {_traceability_text(review.decision)}",
+                f"Current: {_traceability_text(review.current)}",
+                "Supersedes review: " + _traceability_text(review.supersedes_review_id),
+                "Source documents: "
+                + (
+                    ", ".join(
+                        _traceability_text(value)
+                        for value in review.source_document_ids
+                    )
+                    or "none"
+                ),
+            ]
+            review_iid = self._insert(root, "review", label, "\n".join(detail_lines))
+            review_ref = TraceabilityNodeRef(
+                TraceabilityNodeKind.COMPARISON_REVIEW, review.review_id
+            )
+            self._insert_evidence_children(review_iid, review_ref, "review_evidence")
+            self._insert_supersession_leaf(
+                review_iid, review_ref, "review_supersession", "review"
+            )
+
+    def _build_contradictions(self) -> None:
+        if not self._graph.claim_contradictions:
+            return
+        root = self._insert(
+            "",
+            "contradictions",
+            f"Contradictions ({len(self._graph.claim_contradictions)})",
+            "User-reviewed claim contradictions recorded in this run.",
+        )
+        self._insert_caveat(
+            root,
+            "contradiction-caveat",
+            "Note: a recorded contradiction does not decide which claim is true.",
+        )
+        for contradiction in self._graph.claim_contradictions:
+            label = (
+                f"Contradiction {_traceability_text(contradiction.contradiction_id)} "
+                f"(recorded {_traceability_text(contradiction.recorded_at)})"
+            )
+            contradiction_iid = self._insert(
+                root,
+                "contradiction",
+                label,
+                f"Contradiction ID: "
+                f"{_traceability_text(contradiction.contradiction_id)}\n"
+                f"Recorded at: {_traceability_text(contradiction.recorded_at)}",
+            )
+            for summary in contradiction.claims:
+                status = "current" if summary.current else "superseded"
+                resolved = "resolved" if summary.resolved else "unresolved"
+                summary_label = (
+                    f"Claim {_traceability_text(summary.claim_id)}: {resolved}"
+                    + (
+                        f", {_traceability_text(summary.epistemic_state)}"
+                        if summary.epistemic_state
+                        else ""
+                    )
+                    + f", {status}"
+                )
+                self._insert(
+                    contradiction_iid,
+                    "contradiction-claim",
+                    summary_label,
+                    summary_label,
+                )
+            contradiction_ref = TraceabilityNodeRef(
+                TraceabilityNodeKind.CONTRADICTION, contradiction.contradiction_id
+            )
+            self._insert_evidence_children(
+                contradiction_iid, contradiction_ref, "contradiction_evidence"
+            )
+
+    def _build_goal_basis(self) -> None:
+        basis = self._graph.goal_basis
+        if (
+            not basis.notes
+            and basis.contradiction_outcome is None
+            and basis.evidence_gap_outcome is None
+            and basis.supporting_review_id is None
+        ):
+            return
+        detail_lines = [
+            "Contradiction outcome: " + _traceability_text(basis.contradiction_outcome),
+            "Evidence gap outcome: " + _traceability_text(basis.evidence_gap_outcome),
+            "Supporting review ID: " + _traceability_text(basis.supporting_review_id),
+        ]
+        root = self._insert(
+            "", "goal-basis", "Goal evaluation basis", "\n".join(detail_lines)
+        )
+        self._insert_caveat(
+            root,
+            "goal-basis-caveat",
+            "Note: recorded relations and outcomes here are tentative model"
+            " interpretations unless an operator review says otherwise;"
+            " none is a verified fact.",
+        )
+        for note in basis.notes:
+            marker = "" if note.resolved else " (unresolved)"
+            label = (
+                f"{_traceability_text(note.role)} basis note "
+                f"{_traceability_text(note.note_id)}"
+                + (
+                    f" ({_traceability_text(note.recorded_relation)})"
+                    if note.recorded_relation
+                    else ""
+                )
+                + marker
+            )
+            note_iid = self._insert(root, "goal-basis-note", label, label)
+            note_ref = TraceabilityNodeRef(
+                TraceabilityNodeKind.GOAL_BASIS_NOTE, note.node_id
+            )
+            self._insert_evidence_children(note_iid, note_ref, "goal_basis_evidence")
+
+    def _build_revalidations(self) -> None:
+        if not self._graph.source_revalidations:
+            return
+        root = self._insert(
+            "",
+            "revalidations",
+            f"Source revalidations ({len(self._graph.source_revalidations)})",
+            "Explicitly recorded source revalidations.",
+        )
+        for revalidation in self._graph.source_revalidations:
+            label = (
+                f"Revalidation {_traceability_text(revalidation.revalidation_id)} "
+                f"({_traceability_text(revalidation.outcome)}, "
+                f"{_traceability_text(revalidation.recorded_at)})"
+            )
+            revalidation_iid = self._insert(root, "revalidation", label, label)
+            revalidation_ref = TraceabilityNodeRef(
+                TraceabilityNodeKind.REVALIDATION, revalidation.revalidation_id
+            )
+            for edge in self._edges_by_source.get(revalidation_ref, []):
+                role = (
+                    "Earlier"
+                    if edge.relation == "revalidation_earlier_observation"
+                    else "Later"
+                )
+                observation = self._revalidation_observations_by_id.get(
+                    edge.target.node_id
+                )
+                if observation is None or not edge.resolved:
+                    unresolved_id = _traceability_text(edge.target.node_id)
+                    self._insert(
+                        revalidation_iid,
+                        "revalidation-observation",
+                        f"{role} observation: unresolved ({unresolved_id})",
+                        f"{role} observation unresolved: {unresolved_id}",
+                    )
+                    continue
+                detail = "\n".join(
+                    (
+                        f"Run: {_traceability_text(observation.run_id)}",
+                        "Observation ID: "
+                        + _traceability_text(observation.observation_id),
+                        "Document ID: " + _traceability_text(observation.document_id),
+                        "Requested URL: "
+                        + _traceability_text(observation.requested_url),
+                        f"URL: {_traceability_text(observation.url)}",
+                        "Content SHA-256: "
+                        + _traceability_text(observation.content_sha256),
+                        f"Fetched at: {_traceability_text(observation.fetched_at)}",
+                        f"Added at: {_traceability_text(observation.added_at)}",
+                    )
+                )
+                self._insert(
+                    revalidation_iid,
+                    "revalidation-observation",
+                    f"{role} observation "
+                    f"{_traceability_text(observation.observation_id)} "
+                    f"(run {_traceability_text(observation.run_id)})",
+                    detail,
+                )
+
+    def _insert_evidence_children(
+        self,
+        parent_iid: str,
+        source_ref: TraceabilityNodeRef,
+        relation: str,
+    ) -> None:
+        for edge in self._edges_by_source.get(source_ref, []):
+            if edge.relation != relation:
+                continue
+            unresolved_id = _traceability_text(edge.target.node_id)
+            if not edge.resolved:
+                self._insert(
+                    parent_iid,
+                    "evidence",
+                    f"Evidence {unresolved_id} (unresolved)",
+                    f"Evidence {unresolved_id} was not resolved in this run.",
+                )
+                continue
+            node = self._evidence_by_id.get(edge.target.node_id)
+            if node is None:
+                self._insert(
+                    parent_iid,
+                    "evidence",
+                    f"Evidence {unresolved_id} (unresolved)",
+                    f"Evidence {unresolved_id} was not resolved in this run.",
+                )
+                continue
+            suffix = "" if node.source_resolved else " [source unresolved]"
+            label = f"Evidence {_traceability_text(node.evidence_id)}{suffix}"
+            detail = "\n".join(
+                (
+                    f"Evidence ID: {_traceability_text(node.evidence_id)}",
+                    f"Chunk ID: {_traceability_text(node.chunk_id)}",
+                    f"Chunk SHA-256: {_traceability_text(node.chunk_sha256)}",
+                    "Source resolved: "
+                    + _traceability_text(node.source_resolved)
+                    + (
+                        ""
+                        if node.source_resolved
+                        else " (evidence resolved; its source did not)"
+                    ),
+                )
+            )
+            evidence_iid = self._insert(parent_iid, "evidence", label, detail)
+            evidence_ref = TraceabilityNodeRef(
+                TraceabilityNodeKind.EVIDENCE, node.evidence_id
+            )
+            self._insert_source_children(evidence_iid, evidence_ref)
+
+    def _insert_source_children(
+        self, parent_iid: str, evidence_ref: TraceabilityNodeRef
+    ) -> None:
+        for edge in self._edges_by_source.get(evidence_ref, []):
+            if edge.relation != "evidence_source":
+                continue
+            unresolved_id = _traceability_text(edge.target.node_id)
+            node = self._sources_by_id.get(edge.target.node_id)
+            if not edge.resolved or node is None:
+                self._insert(
+                    parent_iid,
+                    "source",
+                    f"Source {unresolved_id} (unresolved)",
+                    f"Source {unresolved_id} was not resolved in this run.",
+                )
+                continue
+            label = (
+                f"Source {_traceability_text(node.document_id)} — "
+                f"{_traceability_text(node.url)}"
+            )
+            detail = "\n".join(
+                (
+                    f"Document ID: {_traceability_text(node.document_id)}",
+                    "Observation ID: " + _traceability_text(node.observation_id),
+                    "Requested URL: " + _traceability_text(node.requested_url),
+                    f"URL: {_traceability_text(node.url)}",
+                    "Content SHA-256: " + _traceability_text(node.content_sha256),
+                    f"Fetched at: {_traceability_text(node.fetched_at)}",
+                    f"Added at: {_traceability_text(node.added_at)}",
+                )
+            )
+            source_iid = self._insert(parent_iid, "source", label, detail)
+            source_ref = TraceabilityNodeRef(
+                TraceabilityNodeKind.SOURCE_OBSERVATION, node.node_id
+            )
+            self._insert_candidate_children(source_iid, source_ref)
+
+    def _insert_candidate_children(
+        self, parent_iid: str, source_ref: TraceabilityNodeRef
+    ) -> None:
+        for edge in self._edges_by_source.get(source_ref, []):
+            if edge.relation != "source_discovery_candidate":
+                continue
+            unresolved_id = _traceability_text(edge.target.node_id)
+            node = self._candidates_by_id.get(edge.target.node_id)
+            if not edge.resolved or node is None:
+                self._insert(
+                    parent_iid,
+                    "candidate",
+                    f"Discovery candidate {unresolved_id} (unresolved)",
+                    f"Discovery candidate {unresolved_id} was not resolved.",
+                )
+                continue
+            label = (
+                f"Candidate {_traceability_text(node.candidate_id)}: "
+                f"{_traceability_text(node.title)}"
+            )
+            detail = "\n".join(
+                (
+                    f"Candidate ID: {_traceability_text(node.candidate_id)}",
+                    f"Discovery ID: {_traceability_text(node.discovery_id)}",
+                    f"Title: {_traceability_text(node.title)}",
+                    f"URL: {_traceability_text(node.url)}",
+                )
+            )
+            self._insert(parent_iid, "candidate", label, detail)
+
+    def _insert_supersession_leaf(
+        self,
+        parent_iid: str,
+        node_ref: TraceabilityNodeRef,
+        relation: str,
+        label_prefix: str,
+    ) -> None:
+        for edge in self._edges_by_source.get(node_ref, []):
+            if edge.relation != relation:
+                continue
+            marker = "" if edge.resolved else " (unresolved)"
+            target_id = _traceability_text(edge.target.node_id)
+            text = f"Supersedes {label_prefix} {target_id}{marker}"
+            self._insert(parent_iid, "supersession", text, text)
+
+
+def _populate_mission_audit_traceability_tree(
+    tree: ttk.Treeview,
+    graph: ResearchMissionAuditTraceabilityGraph,
+) -> dict[str, str]:
+    """Populate `tree` from `graph` and return each row's detail text by ID.
+
+    Read-only: this only calls `tree.insert`, never a store, provider, model
+    or network client.  The caller owns clearing any previous rows first.
+    """
+    builder = _MissionAuditTraceabilityTreeBuilder(tree, graph)
+    builder.build()
+    return builder.details()
+
+
 class KnowledgeRelationProcessor(Protocol):
     """Small mutable relation boundary used by the confirmation helper."""
 
@@ -669,6 +1162,9 @@ class TkinterDesktopWindow:
         #: as reported by the runtime (live results and the recovered listing).
         self._mission_run_ids: dict[str, str] = {}
         self._mission_audit_preview: ResearchMissionAuditExportPreview | None = None
+        #: Detail text for every row currently in the provenance tree, by row
+        #: ID. Selecting a row only looks this up; it never starts a request.
+        self._mission_audit_traceability_details: dict[str, str] = {}
         self._mission_independence_run: ResearchRun | None = None
         self._research_discovery_provider = tk.StringVar(
             value=ResearchDiscoveryProviderName.CROSSREF.value
@@ -2119,6 +2615,11 @@ class TkinterDesktopWindow:
             text="Save mission audit export…",
             command=self._save_mission_audit_export,
         ).grid(row=10, column=1, columnspan=2, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="View provenance graph",
+            command=self._view_mission_audit_traceability,
+        ).grid(row=11, column=0, columnspan=2, sticky="w", pady=(0, 4))
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -2142,6 +2643,56 @@ class TkinterDesktopWindow:
             "No plan preview yet. Enter the authored draft and choose Preview plan.",
         )
         self._research_plan_preview.configure(state=tk.DISABLED)
+        traceability_frame = ttk.LabelFrame(
+            research_plan_frame,
+            text="Mission audit provenance graph",
+            padding=8,
+        )
+        traceability_frame.grid(
+            row=9,
+            column=0,
+            columnspan=2,
+            sticky="nsew",
+            pady=(8, 0),
+        )
+        research_plan_frame.rowconfigure(9, weight=1)
+        traceability_frame.columnconfigure(0, weight=1)
+        traceability_frame.rowconfigure(1, weight=1)
+        ttk.Label(
+            traceability_frame,
+            text=(
+                "Read-only: expands the same already-computed audit data as "
+                "the preview above. Selecting a row never starts a request."
+            ),
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        self._mission_audit_traceability_tree = ttk.Treeview(
+            traceability_frame,
+            show="tree",
+            height=10,
+        )
+        self._mission_audit_traceability_tree.grid(row=1, column=0, sticky="nsew")
+        traceability_scrollbar = ttk.Scrollbar(
+            traceability_frame,
+            orient="vertical",
+            command=self._mission_audit_traceability_tree.yview,
+        )
+        traceability_scrollbar.grid(row=1, column=1, sticky="ns")
+        self._mission_audit_traceability_tree.configure(
+            yscrollcommand=traceability_scrollbar.set
+        )
+        self._mission_audit_traceability_tree.bind(
+            "<<TreeviewSelect>>", self._on_mission_audit_traceability_select
+        )
+        self._mission_audit_traceability_detail = tk.StringVar(
+            value="Select a row to see its recorded fields."
+        )
+        ttk.Label(
+            traceability_frame,
+            textvariable=self._mission_audit_traceability_detail,
+            wraplength=680,
+            justify=tk.LEFT,
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
         if self._plan_authorization_enabled:
             self._build_plan_approval_section(research_plan_frame)
             self._build_execution_control_section(research_plan_frame)
@@ -3633,6 +4184,56 @@ class TkinterDesktopWindow:
         self._append_response(response)
         if not response.success:
             self._mission_audit_preview = None
+
+    def _view_mission_audit_traceability(self) -> None:
+        """Load and browse the mission's already-computed provenance graph.
+
+        Strictly additive: this never changes what "Preview mission audit
+        export" or "Save mission audit export…" do, and issues exactly one
+        read-only Brain request of its own.
+        """
+        plan_id = self._audit_plan_id()
+        if not plan_id:
+            self._status.set("Run or recover a learning research mission first.")
+            return
+        response = self._controller.mission_audit_traceability_view(plan_id)
+        self._render_mission_audit_traceability(response)
+
+    def _render_mission_audit_traceability(self, response: BrainResponse) -> None:
+        tree = self._mission_audit_traceability_tree
+        for item in tree.get_children(""):
+            tree.delete(item)
+        self._mission_audit_traceability_details = {}
+        self._mission_audit_traceability_detail.set(
+            "Select a row to see its recorded fields."
+        )
+        graph = response.research_mission_audit_traceability_graph
+        if not response.success or graph is None:
+            self._status.set(response.message)
+            return
+        self._mission_audit_traceability_details = (
+            _populate_mission_audit_traceability_tree(tree, graph)
+        )
+        self._status.set("mission audit provenance graph: loaded; nothing recorded")
+
+    def _on_mission_audit_traceability_select(self, _event: object = None) -> None:
+        """Show one already-loaded row's fields. Never starts a request.
+
+        Reads only the local tree selection and the detail text this window
+        already built when the graph was loaded; it touches no controller,
+        no Brain, no network and no store.
+        """
+        tree = self._mission_audit_traceability_tree
+        selected = tree.selection()
+        if not selected:
+            self._mission_audit_traceability_detail.set(
+                "Select a row to see its recorded fields."
+            )
+            return
+        detail = self._mission_audit_traceability_details.get(
+            selected[0], "No detail is recorded for this row."
+        )
+        self._mission_audit_traceability_detail.set(detail)
 
     def _review_mission_source_independence(self) -> None:
         """Load the mission's canonical run and list its evidence-bearing sources.

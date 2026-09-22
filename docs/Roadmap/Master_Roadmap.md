@@ -227,7 +227,12 @@ Observation/provenance:
 - [x] Provenance-aware temporal history
 
 - [ ] Evidence lineage graph
-- [ ] Provenance visualization
+- [x] Provenance visualization — `src/research/ResearchMissionAuditTraceabilityGraph.py`
+      re-shapes `build_mission_audit`'s existing traceability data into
+      typed nodes/edges; the `research_mission_audit_traceability_view`
+      Brain intent and the desktop app's read-only `ttk.Treeview`
+      ("View provenance graph", "3 Authored analysis" -> "Plan draft")
+      let an operator browse it in-app (v0.3.399)
 - [ ] Rich source-independence model
 - [ ] Citation-chain / mirror / syndication detection
 

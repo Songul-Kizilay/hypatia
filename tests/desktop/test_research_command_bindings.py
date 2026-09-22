@@ -172,6 +172,7 @@ def build_real_window(**features: bool) -> tuple[Any, list[RecordingWidget]]:
         "ttk.Scrollbar",
         "ttk.Separator",
         "ttk.Progressbar",
+        "ttk.Treeview",
         "tk.Text",
         "tk.Listbox",
         "tk.Canvas",

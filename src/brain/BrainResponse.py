@@ -65,6 +65,9 @@ from research.ResearchMissionAuditExport import (
     ResearchMissionAuditExportPreview,
     ResearchMissionAuditExportResult,
 )
+from research.ResearchMissionAuditTraceabilityGraph import (
+    ResearchMissionAuditTraceabilityGraph,
+)
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -156,6 +159,9 @@ class BrainResponse:
         None
     )
     research_mission_audit_export_result: ResearchMissionAuditExportResult | None = None
+    research_mission_audit_traceability_graph: (
+        ResearchMissionAuditTraceabilityGraph | None
+    ) = None
     research_run_markdown_export_verification: (
         ResearchRunMarkdownExportVerification | None
     ) = None
