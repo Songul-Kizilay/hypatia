@@ -24,6 +24,7 @@ for entry in (SRC_DIR, ROOT_DIR):
 from brain.BrainRequest import BrainRequest
 from cognition.ResearchMissionAuditApplicationService import (
     MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+    MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
     ResearchMissionAuditApplicationService,
 )
 from core.Exceptions import ResearchError
@@ -523,6 +524,154 @@ class ResearchMissionAuditApplicationServiceTraceabilityViewTests(unittest.TestC
 
         self.assertTrue(response.success)
         self.assertEqual(runs.source_revalidations_calls, 1)
+        self.assertEqual(execution.mission_snapshot_calls, ["plan-1"])
+        self.assertEqual(runs.get_calls, ["run-1"])
+
+
+class ResearchMissionAuditApplicationServiceProposalPreviewIntentTests(
+    unittest.TestCase
+):
+    """The new intent must add zero divergent computation over `proposal_for`."""
+
+    def test_matches_calling_proposal_for_directly_for_an_eligible_mission(
+        self,
+    ) -> None:
+        checkpoint = _agreement_checkpoint()
+        snapshot = _snapshot(
+            stop_reason=AutonomyStopReason.RESEARCH_DELIVERABLE_READY,
+            checkpoint=checkpoint,
+        )
+        execution = ExecutionMustNotWrite(snapshot)
+        run = _run(with_note=True)
+        runs = RunManagerMustNotWrite(run)
+        service = _service(execution, runs)
+        request = BrainRequest(
+            message="Preview mission continuation proposal",
+            source="desktop",
+            metadata={
+                "intent": MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+        directly = service.proposal_for("plan-1")
+
+        self.assertTrue(response.success)
+        proposal = response.research_mission_continuation_proposal
+        self.assertIsNotNone(proposal)
+        self.assertIsNotNone(directly)
+        assert proposal is not None and directly is not None
+        # `proposal_id` (a fresh `uuid4()`) and `generated_at` (a fresh
+        # `datetime.now(UTC)`) are, by `continuation_proposal_for`'s own
+        # unmodified design, freshly derived on every call, so two
+        # independent calls can never share those two values byte-for-byte.
+        # Normalizing exactly those two fields and then asserting full
+        # dataclass equality proves every other field -- including
+        # `origin_run_id`, `origin_plan_digest`, `origin_stop_reason`,
+        # `origin_goal_status`, `origin_evidence_status`,
+        # `origin_evidence_limitations` and `seed_question` -- matches
+        # exactly, i.e. the intent adds no divergent computation.
+        self.assertEqual(
+            replace(proposal, proposal_id="normalized", generated_at=NOW),
+            replace(directly, proposal_id="normalized", generated_at=NOW),
+        )
+        self.assertIn(proposal.origin_run_id, response.message)
+
+    def test_reports_an_accurate_not_eligible_message_and_succeeds(self) -> None:
+        """A satisfied (ineligible) mission is refused explicitly, not silently.
+
+        Mirrors `test_returns_none_for_an_ineligible_satisfied_outcome` and,
+        like the traceability view's "no run" case, reports `success=True`
+        with an explicit, generic explanation rather than a crash or a
+        fabricated proposal.
+        """
+        snapshot = _snapshot(
+            stop_reason=AutonomyStopReason.RESEARCH_DELIVERABLE_READY,
+            checkpoint=None,
+        )
+        execution = ExecutionMustNotWrite(snapshot)
+        runs = RunManagerMustNotWrite(_run(with_note=True))
+        service = _service(execution, runs)
+        request = BrainRequest(
+            message="Preview mission continuation proposal",
+            source="desktop",
+            metadata={
+                "intent": MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+
+        self.assertTrue(response.success)
+        self.assertIsNone(response.research_mission_continuation_proposal)
+        self.assertIn("No continuation proposal is available", response.message)
+        self.assertIn("unresolved", response.message)
+        self.assertIn("partially_satisfied", response.message)
+        # The generic explanation folds every possible cause together; it
+        # never names this mission's actual (satisfied) status specifically.
+        self.assertNotIn("goal status is `satisfied`", response.message)
+
+    def test_reports_the_same_generic_message_when_no_run_is_recorded(self) -> None:
+        """A different ineligibility cause (no run) yields the same accurate,
+        generic explanation -- `proposal_for` exposes no reason code to
+        distinguish causes, so this intent must never fabricate one either.
+        """
+        snapshot = _snapshot(research_run_id=None, stop_reason=None)
+        execution = ExecutionMustNotWrite(snapshot)
+        service = _service(execution, None)
+        request = BrainRequest(
+            message="Preview mission continuation proposal",
+            source="desktop",
+            metadata={
+                "intent": MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+
+        self.assertTrue(response.success)
+        self.assertIsNone(response.research_mission_continuation_proposal)
+        self.assertIn("No continuation proposal is available", response.message)
+
+    def test_is_registered_as_a_request_the_service_will_handle(self) -> None:
+        service = _service(ExecutionMustNotWrite(None), None)
+        request = BrainRequest(
+            message="Preview mission continuation proposal",
+            source="desktop",
+            metadata={
+                "intent": MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        self.assertTrue(service.is_request(request))
+
+    def test_performs_no_write_and_no_unexpected_read(self) -> None:
+        """Only `mission_snapshot` and `get` are read; nothing is written."""
+        checkpoint = _agreement_checkpoint()
+        snapshot = _snapshot(
+            stop_reason=AutonomyStopReason.RESEARCH_DELIVERABLE_READY,
+            checkpoint=checkpoint,
+        )
+        execution = ExecutionMustNotWrite(snapshot)
+        run = _run(with_note=True)
+        runs = RunManagerMustNotWrite(run)
+        service = _service(execution, runs)
+        request = BrainRequest(
+            message="Preview mission continuation proposal",
+            source="desktop",
+            metadata={
+                "intent": MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+
+        self.assertTrue(response.success)
         self.assertEqual(execution.mission_snapshot_calls, ["plan-1"])
         self.assertEqual(runs.get_calls, ["run-1"])
 

@@ -365,10 +365,19 @@ class ResearchCommandBindingTests(unittest.TestCase):
         # Scoped to proposal actions. "Start research" is a pre-existing control
         # that creates a research run and has nothing to do with proposals; what
         # this milestone must not add is a way to approve or run one.
+        # Mission continuation proposals (Evaluate -> Adapt v1, an unrelated
+        # capability) also use the word "proposal" in their own button labels;
+        # excluded here by label so this assertion stays scoped to curiosity's
+        # own controls.
+        _mission_continuation_proposal_labels = {
+            "View continuation proposal",
+            "Use this proposal's question",
+        }
         proposal_handlers = {
             handler
             for label, handler in by_label.items()
             if "proposal" in label.casefold()
+            and label not in _mission_continuation_proposal_labels
         }
         self.assertEqual(
             proposal_handlers,

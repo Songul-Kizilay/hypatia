@@ -93,6 +93,9 @@ from research.ResearchMissionAuditTraceabilityGraph import (
     TraceabilityNodeKind,
     TraceabilityNodeRef,
 )
+from research.ResearchMissionContinuationProposal import (
+    ResearchMissionContinuationProposal,
+)
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
@@ -1162,6 +1165,15 @@ class TkinterDesktopWindow:
         #: as reported by the runtime (live results and the recovered listing).
         self._mission_run_ids: dict[str, str] = {}
         self._mission_audit_preview: ResearchMissionAuditExportPreview | None = None
+        #: The last continuation proposal shown, if any -- read by "Use this
+        #: proposal's question" so that action can populate the question
+        #: field without any Brain call of its own.
+        self._continuation_proposal: ResearchMissionContinuationProposal | None = None
+        #: The plan ID that `self._continuation_proposal` was fetched for.
+        #: "Use this proposal's question" refuses if this no longer matches
+        #: `_audit_plan_id()`, so a mission-selector change after viewing a
+        #: proposal can never feed a different mission's stale seed question.
+        self._continuation_proposal_plan_id: str | None = None
         #: Detail text for every row currently in the provenance tree, by row
         #: ID. Selecting a row only looks this up; it never starts a request.
         self._mission_audit_traceability_details: dict[str, str] = {}
@@ -2620,6 +2632,16 @@ class TkinterDesktopWindow:
             text="View provenance graph",
             command=self._view_mission_audit_traceability,
         ).grid(row=11, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        ttk.Button(
+            plan_actions,
+            text="View continuation proposal",
+            command=self._view_continuation_proposal,
+        ).grid(row=12, column=0, sticky="w", pady=(0, 4))
+        ttk.Button(
+            plan_actions,
+            text="Use this proposal's question",
+            command=self._use_continuation_proposal_question,
+        ).grid(row=12, column=1, columnspan=2, sticky="w", pady=(0, 4))
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -4234,6 +4256,85 @@ class TkinterDesktopWindow:
             selected[0], "No detail is recorded for this row."
         )
         self._mission_audit_traceability_detail.set(detail)
+
+    def _view_continuation_proposal(self) -> None:
+        """Load and show one closed mission's continuation proposal, read-only.
+
+        Reuses the shared plan-draft preview box, exactly like "Preview
+        mission audit export" does, and issues exactly one read-only Brain
+        request of its own. Stores the proposal only so "Use this proposal's
+        question" can read its seed question afterward; nothing here
+        executes, fetches, calls, authorizes or starts anything.
+        """
+        self._continuation_proposal = None
+        self._continuation_proposal_plan_id = None
+        plan_id = self._audit_plan_id()
+        if not plan_id:
+            self._status.set("Run or recover a learning research mission first.")
+            return
+        response = self._controller.continuation_proposal_preview(plan_id)
+        self._render_continuation_proposal(response)
+
+    def _render_continuation_proposal(self, response: BrainResponse) -> None:
+        proposal = response.research_mission_continuation_proposal
+        self._research_plan_preview.configure(state=tk.NORMAL)
+        self._research_plan_preview.delete("1.0", tk.END)
+        if not response.success or proposal is None:
+            self._research_plan_preview.insert(tk.END, response.message)
+            self._research_plan_preview.configure(state=tk.DISABLED)
+            self._status.set(response.message)
+            return
+        self._continuation_proposal = proposal
+        self._continuation_proposal_plan_id = self._audit_plan_id()
+        limitations = (
+            ", ".join(
+                limitation.value for limitation in proposal.origin_evidence_limitations
+            )
+            or "none recorded"
+        )
+        self._research_plan_preview.insert(
+            tk.END,
+            "Continuation proposal (read-only; nothing authorized or "
+            "started):\n\n"
+            f"Origin run: {proposal.origin_run_id}\n"
+            f"Origin plan digest: {proposal.origin_plan_digest}\n"
+            f"Origin stop reason: {proposal.origin_stop_reason.value}\n"
+            f"Origin goal status: {proposal.origin_goal_status.value}\n"
+            f"Origin evidence status: {proposal.origin_evidence_status.value}\n"
+            f"Origin evidence limitations: {limitations}\n\n"
+            # `_clean_text` strips directional-override/unsafe control
+            # characters -- the same normalization every other free-text
+            # field in this window applies -- without truncating, so the
+            # full (up to 2,000-character) seed question still round-trips
+            # verbatim into "Use this proposal's question" below.
+            f"Seed question:\n{_clean_text(proposal.seed_question)}",
+        )
+        self._research_plan_preview.see("1.0")
+        self._research_plan_preview.configure(state=tk.DISABLED)
+        self._status.set("continuation proposal: previewed; nothing written")
+
+    def _use_continuation_proposal_question(self) -> None:
+        """Copy the shown proposal's seed question into the question field.
+
+        Pure client-side `StringVar` mutation -- no Brain, network or
+        controller call of any kind. Refuses if the mission selector
+        (`_audit_plan_id()`) has changed since the proposal was viewed, so a
+        stale proposal for a different mission can never be copied in.
+        Everything after this remains the operator's own explicit preview ->
+        authorize -> start walk through the entirely unmodified existing
+        chain, exactly as if they had typed the question by hand.
+        """
+        proposal = self._continuation_proposal
+        if proposal is None:
+            self._status.set("View a continuation proposal first.")
+            return
+        if self._continuation_proposal_plan_id != self._audit_plan_id():
+            self._status.set(
+                "The selected mission changed; view its continuation proposal " "again."
+            )
+            return
+        self._research_question.set(proposal.seed_question)
+        self._status.set("research question: set from continuation proposal")
 
     def _review_mission_source_independence(self) -> None:
         """Load the mission's canonical run and list its evidence-bearing sources.

@@ -1848,6 +1848,28 @@ class DesktopController:
             )
         )
 
+    def continuation_proposal_preview(self, plan_id: str) -> BrainResponse:
+        """Preview one closed mission's continuation proposal. Writes nothing.
+
+        Identical validation and request shape to `preview_mission_audit_export`
+        and `mission_audit_traceability_view`: a pure read of
+        `ResearchMissionAuditApplicationService.proposal_for`, reusing that
+        method's existing eligibility gate exactly as-is. Never executes,
+        fetches, calls, authorizes or starts anything.
+        """
+        if not plan_id.strip():
+            raise ValueError("A mission plan ID is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview mission continuation proposal",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_continuation_proposal_preview",
+                    "research_plan_id": plan_id.strip(),
+                },
+            )
+        )
+
     def save_mission_audit_export(
         self,
         preview: ResearchMissionAuditExportPreview,
