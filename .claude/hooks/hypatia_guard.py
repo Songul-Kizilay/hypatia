@@ -6,20 +6,16 @@ Modes (argv[1]):
            workflow (force-push, remote ref deletion, repo deletion,
            permission bypass), including forms permission rules cannot match
            (``git -C . push -f``, ``+refspec``, combined short flags).
-           Merge, rebase, tag, hard reset, releases and PR merges are "ask"
-           rules in settings.json: each needs the user's explicit approval,
-           EXCEPT the one exact routine shape this guard explicitly allows:
-           a lone ``gh pr merge <number> --merge`` (optionally with exactly
-           one ``--subject <text>``) as the entire command, nothing chained
-           before or after it, and no other flag present. That is the one
-           step of CLAUDE.md's "Default-branch integration" a standing
-           milestone authorization covers without a fresh prompt. A plain
-           wildcard in settings.json cannot express this safely (it cannot
-           refuse to match ``--admin``/``--squash``/``--rebase``/
-           ``--delete-branch`` appearing inside the wildcarded region), so
-           the exact-shape check is done here, on real parsed tokens, and
-           the settings.json "ask" rule is left as the unchanged default
-           for every other ``gh pr merge`` invocation.
+           Merge, rebase, tag, hard reset and releases are "ask" rules in
+           settings.json: each needs the user's explicit approval. `gh pr
+           merge` is NOT an "ask" rule (see _pr_merge_auto_allow/
+           _pr_merge_denial below for why): this guard allows only the one
+           exact routine shape - a lone ``gh pr merge <number> --merge``
+           (optionally with exactly one ``--subject <text>``) as the entire
+           command, nothing chained before or after it - and explicitly
+           denies every other ``gh pr merge`` shape outright. That allowed
+           shape is the one step of CLAUDE.md's "Default-branch integration"
+           a standing milestone authorization covers without a fresh prompt.
   lint     PostToolUse (Edit/Write): run Ruff on one edited Python file.
 
 Standard library only. Hook input is parsed, never executed: no text from the
@@ -179,10 +175,20 @@ def _pr_merge_auto_allow(tokens: list[str]) -> bool:
     Deliberately an allowlist of the exact expected shape, not a denylist of
     known-dangerous flags: any flag other than ``--merge``/``--subject``,
     any non-numeric PR identifier, or any extra token anywhere fails this
-    check and falls through to the settings.json ask rule unchanged. This
-    is checked against real parsed tokens (see ``_segments``), not a glob,
-    specifically so a flag like ``--admin``, ``--squash``, ``--rebase`` or
-    ``--delete-branch`` can never hide inside a wildcarded region.
+    check. This is checked against real parsed tokens (see ``_segments``),
+    not a glob, specifically so a flag like ``--admin``, ``--squash``,
+    ``--rebase`` or ``--delete-branch`` can never hide inside a wildcarded
+    region.
+
+    Claude Code's own documented permission precedence is deny, then ask,
+    then allow, and a matching ``ask`` rule always still prompts regardless
+    of what a PreToolUse hook returns - a hook's ``"allow"`` cannot override
+    an ``ask`` rule the way an earlier version of this guard assumed
+    (confirmed against https://code.claude.com/docs/en/permissions.md and
+    https://code.claude.com/docs/en/hooks-guide.md after that assumption
+    was empirically wrong once in practice). settings.json therefore has NO
+    ``ask`` rule for ``gh pr merge`` any more - see ``_pr_merge_denial``,
+    which is what actually keeps every other shape from running.
     """
     if len(tokens) < 5:
         return False
@@ -199,6 +205,35 @@ def _pr_merge_auto_allow(tokens: list[str]) -> bool:
     if not rest:
         return True
     return len(rest) == 2 and rest[0] == "--subject"
+
+
+def _pr_merge_denial(tokens: list[str], only_segment: bool) -> str | None:
+    """Deny every ``gh pr merge`` shape except the one pre-authorized shape.
+
+    A hook's "allow" cannot carve an exception out of a broader "ask" rule
+    (deny > ask > allow is unconditional, per Claude Code's own docs), so an
+    "ask" rule can no longer gate the unsafe shapes here without also
+    gating the one safe shape this guard exists to auto-allow. Denying every
+    other shape outright - rather than leaving it to fall through to
+    whatever default handling an unmatched command would otherwise get -
+    keeps this guard's behavior deterministic and provable, and matches
+    CLAUDE.md's own absolute prohibition on squash/rebase-merging a
+    milestone PR or using ``--admin`` to bypass checks: those were never
+    meant to be merely "ask", so denying them outright is not a narrowing
+    of policy, it is enforcing the policy that already existed.
+    """
+    if _program(tokens[0]) != "gh" or tokens[1:3] != ["pr", "merge"]:
+        return None
+    if not only_segment:
+        return "A gh pr merge command must not be chained with anything else."
+    if _pr_merge_auto_allow(tokens):
+        return None
+    return (
+        "Only `gh pr merge <number> --merge` (optionally with one "
+        "`--subject <text>`) is pre-authorized. Any other gh pr merge "
+        "shape (a different flag, a non-numeric identifier, anything "
+        "extra) needs the user to run or explicitly authorize it directly."
+    )
 
 
 def command(payload: dict[str, object]) -> None:
@@ -219,9 +254,15 @@ def command(payload: dict[str, object]) -> None:
         if reason is not None:
             _deny(reason)
             return
+    only_segment = len(segments) == 1
+    for tokens in segments:
+        reason = _pr_merge_denial(tokens, only_segment)
+        if reason is not None:
+            _deny(reason)
+            return
     # The whole command must be exactly one safe-shaped call - nothing may
     # be chained before or after it, or the "allow" would cover that too.
-    if len(segments) == 1 and _pr_merge_auto_allow(segments[0]):
+    if only_segment and _pr_merge_auto_allow(segments[0]):
         _allow(
             "routine PR merge for an already-reviewed, CI-green Hypatia "
             "milestone (CLAUDE.md's Default-branch integration)."
