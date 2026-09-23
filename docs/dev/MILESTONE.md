@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Primary-vs-secondary source evidence type: a fifth operator-authored assessment dimension |
 | Base SHA | 06564ff12eb3a708a6288091125a59bc1459eaf5 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: discovery (complete) + implementation; hypatia-security: independent review pending; hypatia-qa: independent review pending; hypatia-release: pending |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-epistemics: discovery (full fan-out map of the 4 existing dimensions, cited file:line) + implementation (new `ResearchSourceEvidenceType` enum threaded through 12 `src/` files) + one follow-up fix closing a QA-found desktop test-coverage gap; hypatia-security: independent review, PASS, no findings, independently confirmed inertness by repo-wide grep and re-read of `ResearchClaimCalibrator`/`EvidenceSupportProfile`/`AssessmentWarningRules`; hypatia-qa: independent review, found one real narrow gap (no end-to-end desktop test proved a non-default `evidence_type` survived the UI→controller call), fixed and independently re-verified non-vacuous via temporary mutation testing; hypatia-release delivered v0.3.405 |
 | Blockers | none |
 
 Rationale: no milestone was open (v0.3.404 delivered and merged to
@@ -933,47 +933,55 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.404: truncated-valid-prefix load fault-injection coverage |
-| SHA | cfa8fb7e9b859cc38b63bbc7234c152dd6974178 |
-| Linux desktop CI (exact-SHA) | success (run 35848233084) |
-| Windows desktop CI (exact-SHA) | success (run 35848238689) |
+| Milestone | v0.3.405: primary-vs-secondary source evidence type |
+| SHA | 922d1d3ed8c893c61fc561336a71c709886c9cf3 |
+| Linux desktop CI (exact-SHA) | success (run 35871221044) |
+| Windows desktop CI (exact-SHA) | success (run 35871225561) |
 | Status | delivered |
-| PR | #383, MERGED 2026-09-23T10:35:25Z, standard merge commit `2ca8132ae9f409ee040b8b744a3b0e121654b825` |
-| origin/main reachability | verified: `git merge-base --is-ancestor cfa8fb7 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #384, MERGED 2026-09-23T14:13:18Z, standard merge commit `7110ca345fe800cfaeff055cf1c4a835b89cbdb6` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 922d1d3 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-23, hypatia-lead): PR #383 base `main`,
+Post-merge verification (2026-09-23, hypatia-lead): PR #384 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
 exactly 2 commits (the documentation-only ledger-reconciliation commit
-`4c02884` and v0.3.404's release commit `cfa8fb7`), 24 files (6 doc/version
-files plus the 18 new test files, matching the locked scope exactly, no
-`src/` file), `mergeStateStatus: CLEAN`, both PR-triggered
-`test-build-smoke` checks `pass`. Merged with `gh pr merge 383 --merge`
-— no interactive confirmation prompt. Author/committer identity on both
-carried commits confirmed unchanged (Songül Kızılay via GitHub noreply
-email, Claude Sonnet 5 co-author trailer preserved). Working tree clean
-after merge.
+`06564ff` and v0.3.405's release commit `922d1d3`), 30 files (5 doc/version
+files, 13 `src/` files including the new `ResearchSourceEvidenceType.py`,
+11 test files, one of which — `test_tkinter_desktop_window.py` — carries
+both the original implementation pass and the QA-triggered follow-up fix
+as a single squashed working-tree diff, matching the locked scope exactly),
+`mergeStateStatus: CLEAN`, both PR-triggered `test-build-smoke` checks
+`pass`. Merged with `gh pr merge 384 --merge` — no interactive
+confirmation prompt. Author/committer identity on both carried commits
+confirmed unchanged (Songül Kızılay via GitHub noreply email, Claude
+Sonnet 5 co-author trailer preserved). Working tree clean after merge.
 
-Note: this milestone's implementation was delegated to hypatia-runtime
-(18 new fault-injection tests across all 18 `JsonFile*Store` classes; no
-`src/` file required a fix — every store already failed closed on a
-truncated-valid-prefix load). Independent hypatia-security review (PASS,
-no findings, independently re-traced the three authority/budget-bearing
-stores' `load()` paths and downstream consumers) and independent
-hypatia-qa review (PASS, no findings, proved non-vacuousness via temporary
+Note: this milestone's implementation was delegated to hypatia-epistemics,
+resumed from the same agent that performed discovery (avoiding redundant
+rediscovery of the same fan-out map). Independent hypatia-security review
+(PASS, no findings) and independent hypatia-qa review (found one real,
+narrow gap — no end-to-end desktop test proved a non-default
+`evidence_type` survived the UI-to-controller call — fixed by the same
+implementer and independently re-verified non-vacuous via temporary
 mutation testing, restored cleanly) both ran as specialist subagents.
 hypatia-lead ran the full canonical gate suite directly on the integrated
-diff before release: 6638 tests, `OK (skipped=3)` (324.6s), Black/Ruff/MyPy
+diff before release: 6652 tests, `OK (skipped=3)` (140.8s), Black/Ruff/MyPy
 all clean, `git diff --check` clean (only pre-existing CRLF-normalization
-advisories on 3 files, no whitespace errors).
+advisories, no whitespace errors). The milestone's central safety claim —
+that `evidence_type` cannot become load-bearing — is proved by a
+differential, mutation-tested regression test
+(`tests/integration/test_research_claim_calibration.py::EvidenceTypeInertnessTests`)
+asserting full-object equality of `ResearchClaimCalibration` across all
+four `evidence_type` values on an otherwise-identical, non-trivial fixture.
 
-Note: v0.3.403 (SHA `848b37d23437a3adb038ef924fb1ca0a4c56455c`), v0.3.402
-(SHA `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401 (SHA
+Note: v0.3.404 (SHA `cfa8fb7e9b859cc38b63bbc7234c152dd6974178`), v0.3.403
+(SHA `848b37d23437a3adb038ef924fb1ca0a4c56455c`), v0.3.402 (SHA
+`793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401 (SHA
 `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400 (SHA
 `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
 `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.404 (this row), which is now the
+`origin/main` as ancestors of v0.3.405 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not
