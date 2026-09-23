@@ -14,10 +14,192 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Explicit tri-state target-scope resolution (Bug Bounty foundation, step 1) |
+| Base SHA | ad7de6cce455f8a931459190b18849de05bd5826 |
+| Status | implementation |
+| Specialists | hypatia-epistemics: sole implementer (avoids the dual-writer file-conflict risk CLAUDE.md warns against); hypatia-security: independent review pending, primary reviewer for this milestone given its subject matter; hypatia-qa: independent review pending; hypatia-release: pending |
+| Blockers | none |
+
+Rationale: user-directed pivot. The user explicitly redirected product
+direction away from the previously-planned pairwise source-relation
+milestone (not implemented this session — recorded as a valid future
+epistemics milestone, not discarded) toward the start of a bounded "Bug
+Bounty Researcher" roadmap, whose stated first required foundation is a
+scope-policy model with the invariant: the operator explicitly defines
+authorized scope; Hypatia may actively interact only with `IN_SCOPE`
+targets; `OUT_OF_SCOPE` targets must never receive active testing;
+`UNCERTAIN` scope must fail closed and require operator clarification.
+
+Repository-grounded discovery (three parallel read-only investigations, an
+Explore-then-Plan design pass, plus a targeted follow-up check, all
+2026-09-23) found this is not greenfield work: a substantial, tested
+bug-bounty program-scope backbone already exists —
+`src/research/ResearchTargetScope.py` (`TargetHostRule` exact/subdomain-only
+host matching + CIDR `allowed_networks`/`excluded_networks`, exclusions
+always win, "not explicitly allowed" already fails closed via
+`require_hostname()`/`require_addresses()`); `ResearchProgramScopeRevision.py`
+(its own docstring: "One immutable, human-confirmed bug-bounty program scope
+revision" — digest-bound, ≤1-hour-validity-ceilinged, one-way
+human-only revocation, single-active-revision-per-`program_id` succession);
+`ResearchProgramScopeExecutionPolicy.py` (permitted check classes/ports/
+rate/request/time budgets, digest-bound alongside scope);
+`ResearchProgramScopeEnrollmentService.py` (two-phase preview→confirm→
+revoke, persist-before-publish). Enforced at three real call sites:
+`ScopedPublicHttpsUrlValidator` (research source fetch, pre- and
+post-DNS-resolution re-checks, literal-IP consistency verification),
+`TargetResearchDraft` (desktop single-source-URL authoring),
+`KaliOperationPreviewApplicationService` (inert Kali preview gating, no
+process execution). Desktop reachability already exists via
+`TkinterDesktopWindow.py`'s "Kali" tab reading
+`program_scope_enrollment_service.revisions`.
+
+The one confirmed genuinely missing piece: no `IN_SCOPE`/`OUT_OF_SCOPE`/
+`UNCERTAIN` tri-state exists anywhere. Matching today is strictly boolean —
+`require_hostname`/`require_addresses` raise identically whether a host is
+explicitly excluded or simply not addressed by any rule, collapsing two
+operator-meaningfully-different outcomes into one refusal. This is exactly
+the distinction the stated invariant requires, and `require_*` cannot
+express it today (it only ever succeeds or raises).
+
+Presented this finding to the user via a clarifying question (given the
+scale of pre-existing infrastructure materially reframes "the smallest
+substantial milestone") with three framings: (a) add the tri-state resolver
+only, reusing all existing matching/persistence/enforcement unchanged; (b)
+the resolver plus extending program-enrollment desktop authoring if it
+proved thinner than needed; (c) something else. User selected (a), the
+smallest option.
+
+Scope: two new frozen types — `src/research/ResearchTargetScopeResolutionStatus.py`
+(a `StrEnum`: `IN_SCOPE`/`OUT_OF_SCOPE`/`UNCERTAIN`, plus a `.settles`
+property, modeled on `ResearchAttemptResolution.py`'s fail-closed-on-
+ambiguity discipline — the strongest existing precedent found for a true
+tri-state security-decision enum, not the merely-descriptive `UNKNOWN`
+members on assessment dimensions like `ResearchSourceApplicability`) and
+`src/research/ResearchTargetScopeResolution.py` (a frozen dataclass:
+`status`, `target`, `matched_rule: str | None` — `None` exactly when
+`UNCERTAIN`, non-empty otherwise — `reason: str`, all bounded and validated
+in `__post_init__`). Two new pure, additive methods on the existing
+`ResearchTargetScope` (same file): `resolve_hostname(hostname)` and
+`resolve_addresses(addresses)`, reusing the exact same normalization/
+matching primitives (`_dns_name`, `TargetHostRule.matches`, `_in_networks`)
+`require_hostname`/`require_addresses` already use, in the same
+exclusion-checked-first order, returning a typed result instead of raising.
+No schema or persistence change — `ResearchTargetScope` itself gains no new
+field, so no store/codec/digest change, no schema-version bump; backward
+compatibility is automatic since the resolver is a pure function over
+already-persisted, already-tested scope state.
+
+Visibility, kept narrow: (1) `KaliOperationPreviewApplicationService.py`
+additionally calls the new resolver when a preview is refused, to include
+the `OUT_OF_SCOPE` vs `UNCERTAIN` distinction in the refusal detail text —
+without changing whether the preview is refused (both statuses still
+refuse identically; explanation only, mirroring the v0.3.402/v0.3.403
+refusal-explanation discipline); (2) `TargetResearchDraft.py` and its
+`TkinterDesktopWindow.py` dialog counterpart show the tri-state resolution
+for a drafted source URL's hostname; (3) one new read-only Brain intent
+(e.g. `research_target_scope_resolution_preview`) exposing the resolver
+directly through `CognitiveEngine.py`/`DesktopController.py`, matching the
+existing preview-intent pattern, for checking a hostname against a scope
+with zero side effects.
+
+Non-goals: no change to `require_hostname`/`require_addresses` themselves,
+`ScopedPublicHttpsUrlValidator`, `KaliOperationAuthorizationApplicationService`,
+any authorization/execution gate, or `ResearchProgramScopeEnrollmentService`'s
+create/revoke workflow. No new program/engagement entity beyond the
+existing `program_id` string. No new desktop program-scope-enrollment
+authoring UI. No wildcard/CIDR matching-algorithm changes. No automatic
+scope inference of any kind (nothing widens scope from a redirect, CNAME,
+discovered asset, or certificate-transparency result — already true today;
+this milestone adds regression tests locking that in, not new behavior).
+No recon, tool execution, vulnerability scanning, or active-testing
+automation of any kind.
+
+Acceptance criteria: `resolve_hostname`/`resolve_addresses` correctly
+classify — exact host match, subdomain-only wildcard match (apex not
+auto-included), suffix-trick non-match (`attackerexample.com` vs
+`example.com`), lookalike-domain non-match, literal-IP/CIDR allow and
+exclude, exclusion-precedence-over-inclusion, and the core new case (a host
+addressed by no rule at all resolves `UNCERTAIN`, never `OUT_OF_SCOPE`);
+redirect/CNAME/CDN/third-party-API/certificate-transparency-style
+"discovered but never authored into a rule" scenarios all resolve
+`UNCERTAIN`, proving discovery never implies scope; restart/reload and
+legacy (v1-schema) persisted state produce identical resolutions, proving
+no session-derived state leaks in; a differential test proves every
+existing `ScopedPublicHttpsUrlValidator`/`KaliOperationPreviewApplicationService`
+test fixture's actual accept/refuse outcome is byte-for-byte unchanged
+before and after this milestone; full canonical gates green.
+
+Specialist ownership: hypatia-epistemics is the sole implementer, to avoid
+the dual-writer file-conflict risk this constitution warns against (both
+specialists would otherwise touch the same `src/research/` files).
+hypatia-security is the primary independent reviewer for this milestone
+given its subject matter (authority-adjacent explanatory surface over a
+real security boundary, even though it changes no enforcement);
+hypatia-qa reviews independently afterward; hypatia-release delivers only
+after both reviews and full canonical gates are green.
+
+Security implications: the critical property is that this milestone adds
+zero new authority — `IN_SCOPE` from the new resolver must never be
+readable as, or substitutable for, an actual execution grant; only the
+unchanged `require_hostname`/`require_addresses` gates and further
+upstream authorization records (`ResearchKaliOperationAuthorization`,
+program-scope revisions) create real execution authority. hypatia-security
+must independently verify `require_hostname`/`require_addresses`,
+`ScopedPublicHttpsUrlValidator`, and
+`KaliOperationAuthorizationApplicationService` are byte-for-byte unchanged,
+and that no code path anywhere treats a bare `resolve_*` result as
+sufficient to proceed with a fetch or operation.
+
+Epistemic implications: the tri-state distinction is itself an
+epistemic/explainability improvement — `UNCERTAIN` is an honest "this
+policy does not address this target" answer, never silently folded into
+either confident state. `matched_rule`/`reason` must cite only literal,
+already-persisted rule data, never inferred or model-generated text.
+
+Persistence implications: none — no schema, store, or codec change of any
+kind; the resolver is a pure read over the existing `ResearchTargetScope`
+shape.
+
+Restart/replay implications: none — resolution is a stateless pure
+function recomputed fresh from persisted scope data on every call; a test
+proves identical results across a fresh process reload.
+
+Authority implications: none created, widened, or restored. Discovery vs.
+active-testing authority stays structurally separated exactly as today:
+resolving a hostname is a side-effect-free read that grants nothing by
+itself.
+
+Budget implications: none — no budget primitive touched.
+
+Target implications: none — no target identity semantics changed; the
+resolver only classifies an already-given hostname/address against an
+already-persisted scope, never selects or substitutes a target.
+
+Credential implications: none — no credential primitive touched.
+
+Provenance requirements: `matched_rule`/`reason` must be literal citations
+of the exact persisted rule (or its absence) that produced the result —
+never inferred, paraphrased, or model-generated — mirroring this file's
+existing goal-explanation discipline (`ResearchMissionGoalExplanation`'s
+"does not interpret source/model prose" invariant).
+
+Test strategy: exhaustive adversarial matching cases (see acceptance
+criteria) in a new test class colocated with
+`tests/research/test_research_target_scope_store.py`'s existing
+convention; a `resolve_addresses` mirror of the network-only cases; a
+`KaliOperationPreviewApplicationService` refusal-detail differential test
+proving unchanged accept/refuse behavior; a desktop-reachability test for
+the `TargetResearchDraft` integration using this session's established
+real-constructed-widget pattern.
+
+## Historical scope: v0.3.405 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Primary-vs-secondary source evidence type: a fifth operator-authored assessment dimension |
 | Base SHA | 06564ff12eb3a708a6288091125a59bc1459eaf5 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: discovery (complete) + implementation; hypatia-security: independent review pending; hypatia-qa: independent review pending; hypatia-release: pending |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-epistemics: discovery (full fan-out map of the 4 existing dimensions, cited file:line) + implementation (new `ResearchSourceEvidenceType` enum threaded through 12 `src/` files) + one follow-up fix closing a QA-found desktop test-coverage gap; hypatia-security: independent review, PASS, no findings, independently confirmed inertness by repo-wide grep and re-read of `ResearchClaimCalibrator`/`EvidenceSupportProfile`/`AssessmentWarningRules`; hypatia-qa: independent review, found one real narrow gap (no end-to-end desktop test proved a non-default `evidence_type` survived the UI→controller call), fixed and independently re-verified non-vacuous via temporary mutation testing; hypatia-release delivered v0.3.405 |
 | Blockers | none |
 
 Rationale: no milestone was open (v0.3.404 delivered and merged to
@@ -933,47 +1115,55 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.404: truncated-valid-prefix load fault-injection coverage |
-| SHA | cfa8fb7e9b859cc38b63bbc7234c152dd6974178 |
-| Linux desktop CI (exact-SHA) | success (run 35848233084) |
-| Windows desktop CI (exact-SHA) | success (run 35848238689) |
+| Milestone | v0.3.405: primary-vs-secondary source evidence type |
+| SHA | 922d1d3ed8c893c61fc561336a71c709886c9cf3 |
+| Linux desktop CI (exact-SHA) | success (run 35871221044) |
+| Windows desktop CI (exact-SHA) | success (run 35871225561) |
 | Status | delivered |
-| PR | #383, MERGED 2026-09-23T10:35:25Z, standard merge commit `2ca8132ae9f409ee040b8b744a3b0e121654b825` |
-| origin/main reachability | verified: `git merge-base --is-ancestor cfa8fb7 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #384, MERGED 2026-09-23T14:13:18Z, standard merge commit `7110ca345fe800cfaeff055cf1c4a835b89cbdb6` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 922d1d3 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-23, hypatia-lead): PR #383 base `main`,
+Post-merge verification (2026-09-23, hypatia-lead): PR #384 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
 exactly 2 commits (the documentation-only ledger-reconciliation commit
-`4c02884` and v0.3.404's release commit `cfa8fb7`), 24 files (6 doc/version
-files plus the 18 new test files, matching the locked scope exactly, no
-`src/` file), `mergeStateStatus: CLEAN`, both PR-triggered
-`test-build-smoke` checks `pass`. Merged with `gh pr merge 383 --merge`
-— no interactive confirmation prompt. Author/committer identity on both
-carried commits confirmed unchanged (Songül Kızılay via GitHub noreply
-email, Claude Sonnet 5 co-author trailer preserved). Working tree clean
-after merge.
+`06564ff` and v0.3.405's release commit `922d1d3`), 30 files (5 doc/version
+files, 13 `src/` files including the new `ResearchSourceEvidenceType.py`,
+11 test files, one of which — `test_tkinter_desktop_window.py` — carries
+both the original implementation pass and the QA-triggered follow-up fix
+as a single squashed working-tree diff, matching the locked scope exactly),
+`mergeStateStatus: CLEAN`, both PR-triggered `test-build-smoke` checks
+`pass`. Merged with `gh pr merge 384 --merge` — no interactive
+confirmation prompt. Author/committer identity on both carried commits
+confirmed unchanged (Songül Kızılay via GitHub noreply email, Claude
+Sonnet 5 co-author trailer preserved). Working tree clean after merge.
 
-Note: this milestone's implementation was delegated to hypatia-runtime
-(18 new fault-injection tests across all 18 `JsonFile*Store` classes; no
-`src/` file required a fix — every store already failed closed on a
-truncated-valid-prefix load). Independent hypatia-security review (PASS,
-no findings, independently re-traced the three authority/budget-bearing
-stores' `load()` paths and downstream consumers) and independent
-hypatia-qa review (PASS, no findings, proved non-vacuousness via temporary
+Note: this milestone's implementation was delegated to hypatia-epistemics,
+resumed from the same agent that performed discovery (avoiding redundant
+rediscovery of the same fan-out map). Independent hypatia-security review
+(PASS, no findings) and independent hypatia-qa review (found one real,
+narrow gap — no end-to-end desktop test proved a non-default
+`evidence_type` survived the UI-to-controller call — fixed by the same
+implementer and independently re-verified non-vacuous via temporary
 mutation testing, restored cleanly) both ran as specialist subagents.
 hypatia-lead ran the full canonical gate suite directly on the integrated
-diff before release: 6638 tests, `OK (skipped=3)` (324.6s), Black/Ruff/MyPy
+diff before release: 6652 tests, `OK (skipped=3)` (140.8s), Black/Ruff/MyPy
 all clean, `git diff --check` clean (only pre-existing CRLF-normalization
-advisories on 3 files, no whitespace errors).
+advisories, no whitespace errors). The milestone's central safety claim —
+that `evidence_type` cannot become load-bearing — is proved by a
+differential, mutation-tested regression test
+(`tests/integration/test_research_claim_calibration.py::EvidenceTypeInertnessTests`)
+asserting full-object equality of `ResearchClaimCalibration` across all
+four `evidence_type` values on an otherwise-identical, non-trivial fixture.
 
-Note: v0.3.403 (SHA `848b37d23437a3adb038ef924fb1ca0a4c56455c`), v0.3.402
-(SHA `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401 (SHA
+Note: v0.3.404 (SHA `cfa8fb7e9b859cc38b63bbc7234c152dd6974178`), v0.3.403
+(SHA `848b37d23437a3adb038ef924fb1ca0a4c56455c`), v0.3.402 (SHA
+`793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401 (SHA
 `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400 (SHA
 `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
 `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.404 (this row), which is now the
+`origin/main` as ancestors of v0.3.405 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not

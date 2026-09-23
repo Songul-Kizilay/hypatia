@@ -22,6 +22,7 @@ from research.ResearchTargetScope import (
     ResearchTargetScope,
     TargetHostRule,
 )
+from research.ResearchTargetScopeResolution import ResearchTargetScopeResolution
 
 MAX_TARGET_FORM_FIELD_CHARACTERS = 65_536
 _ACTIONS = frozenset({"source_fetch", "source_accept"})
@@ -120,6 +121,24 @@ def _source_url(value: str, scope: ResearchTargetScope) -> str:
     if len(normalized) > MAX_RESEARCH_PLAN_AUTHORIZED_URL_CHARACTERS:
         raise ResearchError("Target source URL is too long.")
     return normalized
+
+
+def resolve_source_url_hostname(
+    url: str, scope: ResearchTargetScope
+) -> ResearchTargetScopeResolution:
+    """Explain one entered URL's host against scope, parsed loosely; grants nothing.
+
+    Unlike `_source_url`, this never requires the host to be in scope — it is
+    the tri-state explanation offered before, or alongside, that hard refusal,
+    so "not yet addressed by any rule" reads differently from "explicitly
+    excluded" rather than collapsing into the same rejection.
+    """
+    if not isinstance(url, str) or not url.strip():
+        raise ResearchError("Target source URL is invalid or too long.")
+    parsed = urlsplit(url.strip())
+    if not parsed.hostname:
+        raise ResearchError("Target source URL has no explicit host.")
+    return scope.resolve_hostname(parsed.hostname)
 
 
 @dataclass(frozen=True, slots=True)

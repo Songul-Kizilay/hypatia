@@ -8,7 +8,11 @@ from tkinter import scrolledtext, ttk
 from typing import Protocol
 
 from core.Exceptions import ResearchError
-from desktop.TargetResearchDraft import TargetResearchDraft, target_scope_from_fields
+from desktop.TargetResearchDraft import (
+    TargetResearchDraft,
+    resolve_source_url_hostname,
+    target_scope_from_fields,
+)
 from research.ResearchProgramScopeEnrollmentPreview import (
     PROGRAM_SCOPE_CREATE_ACTION,
     PROGRAM_SCOPE_REVOKE_ACTION,
@@ -167,9 +171,21 @@ class TargetResearchDraftDialog:
             foreground=foreground,
             insertbackground=foreground,
         )
-        box.grid(sticky="nsew")
+        box.grid(row=0, column=0, sticky="nsew")
         box.insert("1.0", values.get("source_urls", ""))
         self.fields["source_urls"] = box
+        self.scope_check_status = tk.StringVar(master=self.window)
+        ttk.Button(
+            urls,
+            text="Check scope (no network, not an authorization)",
+            command=self._check_target_scope,
+        ).grid(row=1, column=0, sticky="e", pady=(6, 0))
+        ttk.Label(
+            urls,
+            textvariable=self.scope_check_status,
+            wraplength=800,
+            justify="left",
+        ).grid(row=2, column=0, sticky="ew", pady=(4, 0))
         ttk.Label(
             panel,
             text=(
@@ -281,6 +297,45 @@ class TargetResearchDraftDialog:
             self.fields["excluded_hosts"].get("1.0", "end-1c"),
             self.fields["allowed_networks"].get("1.0", "end-1c"),
             self.fields["excluded_networks"].get("1.0", "end-1c"),
+        )
+
+    def _check_target_scope(self) -> None:
+        """Show each entered URL's tri-state scope read; performs no network I/O.
+
+        Purely explanatory: it never changes what "Use in plan" accepts or
+        refuses, and a settled read here is never itself permission to fetch
+        anything — only the unchanged authorize/start chain grants that.
+        """
+        try:
+            scope = self._current_scope()
+        except (ResearchError, ValueError) as error:
+            self.scope_check_status.set(f"Scope check unavailable: {error}")
+            return
+        rows = [
+            row.strip()
+            for row in self.fields["source_urls"].get("1.0", "end-1c").split("\n")
+            if row.strip()
+        ]
+        if not rows:
+            self.scope_check_status.set(
+                "Scope check: enter at least one source URL first."
+            )
+            return
+        lines: list[str] = []
+        for row in rows:
+            try:
+                resolution = resolve_source_url_hostname(row, scope)
+            except (ResearchError, ValueError) as error:
+                lines.append(f"{row}: {error}")
+                continue
+            if resolution.matched_rule is not None:
+                detail = f"matched rule: {resolution.matched_rule}"
+            else:
+                detail = "no rule in this scope addresses this host yet"
+            lines.append(f"{resolution.target}: {resolution.status.value} ({detail})")
+        self.scope_check_status.set(
+            "Scope check (explanatory only; not an authorization to fetch): "
+            + " | ".join(lines)
         )
 
     def _preview_scope_enrollment(self) -> None:

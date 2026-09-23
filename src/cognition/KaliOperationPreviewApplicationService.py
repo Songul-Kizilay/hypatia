@@ -20,6 +20,10 @@ from research.ResearchProgramScopeExecutionPolicy import (
 )
 from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
+from research.ResearchTargetScope import ResearchTargetScope
+from research.ResearchTargetScopeResolutionStatus import (
+    ResearchTargetScopeResolutionStatus,
+)
 from response.ResponseComposer import ResponseComposer
 
 KALI_OPERATION_PREVIEW_INTENT = "kali_operation_preview"
@@ -73,7 +77,12 @@ class KaliOperationPreviewApplicationService:
             revision_id=cast(str, request.metadata.get("scope_revision_id")),
             revision_digest=cast(str, request.metadata.get("scope_revision_digest")),
         )
-        revision.scope.require_hostname(hostname)
+        try:
+            revision.scope.require_hostname(hostname)
+        except ResearchError as error:
+            raise ResearchError(
+                str(error) + self._hostname_resolution_detail(revision.scope, hostname)
+            ) from error
         policy = revision.execution_policy
         check_class = self._check_class_for_kind(kind)
         if check_class not in policy.permitted_check_classes:
@@ -91,7 +100,15 @@ class KaliOperationPreviewApplicationService:
             destination = self._https_url_validator.validate_and_resolve(
                 f"https://{normalized_hostname}/"
             )
-            revision.scope.require_addresses(destination.addresses)
+            try:
+                revision.scope.require_addresses(destination.addresses)
+            except ResearchError as error:
+                raise ResearchError(
+                    str(error)
+                    + self._addresses_resolution_detail(
+                        revision.scope, destination.addresses
+                    )
+                ) from error
             resolved_address = destination.addresses[0]
         return ResearchKaliOperationPreview(
             program_id=revision.program_id,
@@ -173,3 +190,52 @@ class KaliOperationPreviewApplicationService:
         if not revision.valid_at(self._clock()):
             raise ResearchError("Kali operation preview scope revision is not active.")
         return revision
+
+    @staticmethod
+    def _hostname_resolution_detail(scope: ResearchTargetScope, hostname: str) -> str:
+        """Add the OUT_OF_SCOPE/UNCERTAIN distinction; never changes the refusal.
+
+        Explanatory only: whether a preview is refused is decided entirely by
+        `require_hostname` above, before this runs. This only appends detail
+        about why, by literally citing the same scope's resolved status.
+        """
+        try:
+            resolution = scope.resolve_hostname(hostname)
+        except ResearchError:
+            return ""
+        if resolution.matched_rule is not None:
+            detail = f"matched rule: {resolution.matched_rule}"
+        else:
+            detail = "no rule in this scope addresses this host"
+        return f" Scope resolution: {resolution.status.value} ({detail})."
+
+    @staticmethod
+    def _addresses_resolution_detail(
+        scope: ResearchTargetScope, addresses: tuple[str, ...]
+    ) -> str:
+        """Cite each excluded address's exact rule; never changes the refusal.
+
+        `require_addresses` only ever raises for an explicit exclusion, so the
+        only status named here is `OUT_OF_SCOPE` — this never introduces an
+        `UNCERTAIN` reading `require_addresses` itself does not check for.
+        """
+        try:
+            resolutions = scope.resolve_addresses(addresses)
+        except ResearchError:
+            return ""
+        excluded = tuple(
+            resolution
+            for resolution in resolutions
+            if resolution.status is ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE
+        )
+        if not excluded:
+            return ""
+        return (
+            " Scope resolution: "
+            + "; ".join(
+                f"{resolution.target} {resolution.status.value} "
+                f"(matched rule: {resolution.matched_rule})"
+                for resolution in excluded
+            )
+            + "."
+        )

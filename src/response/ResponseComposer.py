@@ -124,6 +124,7 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchTargetScopeCodec import target_scope_digest
+from research.ResearchTargetScopeResolution import ResearchTargetScopeResolution
 from research.SourceLoadStage import SourceLoadStage
 from research.SourceReputation import SourceReputation
 from response.HonestyPhrasebook import phrase
@@ -1135,6 +1136,48 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="kali_operation_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_target_scope_resolution_preview(
+        self,
+        request: BrainRequest,
+        resolution: ResearchTargetScopeResolution,
+    ) -> BrainResponse:
+        """Report one explanatory tri-state read; never an execution grant."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Target scope resolution:",
+                    f"Target: {resolution.target}",
+                    f"Status: {resolution.status.value}",
+                    "Matched rule: " + (resolution.matched_rule or "none"),
+                    f"Reason: {resolution.reason}",
+                    "(explanatory only; not an authorization to fetch or execute)",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_target_scope_resolution_preview",
+            memory_count=0,
+            research_target_scope_resolution=resolution,
+        )
+
+    def research_target_scope_resolution_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid resolution-preview request."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Target scope resolution preview rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_target_scope_resolution_preview",
             memory_count=0,
             success=False,
         )

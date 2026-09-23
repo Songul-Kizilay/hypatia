@@ -95,6 +95,9 @@ from cognition.ResearchPlanPreviewApplicationService import (
 from cognition.ResearchSourceAcceptanceService import (
     ResearchSourceAcceptanceService,
 )
+from cognition.ResearchTargetScopeResolutionApplicationService import (
+    ResearchTargetScopeResolutionApplicationService,
+)
 from cognition.RuntimeCapabilityProjection import (
     RuntimeCapabilityContext,
     RuntimeCapabilityEvidence,
@@ -709,6 +712,9 @@ class CognitiveEngine:
             ),
             research_run_manager=research_run_manager,
         )
+        self._research_target_scope_resolution_service = (
+            ResearchTargetScopeResolutionApplicationService(response_composer)
+        )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
@@ -857,6 +863,11 @@ class CognitiveEngine:
 
         if self._research_plan_preview_service.is_draft_preview_request(request):
             return self._research_plan_preview_service.process_draft_preview(request)
+
+        if self._research_target_scope_resolution_service.is_preview_request(request):
+            return self._research_target_scope_resolution_service.process_preview(
+                request
+            )
 
         if KaliOperationPreviewApplicationService.is_preview_request(request):
             if self._kali_operation_preview_service is None:

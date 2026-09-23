@@ -36,6 +36,7 @@ from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.ResearchTargetScope import ResearchTargetScope
 
 #: What the operator picks when they want the text to stay advisory. Kept out
 #: of the restriction vocabulary itself: "no restriction" is the absence of
@@ -288,6 +289,23 @@ class DesktopController:
         if not message.strip():
             raise ValueError("A desktop message cannot be empty.")
         return self._brain.process(message)
+
+    def preview_research_target_scope_resolution(
+        self,
+        scope: ResearchTargetScope,
+        hostname: str,
+    ) -> BrainResponse:
+        """Read-only tri-state check of one host against one scope; no side effect."""
+        return self._brain.process(
+            BrainRequest(
+                "Preview target scope resolution",
+                metadata={
+                    "intent": "research_target_scope_resolution_preview",
+                    "research_target_scope": scope,
+                    "hostname": hostname.strip(),
+                },
+            )
+        )
 
     def preview_kali_operation(
         self,

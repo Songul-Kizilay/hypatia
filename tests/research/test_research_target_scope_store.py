@@ -23,6 +23,10 @@ from research.ResearchTargetScopeCodec import (
     encode_target_scope,
     target_scope_digest,
 )
+from research.ResearchTargetScopeResolution import ResearchTargetScopeResolution
+from research.ResearchTargetScopeResolutionStatus import (
+    ResearchTargetScopeResolutionStatus,
+)
 from research.ScopedPublicHttpsUrlValidator import ScopedPublicHttpsUrlValidator
 
 
@@ -345,6 +349,339 @@ class TargetScopeStoreTests(unittest.TestCase):
         with patch.object(Path, "open", side_effect=PermissionError("denied")):
             with self.assertRaisesRegex(ResearchError, "read"):
                 self.store.load()
+
+
+class TargetScopeResolutionStatusTests(unittest.TestCase):
+    def test_only_the_two_confident_statuses_settle(self) -> None:
+        self.assertTrue(ResearchTargetScopeResolutionStatus.IN_SCOPE.settles)
+        self.assertTrue(ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE.settles)
+        self.assertFalse(ResearchTargetScopeResolutionStatus.UNCERTAIN.settles)
+
+    def test_exactly_three_values_exist(self) -> None:
+        self.assertEqual(
+            {member.value for member in ResearchTargetScopeResolutionStatus},
+            {"in_scope", "out_of_scope", "uncertain"},
+        )
+
+
+class TargetScopeResolutionRecordTests(unittest.TestCase):
+    """`matched_rule is None` iff `UNCERTAIN` is a structural invariant."""
+
+    def test_uncertain_requires_no_matched_rule(self) -> None:
+        ResearchTargetScopeResolution(
+            status=ResearchTargetScopeResolutionStatus.UNCERTAIN,
+            target="unknown.test",
+            matched_rule=None,
+            reason="No rule in this scope addresses this host.",
+        )
+        with self.assertRaises(ResearchError):
+            ResearchTargetScopeResolution(
+                status=ResearchTargetScopeResolutionStatus.UNCERTAIN,
+                target="unknown.test",
+                matched_rule="example.test",
+                reason="No rule in this scope addresses this host.",
+            )
+
+    def test_settled_statuses_require_a_non_empty_matched_rule(self) -> None:
+        for status in (
+            ResearchTargetScopeResolutionStatus.IN_SCOPE,
+            ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE,
+        ):
+            with self.subTest(status=status):
+                ResearchTargetScopeResolution(
+                    status=status,
+                    target="example.test",
+                    matched_rule="example.test",
+                    reason="Target host matches an explicitly allowed scope rule.",
+                )
+                with self.assertRaises(ResearchError):
+                    ResearchTargetScopeResolution(
+                        status=status,
+                        target="example.test",
+                        matched_rule=None,
+                        reason="Target host matches an explicitly allowed scope rule.",
+                    )
+                with self.assertRaises(ResearchError):
+                    ResearchTargetScopeResolution(
+                        status=status,
+                        target="example.test",
+                        matched_rule="   ",
+                        reason="Target host matches an explicitly allowed scope rule.",
+                    )
+
+    def test_empty_or_oversized_target_and_reason_are_rejected(self) -> None:
+        for target, reason in (("", "reason"), ("target", ""), ("x" * 501, "reason")):
+            with self.subTest(target=target, reason=reason):
+                with self.assertRaises(ResearchError):
+                    ResearchTargetScopeResolution(
+                        status=ResearchTargetScopeResolutionStatus.UNCERTAIN,
+                        target=target,
+                        matched_rule=None,
+                        reason=reason,
+                    )
+
+
+class TargetScopeResolveHostnameTests(unittest.TestCase):
+    def test_exact_host_match_is_in_scope_citing_the_exact_rule(self) -> None:
+        scope = ResearchTargetScope(allowed_hosts=(TargetHostRule("example.test"),))
+
+        resolution = scope.resolve_hostname("example.test")
+
+        self.assertEqual(
+            resolution.status, ResearchTargetScopeResolutionStatus.IN_SCOPE
+        )
+        self.assertEqual(resolution.target, "example.test")
+        self.assertEqual(resolution.matched_rule, "example.test")
+
+    def test_subdomain_only_wildcard_matches_a_subdomain_but_not_the_apex(
+        self,
+    ) -> None:
+        scope = ResearchTargetScope(
+            allowed_hosts=(TargetHostRule("example.test", True),)
+        )
+
+        subdomain = scope.resolve_hostname("api.example.test")
+        apex = scope.resolve_hostname("example.test")
+
+        self.assertEqual(subdomain.status, ResearchTargetScopeResolutionStatus.IN_SCOPE)
+        self.assertEqual(subdomain.matched_rule, "*.example.test")
+        self.assertEqual(apex.status, ResearchTargetScopeResolutionStatus.UNCERTAIN)
+        self.assertIsNone(apex.matched_rule)
+
+    def test_apex_rule_plus_subdomain_rule_together_cover_both(self) -> None:
+        scope = ResearchTargetScope(
+            allowed_hosts=(
+                TargetHostRule("example.test"),
+                TargetHostRule("example.test", True),
+            )
+        )
+
+        self.assertEqual(
+            scope.resolve_hostname("example.test").status,
+            ResearchTargetScopeResolutionStatus.IN_SCOPE,
+        )
+        self.assertEqual(
+            scope.resolve_hostname("api.example.test").status,
+            ResearchTargetScopeResolutionStatus.IN_SCOPE,
+        )
+
+    def test_suffix_trick_does_not_match_a_similarly_spelled_domain(self) -> None:
+        scope = ResearchTargetScope(allowed_hosts=(TargetHostRule("example.test"),))
+
+        # attackerexample.test ends with "example.test" as a raw string, but
+        # is not a subdomain of it and must never be treated as in scope.
+        resolution = scope.resolve_hostname("attackerexample.test")
+
+        self.assertEqual(
+            resolution.status, ResearchTargetScopeResolutionStatus.UNCERTAIN
+        )
+        self.assertIsNone(resolution.matched_rule)
+
+    def test_suffix_trick_does_not_match_a_subdomain_wildcard_rule(self) -> None:
+        scope = ResearchTargetScope(
+            allowed_hosts=(TargetHostRule("example.test", subdomains_only=True),)
+        )
+
+        # notexample.test ends with "example.test" as a raw string, but is
+        # not a subdomain of it (no "." boundary) and must never be treated
+        # as in scope, even though the rule allows any *.example.test host.
+        resolution = scope.resolve_hostname("notexample.test")
+
+        self.assertEqual(
+            resolution.status, ResearchTargetScopeResolutionStatus.UNCERTAIN
+        )
+        self.assertIsNone(resolution.matched_rule)
+
+    def test_lookalike_domain_does_not_match(self) -> None:
+        scope = ResearchTargetScope(allowed_hosts=(TargetHostRule("example.test"),))
+
+        resolution = scope.resolve_hostname("examp1e.test")
+
+        self.assertEqual(
+            resolution.status, ResearchTargetScopeResolutionStatus.UNCERTAIN
+        )
+
+    def test_literal_ip_allow_and_exclude_cite_the_exact_network(self) -> None:
+        scope = ResearchTargetScope(
+            allowed_hosts=(TargetHostRule("example.test"),),
+            allowed_networks=("93.184.216.0/24",),
+            excluded_networks=("93.184.216.35/32",),
+        )
+
+        allowed = scope.resolve_hostname("93.184.216.34")
+        excluded = scope.resolve_hostname("93.184.216.35")
+        unaddressed = scope.resolve_hostname("8.8.8.8")
+
+        self.assertEqual(allowed.status, ResearchTargetScopeResolutionStatus.IN_SCOPE)
+        self.assertEqual(allowed.matched_rule, "93.184.216.0/24")
+        self.assertEqual(
+            excluded.status, ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE
+        )
+        self.assertEqual(excluded.matched_rule, "93.184.216.35/32")
+        self.assertEqual(
+            unaddressed.status, ResearchTargetScopeResolutionStatus.UNCERTAIN
+        )
+        self.assertIsNone(unaddressed.matched_rule)
+
+    def test_exclusion_wins_over_inclusion_for_hosts(self) -> None:
+        scope = scope_fixture()
+
+        for hostname in ("pay.example.test", "deep.pay.example.test"):
+            with self.subTest(hostname=hostname):
+                resolution = scope.resolve_hostname(hostname)
+                self.assertEqual(
+                    resolution.status,
+                    ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE,
+                )
+
+    def test_a_host_addressed_by_no_rule_is_uncertain_never_out_of_scope(
+        self,
+    ) -> None:
+        scope = ResearchTargetScope(allowed_hosts=(TargetHostRule("example.test"),))
+
+        resolution = scope.resolve_hostname("totally-unrelated.test")
+
+        self.assertEqual(
+            resolution.status, ResearchTargetScopeResolutionStatus.UNCERTAIN
+        )
+        self.assertIsNone(resolution.matched_rule)
+        self.assertIn("no rule", resolution.reason.lower())
+
+    def test_discovery_by_redirect_cname_cdn_or_ct_log_never_implies_scope(
+        self,
+    ) -> None:
+        """A hostname merely observed, never authored into a rule, is UNCERTAIN.
+
+        Simulates the shapes a redirect target, a CNAME answer, a third-party
+        CDN/API host, or a certificate-transparency log entry would take —
+        none of them were ever added to this scope's rules, so none of them
+        may be read as settled, in either direction.
+        """
+        scope = ResearchTargetScope(allowed_hosts=(TargetHostRule("example.test"),))
+        discovered_hostnames = (
+            "redirect-target.example-cdn.net",  # a redirect Location host
+            "example.test.edge.cdn-provider.net",  # a CNAME answer
+            "api.third-party-vendor.test",  # a third-party API host
+            "new-subdomain.example.test",  # a CT-log-discovered subdomain
+        )
+
+        for hostname in discovered_hostnames:
+            with self.subTest(hostname=hostname):
+                resolution = scope.resolve_hostname(hostname)
+                self.assertEqual(
+                    resolution.status,
+                    ResearchTargetScopeResolutionStatus.UNCERTAIN,
+                )
+
+    def test_invalid_hostname_input_still_raises_like_require_hostname(self) -> None:
+        scope = scope_fixture()
+        with self.assertRaises(ResearchError):
+            scope.resolve_hostname("host%with%percent")
+        with self.assertRaises(ResearchError):
+            scope.resolve_hostname(123)  # type: ignore[arg-type]
+
+    def test_restart_reload_produces_identical_resolutions(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "scope.json"
+        scope = scope_fixture()
+        store = JsonFileResearchTargetScopeStore(path)
+        store.save(scope)
+
+        reloaded = JsonFileResearchTargetScopeStore(path).load()
+        assert reloaded is not None
+
+        for hostname in (
+            "example.test",
+            "api.example.test",
+            "pay.example.test",
+            "unaddressed.test",
+        ):
+            with self.subTest(hostname=hostname):
+                self.assertEqual(
+                    scope.resolve_hostname(hostname),
+                    reloaded.resolve_hostname(hostname),
+                )
+
+    def test_legacy_persisted_scope_resolves_unchanged(self) -> None:
+        """A scope decoded from its existing (only) schema resolves identically.
+
+        The resolver adds no field and reads nothing beyond the scope's
+        already-persisted shape, so a scope reconstructed purely from its own
+        stored document must resolve exactly like the in-memory original.
+        """
+        scope = scope_fixture()
+        decoded = decode_target_scope(encode_target_scope(scope))
+
+        for hostname in ("example.test", "pay.example.test", "unaddressed.test"):
+            with self.subTest(hostname=hostname):
+                self.assertEqual(
+                    scope.resolve_hostname(hostname),
+                    decoded.resolve_hostname(hostname),
+                )
+
+
+class TargetScopeResolveAddressesTests(unittest.TestCase):
+    def test_mirrors_the_network_only_allow_exclude_and_unaddressed_cases(
+        self,
+    ) -> None:
+        scope = ResearchTargetScope(
+            allowed_hosts=(TargetHostRule("example.test"),),
+            allowed_networks=("93.184.216.0/24",),
+            excluded_networks=("93.184.216.35/32",),
+        )
+
+        resolutions = scope.resolve_addresses(
+            ("93.184.216.34", "93.184.216.35", "8.8.8.8")
+        )
+
+        self.assertEqual(
+            [resolution.status for resolution in resolutions],
+            [
+                ResearchTargetScopeResolutionStatus.IN_SCOPE,
+                ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE,
+                ResearchTargetScopeResolutionStatus.UNCERTAIN,
+            ],
+        )
+        self.assertEqual(resolutions[0].matched_rule, "93.184.216.0/24")
+        self.assertEqual(resolutions[1].matched_rule, "93.184.216.35/32")
+        self.assertIsNone(resolutions[2].matched_rule)
+
+    def test_exclusion_wins_over_inclusion_for_an_address_in_both(self) -> None:
+        scope = ResearchTargetScope(
+            allowed_hosts=(TargetHostRule("example.test"),),
+            allowed_networks=("93.184.216.0/24",),
+            excluded_networks=("93.184.216.0/28",),
+        )
+
+        resolution = scope.resolve_addresses(("93.184.216.5",))[0]
+
+        self.assertEqual(
+            resolution.status, ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE
+        )
+        self.assertEqual(resolution.matched_rule, "93.184.216.0/28")
+
+    def test_invalid_address_set_still_raises_like_require_addresses(self) -> None:
+        scope = scope_fixture()
+        with self.assertRaises(ResearchError):
+            scope.resolve_addresses(())
+        with self.assertRaises(ResearchError):
+            scope.resolve_addresses(("not-an-address",))
+
+    def test_restart_reload_produces_identical_address_resolutions(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "scope.json"
+        scope = scope_fixture()
+        JsonFileResearchTargetScopeStore(path).save(scope)
+        reloaded = JsonFileResearchTargetScopeStore(path).load()
+        assert reloaded is not None
+
+        addresses = ("93.184.216.34", "93.184.216.35", "2606:4700::1")
+        self.assertEqual(
+            scope.resolve_addresses(addresses),
+            reloaded.resolve_addresses(addresses),
+        )
 
 
 if __name__ == "__main__":

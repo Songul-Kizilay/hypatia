@@ -112,6 +112,7 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchSourcePreview import ResearchSourcePreview
+from research.ResearchTargetScopeResolution import ResearchTargetScopeResolution
 from research.SemanticComparisonStepResult import SemanticComparisonStepResult
 from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
 from research.SourceLoadStage import SourceLoadStage
@@ -244,3 +245,4 @@ class BrainResponse:
     related_vulnerability_families: tuple[RelatedFamily, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None
+    research_target_scope_resolution: ResearchTargetScopeResolution | None = None

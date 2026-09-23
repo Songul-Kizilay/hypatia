@@ -2,10 +2,34 @@
 
 ## Runtime Version
 
-`v0.3.405 (Genesis)`
+`v0.3.406 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.406 adds a new explicit tri-state scope-resolution read
+(`IN_SCOPE`/`OUT_OF_SCOPE`/`UNCERTAIN`) over Hypatia's existing bug-bounty
+program-scope model, `ResearchTargetScope`: a new
+`ResearchTargetScopeResolutionStatus`/`ResearchTargetScopeResolution` pair,
+and two new pure, read-only methods, `resolve_hostname`/`resolve_addresses`,
+reusing the exact same matching primitives and exclusion-checked-first
+ordering the existing `require_hostname`/`require_addresses` enforcement
+gates already use. This closes the gap where matching was strictly
+boolean — an explicitly excluded host and a host simply unaddressed by any
+rule previously produced an identical refusal; `UNCERTAIN` is the new
+honest default meaning "no rule addresses this target — do not actively
+test, operator clarification required," and is never conflated with either
+confident state. The existing enforcement gates are completely unmodified
+— byte-for-byte, proven by a differential test — and the new resolver is
+purely additive/explanatory: it grants no authority, and no code path
+treats a `resolve_*` result as sufficient grounds for an active action
+(independently verified by security review). A new desktop "Check scope"
+button in `TargetResearchDraftDialog` (no network I/O, proven to never
+affect the accept/refuse decision) and a new read-only Brain intent,
+`research_target_scope_resolution_preview`, surface it. No schema or
+persistence change of any kind. This is step 1 of Hypatia's bounded Bug
+Bounty Researcher roadmap. No authority, budget, scope, target, or
+credential semantics changed.
 
 Version v0.3.405 adds a fifth operator-authored, citation-only assessment
 dimension, `evidence_type` (`unknown`/`primary`/`secondary`/`tertiary`),
