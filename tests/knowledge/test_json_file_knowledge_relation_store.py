@@ -199,6 +199,19 @@ class JsonFileKnowledgeRelationStoreTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), exact_snapshot)
         self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        records = [
+            self._record("source-1", "target-1"),
+            self._record("source-2", "target-2"),
+        ]
+        self.store.save(records)
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(KnowledgeError):
+            self.store.load()
+
     def test_failed_replace_preserves_existing_snapshot_and_cleans_temp_file(
         self,
     ) -> None:

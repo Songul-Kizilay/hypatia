@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.404] - 2026-09-23
+
+### Added
+
+- 18 new fault-injection tests, one per `JsonFile*Store` class, closing the
+  specific gap `docs/Roadmap/Master_Roadmap.md` Phase 7 named: "the specific
+  truncated-valid-prefix fixture itself is confirmed absent" across every
+  `JsonFile*Store` test file. Each new `test_truncated_valid_prefix_on_load_fails_safely`
+  builds a real, non-trivial, valid document through the store's own
+  `save()` path, reads the resulting bytes directly off disk, truncates them
+  at an interior cut point that leaves a non-empty prefix that is not
+  well-formed JSON, writes the truncated bytes back to the same path, and
+  asserts `load()` raises the store's own existing typed error
+  (`ResearchError`, `MemoryError`, `SessionError`, or `KnowledgeError`)
+  rather than returning an empty, partial, or fabricated result. This is a
+  genuine save-then-truncate-then-load round trip, not a hand-written
+  malformed string, reproducing what a crash mid-write on a non-atomic path
+  or a partially flushed filesystem would leave behind.
+- Stores covered (18/18): `JsonFileResearchExecutionStore`,
+  `JsonFileResearchRunStore`, `JsonFileResearchSourceContentStore`,
+  `JsonFileResearchKaliOperationAuthorizationStore`,
+  `JsonFileDeferredExecutionGrantStore`, `JsonFileResearchPlanAuthorizationStore`,
+  `JsonFileOneShotDeferredExecutionScheduleStore`, `JsonFileBackgroundTaskStore`,
+  `JsonFileHypothesisStore`, `JsonFileFailureLessonStore`,
+  `JsonFileReflectionReportStore`, `JsonFileCuriosityQuestionStore`,
+  `JsonFileVulnerabilityGraphStore`, `JsonFileResearchTargetScopeStore`,
+  `JsonFileResearchProgramScopeRevisionStore`, `JsonFileMemoryStore`,
+  `JsonFileSessionStore`, `JsonFileKnowledgeRelationStore`.
+
+No `src/` production code changed — every one of the 18 stores already
+failed closed on this fault (confirmed by direct inspection of each
+`load()` before this milestone was locked); this is regression coverage for
+already-correct behavior, not a bug fix. The three authority/budget-bearing
+stores among the eighteen (`JsonFileResearchKaliOperationAuthorizationStore`,
+`JsonFileDeferredExecutionGrantStore`, `JsonFileResearchPlanAuthorizationStore`)
+were independently security-reviewed to confirm their refusal is fail-closed
+— never readable downstream as a default-permissive or default-authorized
+state — not merely fail-noisy. No authority, budget, scope, target, or
+credential semantics changed; no schema-version bump; no change to any
+store's `save()` write path.
+
 ## [0.3.403] - 2026-09-23
 
 ### Added

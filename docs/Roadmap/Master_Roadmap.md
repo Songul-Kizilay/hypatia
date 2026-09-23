@@ -569,21 +569,19 @@ Persistence/concurrency:
       `OSError` (e.g. `tests/research/test_json_file_research_execution_store.py`,
       plus ten more added in v0.3.398). This closes exactly the gap this
       line used to describe)
-- [ ] Corrupted/truncated state handling on **load** (**re-corrected
-      2026-09-22**: the mid-write-*failure* case above is now closed; the
-      remaining gap is narrower than this line's v0.3.395 wording — a
-      dedicated test that takes a real, previously-saved document and
-      truncates its actual bytes at an arbitrary cut point (reproducing
+- [x] Corrupted/truncated state handling on **load** (**closed, v0.3.404**:
+      the mid-write-*failure* case above was already closed; the remaining
+      gap — a dedicated test that takes a real, previously-saved document
+      and truncates its actual bytes at an arbitrary cut point (reproducing
       what a crash mid-`write()` on a non-atomic path, or a partially
       flushed filesystem, would leave behind) and asserts `load()` refuses
-      it. 10+ JSON stores already have malformed-content-refuses tests
-      (e.g. `tests/integration/test_research_execution_restart.py::test_corrupted_store_refuses_rather_than_fabricating_state`)
-      and legacy-schema-load tests, and the existing exception-handling
-      machinery (blanket `except (UnicodeDecodeError, json.JSONDecodeError)`
-      plus required-field validation) very likely already covers this
-      case — but the specific truncated-valid-prefix fixture itself is
-      confirmed absent across every `JsonFile*Store` test file checked,
-      not merely undocumented)
+      it — is now closed for all 18 `JsonFile*Store` classes, each with a
+      new `test_truncated_valid_prefix_on_load_fails_safely` fault-injection
+      test performing a real save-then-truncate-then-load round trip, not a
+      hand-written malformed string. Every store was already fail-closed
+      before this milestone (no `src/` change was needed); this closes the
+      test-fixture gap itself, not a behavior gap. See CHANGELOG.md's
+      v0.3.404 entry for the full store list)
 - [x] File locking, concurrent-writer prevention (**corrected — was `[ ]`,
       uncredited**): `tests/core/test_exclusive_store_ownership.py` spawns
       real OS subprocesses, takes a kernel-level file lock, and proves a

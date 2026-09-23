@@ -14,10 +14,145 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Truncated-valid-prefix-on-load fault-injection coverage for every durable JSON store |
+| Base SHA | 4c0288476510258d5efcc1bb04e0976187bb3b5d |
+| Status | implementation |
+| Specialists | hypatia-runtime: implementation; hypatia-security: independent review pending; hypatia-qa: independent review pending; hypatia-release: pending |
+| Blockers | none |
+
+Rationale: selected from `docs/Roadmap/Master_Roadmap.md`'s own "Default
+development order". Item 1 (Evaluate -> Adapt) is delivered, v2 explicitly
+blocked on a human cross-mission authority/budget decision. Item 3 (Tool
+registry + policy engine) is explicitly flagged authority-adjacent and
+requiring a human check-in before autonomous implementation — excluded per
+standing instructions. Item 2 (persistence/concurrency/cancellation
+hardening) is the next legitimate item: the roadmap's own Phase 7 entry
+names one still-open, precisely bounded residual — "Corrupted/truncated
+state handling on **load**" — with the exact wording: existing tests cover
+hand-written malformed content (`"{ not json"` style strings), but "the
+specific truncated-valid-prefix fixture itself is confirmed absent across
+every `JsonFile*Store` test file checked, not merely undocumented."
+
+Re-verified directly against current code before locking (hypatia-lead,
+2026-09-23): 18 `JsonFile*Store` classes exist in `src/` (`grep -rl "class
+JsonFile.*Store" src/`): `JsonFileResearchExecutionStore`,
+`JsonFileResearchRunStore`, `JsonFileResearchSourceContentStore`,
+`JsonFileResearchKaliOperationAuthorizationStore`,
+`JsonFileDeferredExecutionGrantStore`, `JsonFileResearchPlanAuthorizationStore`,
+`JsonFileOneShotDeferredExecutionScheduleStore`, `JsonFileBackgroundTaskStore`,
+`JsonFileHypothesisStore`, `JsonFileFailureLessonStore`,
+`JsonFileReflectionReportStore`, `JsonFileCuriosityQuestionStore`,
+`JsonFileVulnerabilityGraphStore`, `JsonFileResearchTargetScopeStore`,
+`JsonFileResearchProgramScopeRevisionStore`, `JsonFileMemoryStore`,
+`JsonFileSessionStore`, `JsonFileKnowledgeRelationStore`. Every one already
+fails closed on unreadable/malformed content with its own typed error
+(`ResearchError`, `MemoryError`, `SessionError`, or `KnowledgeError`,
+confirmed by direct inspection of each `load()`), but
+`tests/integration/test_research_execution_restart.py::test_corrupted_store_refuses_rather_than_fabricating_state`
+and its siblings across the 16 dedicated per-store unit test files (plus
+`tests/research/test_research_target_scope_store.py` and
+`tests/research/test_research_program_scope_revision_store.py` for the two
+stores without a `test_json_file_*_store.py`-named file) all construct
+malformed content by hand rather than by truncating a real, previously
+valid, saved document's actual bytes — exactly the gap the roadmap names,
+and exactly the scenario a genuine crash mid-write on a non-atomic path or
+a partially flushed filesystem would produce.
+
+Scope: for each of the 18 stores listed above, add one new test to its
+existing dedicated test file that (1) builds a real, non-trivial, valid
+document through the store's own `save()` path using that file's existing
+fixture/builder helpers, (2) reads the resulting bytes directly off disk,
+(3) truncates them at an arbitrary interior cut point that leaves a
+non-empty prefix that is not well-formed JSON, (4) writes the truncated
+bytes back to the same path, and (5) asserts `load()` raises the store's
+own existing typed error rather than returning an empty, partial, or
+otherwise fabricated result. No new store, no new persistence mechanism,
+no schema-version bump, and no change to `save()`/atomic-write behavior is
+anticipated — the existing `except (UnicodeDecodeError, json.JSONDecodeError)`
+plus required-field validation already present in every `load()` is
+expected to already refuse a truncated prefix in most cases. If a specific
+store is found during implementation to NOT fail closed on a truncated
+prefix (for example, a cut point that happens to leave syntactically valid
+but semantically incomplete JSON that passes today's validation), fixing
+that store's `load()` to refuse it is in-scope per standing instructions
+("ordinary bugs inside the locked milestone: fix them without asking"),
+not scope creep.
+
+Non-goals: the roadmap's other bundled Phase 7 residual — WSL in-guest
+process-tree cleanup on Kali operation timeout — is deliberately excluded
+from this milestone. That item requires real WSL-guest process-management
+verification (asserting no orphaned process survives inside the Linux
+namespace), which cannot be safely bounded or deterministically tested
+unattended in this session and is a materially different engineering
+problem (subprocess/process-group lifecycle, not load-time fault
+injection) from what this milestone scopes; it remains a separate future
+residual, not discarded. No change to any authority, budget, scope,
+target, or credential field on any store's schema; no change to `save()`'s
+already-hardened (v0.3.397/v0.3.398) mid-write-failure atomicity; no
+change to what any store's `load()` accepts as *valid* content, only
+confirmation/hardening of what it refuses when content is truncated.
+
+Acceptance criteria: all 18 stores have a new truncation-fixture test in
+their existing test file; each new test is a genuine fault-injection test
+(real bytes physically truncated after a real successful save, not a
+hand-written malformed string); every new test passes against the final
+code; if any store required a `load()` fix to fail closed, a
+characterization run proves the new test would have failed before the fix;
+full canonical gates green (focused tests first, full suite once); no
+existing test's behavior or assertions weakened.
+
+Affected modules: the 18 `src/*/JsonFile*Store.py` files listed above
+(read-only unless a genuine refusal-gap fix is required in one) and their
+corresponding 18 test files under `tests/`.
+
+Security implications: three of the eighteen stores are authority/budget-
+bearing (`JsonFileResearchKaliOperationAuthorizationStore`,
+`JsonFileDeferredExecutionGrantStore`, `JsonFileResearchPlanAuthorizationStore`).
+hypatia-security must independently verify that a truncated authorization
+or grant document is refused outright with no partial trust, and — the
+critical property — that a refused load can never be read downstream as a
+default-permissive or default-authorized state (fail-closed, not merely
+fail-noisy). Also verify no test in this milestone changes any store's
+`save()` write path, since that is exactly the boundary v0.3.397/v0.3.398
+already hardened and reviewed.
+
+Epistemic implications: none — this is fault-injection testing of an
+existing fail-closed load path; it introduces no new evidence, claim, or
+provenance semantics and asserts no new epistemic state.
+
+Persistence implications: none structural (no schema change on any
+store); the milestone only adds load-time fault-injection coverage to
+already-existing schemas.
+
+Restart/replay implications: directly on-point — this is precisely the
+"restart encounters corrupted durable state" scenario across every
+persisted store in the codebase. The milestone proves restart never
+fabricates a partial or successful load from a truncated document for any
+of the 18 stores, reinforcing this file's "malformed, missing, stale,
+inconsistent, or ambiguous authority-bearing state fails closed" invariant
+uniformly rather than store-by-store.
+
+Authority/budget/target/credential implications: none created, widened, or
+restored by this milestone; it only adds test coverage proving existing
+refusal behavior holds under a fault (truncation) it was not previously
+exercised against, including for the three authority/budget-bearing
+stores named above.
+
+Test strategy: one new fault-injection test per store (18 total), each a
+real save-then-truncate-then-load round trip added to that store's
+existing test file; focused tests run per store during implementation;
+full canonical suite (unittest discover, Black, Ruff, MyPy, `git diff
+--check`) run once at the milestone boundary per this constitution's
+resource policy.
+
+## Historical scope: v0.3.403 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Deterministic gap-closing guidance on the mission goal explanation |
 | Base SHA | 201b1af345f9b853b522bd3f219b886d9c719415 |
-| Status | ci-pending — implementation, independent security review, independent QA review, and full canonical gates complete; awaiting release commit and exact-SHA CI |
-| Specialists | hypatia-epistemics-scope work performed directly by hypatia-lead (single-file, narrowly-bounded literal mapping); hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, all seven required test behaviors verified with real differential/equality assertions, full 133-test integration suite re-run clean |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-epistemics-scope work performed directly by hypatia-lead (single-file, narrowly-bounded literal mapping); hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, all seven required test behaviors verified with real differential/equality assertions, full 133-test integration suite re-run clean; hypatia-release delivered v0.3.403 |
 | Blockers | none |
 
 Rationale: user-directed. The user approved the prior turn's read-only
@@ -592,51 +727,44 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.402: persist budget-refusal reasons across a status refresh |
-| SHA | 793b5d70147438cad4a6a38590e61128a00aaa46 |
-| Linux desktop CI (exact-SHA) | success (run 35771449760) |
-| Windows desktop CI (exact-SHA) | success (run 35771465791) |
+| Milestone | v0.3.403: deterministic gap-closing guidance on the goal explanation |
+| SHA | 848b37d23437a3adb038ef924fb1ca0a4c56455c |
+| Linux desktop CI (exact-SHA) | success (run 35786167329) |
+| Windows desktop CI (exact-SHA) | success (run 35786172103) |
 | Status | delivered |
-| PR | #381, MERGED 2026-09-22T19:37:39Z, standard merge commit `cb96a3b674af5819651dca8571ba775d239f17c5` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 793b5d7 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #382, MERGED 2026-09-22T21:33:20Z, standard merge commit `52e5223a604592d9cb0df2de8d18b794c43647c7` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 848b37d origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-22, hypatia-lead): PR #381 base `main`,
+Post-merge verification (2026-09-22, hypatia-lead): PR #382 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 3 commits (v0.3.402's release commit `6e18a45`, its follow-up
-fixture-correction commit `793b5d7`, and the documentation-only
-product-direction commit `e24f085`), 15 files, `mergeStateStatus: CLEAN`,
-both PR-triggered checks `SUCCESS`. Merged with
-`gh pr merge 381 --merge --subject "..."` — no interactive confirmation
-prompt. Author/committer identity on all three carried commits confirmed
+exactly 3 commits (the documentation-only ledger-reconciliation commit
+`c0b4134`, the documentation-only skip-count-correction commit `201b1af`,
+and v0.3.403's release commit `848b37d`), 9 files, `mergeStateStatus:
+CLEAN`, both PR-triggered checks `SUCCESS`. Merged with `gh pr merge 382
+--merge --subject "..."` — no interactive confirmation prompt.
+Author/committer identity on all three carried commits confirmed
 unchanged (Songül Kızılay via GitHub noreply email). Working tree clean
 after merge.
 
-Note: implementation, security-relevant fixes (three findings addressed:
-the refusal reason now correctly survives `restored()`; `refuse_advance`
-is now only ever called when the execution is cleanly `RUNNING` with no
-step in flight, so it can never raise on a non-running/failed execution;
-refusal recording is skipped entirely whenever another step is actively
-running, eliminating any interference with that step's own result), and
-release for this milestone completed during an automatic session-limit
-resume; hypatia-lead independently re-verified all three fixes directly
-against the final code (not merely trusted the resumed session's own
-account) before proceeding, and independently re-ran the full canonical
-suite plus Black/Ruff/MyPy/`git diff --check` on the exact release commit
-before default-branch integration. That local rerun's exact skip count is
-not evidenced by any repository-local artifact, so it is not restated as
-a specific number here; the two exact-SHA CI runs already cited above
-(Linux `35771449760`, Windows `35771465791`) each independently collected
-6612 tests, with Linux reporting `OK (skipped=34)` and Windows reporting
-plain `OK` (0 skipped) — two genuine but distinct platform results whose
-skip counts are not interchangeable with each other or with the
-unevidenced local figure.
+Note: this milestone's implementation, independent security review,
+independent QA review, and release were all completed directly by
+hypatia-lead in one continuous session (no delegated specialist agent for
+the single-file literal-mapping implementation itself; hypatia-security
+and hypatia-qa each ran one independent review pass as specialist
+subagents, both PASS with no findings). Full canonical suite on the
+release SHA: 6620 tests, `OK (skipped=3)` — this local skip count is
+genuinely evidenced by this session's own full-suite run
+(`full_suite_out.log`), for this exact commit only; it does not
+retroactively validate or apply to the different, unevidenced v0.3.402
+claim corrected in commit `201b1af`.
 
-Note: v0.3.401 (SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400
-(SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
+Note: v0.3.402 (SHA `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401
+(SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400 (SHA
+`ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
 `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.402 (this row), which is now the
+`origin/main` as ancestors of v0.3.403 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not

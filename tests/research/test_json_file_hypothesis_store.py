@@ -48,6 +48,15 @@ class JsonFileHypothesisStoreFailurePathTests(unittest.TestCase):
 
         self.assertEqual(self.store.load(), original)
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        self.store.save([hypothesis("hypothesis-1"), hypothesis("hypothesis-2")])
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_partial_write_failure_preserves_previous_snapshot_byte_for_byte(
         self,
     ) -> None:

@@ -57,6 +57,20 @@ class JsonFileDeferredExecutionGrantStoreTests(unittest.TestCase):
 
         self.assertEqual(self.store.load(), original)
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        self.store.save(
+            [
+                grant(grant_id="grant-1", task_id="task-1"),
+                grant(grant_id="grant-2", task_id="task-2"),
+            ]
+        )
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_partial_write_failure_preserves_previous_document_byte_for_byte(
         self,
     ) -> None:

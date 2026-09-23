@@ -316,6 +316,15 @@ class TargetScopeStoreTests(unittest.TestCase):
             temporary.assert_not_called()
         self.assertEqual(self.path.read_bytes(), before)
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        self.store.save(self.scope)
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_corrupt_existing_snapshot_does_not_fall_back_to_absence(self) -> None:
         self.path.write_bytes(b"{bad json")
         with self.assertRaises(ResearchError):
