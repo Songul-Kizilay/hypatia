@@ -2,6 +2,58 @@
 
 All notable project changes are recorded here.
 
+## [0.3.406] - 2026-09-23
+
+### Added
+
+- A new explicit tri-state scope-resolution read over Hypatia's existing
+  bug-bounty program-scope model (`ResearchTargetScope`):
+  `ResearchTargetScopeResolutionStatus` (a `StrEnum`: `IN_SCOPE`/
+  `OUT_OF_SCOPE`/`UNCERTAIN`) and `ResearchTargetScopeResolution` (a frozen,
+  validated dataclass: `status`, `target`, `matched_rule` — `None` exactly
+  when `UNCERTAIN`, non-empty otherwise — `reason`). This closes the gap
+  where matching was strictly boolean: an explicitly excluded host and a
+  host simply unaddressed by any rule previously produced an identical
+  refusal from `require_hostname`/`require_addresses`, collapsing two
+  operator-meaningfully-different outcomes into one. `UNCERTAIN` is the new
+  honest default — "no rule addresses this target — do not actively test,
+  operator clarification required" — and is never conflated with either
+  confident state.
+- Two new pure, additive, read-only methods on `ResearchTargetScope`:
+  `resolve_hostname(hostname)` and `resolve_addresses(addresses)`. They
+  reuse the exact same normalization/matching primitives and
+  exclusion-checked-first ordering `require_hostname`/`require_addresses`
+  already use, returning a typed tri-state result instead of raising. No
+  schema or persistence change: `ResearchTargetScope` gains no new field,
+  so no store/codec/digest change and no schema-version bump.
+- `KaliOperationPreviewApplicationService`'s refusal-detail text now
+  includes the `OUT_OF_SCOPE` vs `UNCERTAIN` distinction when a preview is
+  refused — explanation only, mirroring the v0.3.402/v0.3.403
+  refusal-explanation discipline. A new "Check scope" button in the desktop
+  `TargetResearchDraftDialog` shows the tri-state resolution for a drafted
+  source URL's hostname (no network I/O). A new read-only Brain intent,
+  `research_target_scope_resolution_preview`, exposes the resolver directly
+  through `CognitiveEngine`/`DesktopController`, matching the existing
+  preview-intent pattern, with zero side effects.
+
+### Notes
+
+- The existing `require_hostname`/`require_addresses` enforcement gates are
+  completely unmodified — byte-for-byte, proven by a differential test
+  showing every existing `ScopedPublicHttpsUrlValidator`/
+  `KaliOperationPreviewApplicationService` test fixture's actual
+  accept/refuse outcome is unchanged before and after this milestone.
+- The new resolver is purely additive and explanatory: it grants no
+  authority, and no code path treats a `resolve_*` result — including a
+  bare `IN_SCOPE` — as sufficient grounds for an active action. This was
+  independently verified by security review (PASS, no findings). The new
+  desktop "Check scope" button was independently proven to never affect
+  the accept/refuse decision.
+- This is step 1 of Hypatia's bounded Bug Bounty Researcher roadmap
+  (scope-policy tri-state foundation). No authority, budget, scope,
+  target, or credential semantics changed; no schema/persistence change of
+  any kind.
+
 ## [0.3.405] - 2026-09-23
 
 ### Added

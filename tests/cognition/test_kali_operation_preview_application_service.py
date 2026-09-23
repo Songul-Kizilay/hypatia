@@ -531,5 +531,117 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
                 self.assertIsNone(response.kali_operation_preview)
 
 
+class KaliOperationPreviewNoBehaviorChangeDifferentialTests(unittest.TestCase):
+    """The tri-state resolver may only add refusal *text*, never a *decision*.
+
+    Every fixture this module already exercises is replayed twice: once with
+    the new resolution-detail augmentation disabled (simulating this
+    milestone's code absent) and once with it enabled (the real, current
+    code). `success` must match exactly and, whenever it differs at all, the
+    augmented message must retain the unaugmented one as a literal prefix —
+    proving the milestone only ever appends explanation, never changes
+    whether a preview is accepted or refused.
+    """
+
+    def setUp(self) -> None:
+        self.revision = revision_fixture()
+        self.store = FakeProgramScopeRevisionStore([self.revision])
+        self.service = KaliOperationPreviewApplicationService(
+            ResponseComposer(),
+            self.store,
+            clock=lambda: NOW,
+        )
+
+    def _requests(self) -> tuple[BrainRequest, ...]:
+        base = BrainRequest(
+            message="preview Kali operation",
+            metadata={
+                "intent": KALI_OPERATION_PREVIEW_INTENT,
+                "program_id": "program-a",
+                "scope_revision_id": self.revision.revision_id,
+                "scope_revision_digest": self.revision.revision_digest,
+                "kali_operation_kind": (
+                    ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                ),
+                "hostname": "www.example.test.",
+                "dns_record_type": ResearchDnsRecordType.A.value,
+            },
+        )
+        excluded_host_request = BrainRequest(
+            message="preview Kali operation",
+            metadata={**base.metadata, "hostname": "admin.example.test"},
+        )
+        outside_scope_request = BrainRequest(
+            message="preview Kali operation",
+            metadata={**base.metadata, "hostname": "outside.test"},
+        )
+        https_request = BrainRequest(
+            message="preview Kali operation",
+            metadata={
+                **base.metadata,
+                "kali_operation_kind": (
+                    ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                ),
+            },
+        )
+        return (
+            base,
+            excluded_host_request,
+            outside_scope_request,
+            https_request,
+        )
+
+    def test_every_fixture_accept_refuse_outcome_is_unchanged_by_augmentation(
+        self,
+    ) -> None:
+        resolved = [(2, 1, 6, "", ("93.184.216.34", 443))]
+        with (
+            patch("socket.getaddrinfo", return_value=resolved),
+            patch("subprocess.run"),
+            patch("subprocess.Popen"),
+        ):
+            unaugmented: list[tuple[bool, str]] = []
+            with (
+                patch.object(
+                    KaliOperationPreviewApplicationService,
+                    "_hostname_resolution_detail",
+                    return_value="",
+                ),
+                patch.object(
+                    KaliOperationPreviewApplicationService,
+                    "_addresses_resolution_detail",
+                    return_value="",
+                ),
+            ):
+                for request in self._requests():
+                    response = self.service.process_preview(request)
+                    unaugmented.append((response.success, response.message))
+
+            augmented: list[tuple[bool, str]] = []
+            for request in self._requests():
+                response = self.service.process_preview(request)
+                augmented.append((response.success, response.message))
+
+        self.assertEqual(len(unaugmented), len(augmented))
+        for (before_success, before_message), (after_success, after_message) in zip(
+            unaugmented, augmented, strict=True
+        ):
+            self.assertEqual(before_success, after_success)
+            if before_message == after_message:
+                continue
+            # Only the "Reason:" line may gain trailing detail; every other
+            # line — including the accept/refuse framing itself — is
+            # untouched, and even the changed line keeps its old text as an
+            # exact prefix rather than being reworded.
+            before_lines = before_message.split("\n")
+            after_lines = after_message.split("\n")
+            self.assertEqual(len(before_lines), len(after_lines))
+            for before_line, after_line in zip(before_lines, after_lines, strict=True):
+                if before_line == after_line:
+                    continue
+                self.assertTrue(before_line.startswith("Reason: "), before_line)
+                self.assertTrue(after_line.startswith(before_line), after_line)
+
+
 if __name__ == "__main__":
     unittest.main()

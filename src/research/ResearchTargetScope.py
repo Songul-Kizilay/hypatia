@@ -12,6 +12,10 @@ import re
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.ResearchTargetScopeResolution import ResearchTargetScopeResolution
+from research.ResearchTargetScopeResolutionStatus import (
+    ResearchTargetScopeResolutionStatus,
+)
 
 MAX_SCOPE_RULES = 100
 _LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
@@ -51,6 +55,11 @@ class TargetHostRule:
         if self.subdomains_only:
             return hostname.endswith("." + self.host)
         return hostname == self.host
+
+
+def _host_rule_citation(rule: TargetHostRule) -> str:
+    """Render one host rule exactly as it was authored, for citation only."""
+    return ("*." if rule.subdomains_only else "") + rule.host
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,3 +148,134 @@ class ResearchTargetScope:
                 raise ResearchError("Target scope address is invalid.") from error
             if excluded:
                 raise ResearchError("Target address is explicitly excluded from scope.")
+
+    def _matching_network(self, address: str, networks: tuple[str, ...]) -> str | None:
+        """Name which already-matched network decided a result, for citation only.
+
+        Never used to decide inclusion/exclusion itself — callers already
+        established that with `_in_networks`; this only finds which literal
+        rule to cite.
+        """
+        for network in networks:
+            if self._in_networks(address, (network,)):
+                return network
+        return None
+
+    def resolve_hostname(self, hostname: str) -> ResearchTargetScopeResolution:
+        """Explain this scope's tri-state stance on one host; grants nothing.
+
+        Read-only counterpart to `require_hostname`, reusing its exact
+        normalization and matching order. A settled result cites the literal
+        rule that decided it; an address this scope's rules never mention
+        returns `UNCERTAIN`, never `OUT_OF_SCOPE` — being unaddressed is not
+        the same as being excluded, and this resolution is never itself an
+        authorization to fetch, scan, or otherwise act on the target.
+        """
+        if not isinstance(hostname, str) or "%" in hostname:
+            raise ResearchError("Target scope host is invalid.")
+        try:
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            name = _dns_name(hostname)
+            for rule in self.excluded_hosts:
+                if rule.matches(name):
+                    return ResearchTargetScopeResolution(
+                        status=ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE,
+                        target=name,
+                        matched_rule=_host_rule_citation(rule),
+                        reason="Target host matches an explicitly excluded scope rule.",
+                    )
+            for rule in self.allowed_hosts:
+                if rule.matches(name):
+                    return ResearchTargetScopeResolution(
+                        status=ResearchTargetScopeResolutionStatus.IN_SCOPE,
+                        target=name,
+                        matched_rule=_host_rule_citation(rule),
+                        reason="Target host matches an explicitly allowed scope rule.",
+                    )
+            return ResearchTargetScopeResolution(
+                status=ResearchTargetScopeResolutionStatus.UNCERTAIN,
+                target=name,
+                matched_rule=None,
+                reason="No rule in this scope addresses this host.",
+            )
+        else:
+            if self._in_networks(hostname, self.excluded_networks):
+                network = self._matching_network(hostname, self.excluded_networks)
+                assert network is not None
+                return ResearchTargetScopeResolution(
+                    status=ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE,
+                    target=hostname,
+                    matched_rule=network,
+                    reason="Target address matches an explicitly excluded network.",
+                )
+            if self._in_networks(hostname, self.allowed_networks):
+                network = self._matching_network(hostname, self.allowed_networks)
+                assert network is not None
+                return ResearchTargetScopeResolution(
+                    status=ResearchTargetScopeResolutionStatus.IN_SCOPE,
+                    target=hostname,
+                    matched_rule=network,
+                    reason="Target address matches an explicitly allowed network.",
+                )
+            return ResearchTargetScopeResolution(
+                status=ResearchTargetScopeResolutionStatus.UNCERTAIN,
+                target=hostname,
+                matched_rule=None,
+                reason="No rule in this scope addresses this address.",
+            )
+
+    def resolve_addresses(
+        self, addresses: tuple[str, ...]
+    ) -> tuple[ResearchTargetScopeResolution, ...]:
+        """Explain this scope's tri-state stance on each address; grants nothing.
+
+        Read-only counterpart to `require_addresses`, mirroring its
+        address-only, network-only exclusion-before-inclusion checks, but
+        returning one typed resolution per address instead of raising on the
+        first exclusion.
+        """
+        if not isinstance(addresses, tuple) or not 1 <= len(addresses) <= 64:
+            raise ResearchError("Target scope address set is invalid.")
+        resolutions: list[ResearchTargetScopeResolution] = []
+        for address in addresses:
+            if not isinstance(address, str) or "%" in address:
+                raise ResearchError("Target scope address is invalid.")
+            try:
+                excluded = self._in_networks(address, self.excluded_networks)
+            except (ValueError, TypeError) as error:
+                raise ResearchError("Target scope address is invalid.") from error
+            if excluded:
+                network = self._matching_network(address, self.excluded_networks)
+                assert network is not None
+                resolutions.append(
+                    ResearchTargetScopeResolution(
+                        status=ResearchTargetScopeResolutionStatus.OUT_OF_SCOPE,
+                        target=address,
+                        matched_rule=network,
+                        reason="Target address matches an explicitly excluded network.",
+                    )
+                )
+                continue
+            allowed = self._in_networks(address, self.allowed_networks)
+            if allowed:
+                network = self._matching_network(address, self.allowed_networks)
+                assert network is not None
+                resolutions.append(
+                    ResearchTargetScopeResolution(
+                        status=ResearchTargetScopeResolutionStatus.IN_SCOPE,
+                        target=address,
+                        matched_rule=network,
+                        reason="Target address matches an explicitly allowed network.",
+                    )
+                )
+                continue
+            resolutions.append(
+                ResearchTargetScopeResolution(
+                    status=ResearchTargetScopeResolutionStatus.UNCERTAIN,
+                    target=address,
+                    matched_rule=None,
+                    reason="No rule in this scope addresses this address.",
+                )
+            )
+        return tuple(resolutions)

@@ -20,6 +20,7 @@ from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 
 
 class RecordingBrain:
@@ -1186,6 +1187,26 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertIs(response, self.response)
         self.assertEqual(self.brain.requests, ["research evidence status"])
+
+    def test_preview_research_target_scope_resolution_sends_structured_metadata(
+        self,
+    ) -> None:
+        scope = ResearchTargetScope(allowed_hosts=(TargetHostRule("example.test"),))
+
+        response = self.controller.preview_research_target_scope_resolution(
+            scope, "  example.test  "
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(
+            request.metadata["intent"],
+            "research_target_scope_resolution_preview",
+        )
+        self.assertIs(request.metadata["research_target_scope"], scope)
+        self.assertEqual(request.metadata["hostname"], "example.test")
 
 
 if __name__ == "__main__":
