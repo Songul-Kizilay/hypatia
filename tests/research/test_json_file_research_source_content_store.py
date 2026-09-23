@@ -69,6 +69,15 @@ class JsonFileResearchSourceContentStoreTests(unittest.TestCase):
                 with self.assertRaisesRegex(ResearchError, message):
                     self.store.load()
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        self.store.save([self.record])
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_save_rejects_duplicate_document_ids(self) -> None:
         with self.assertRaisesRegex(ResearchError, "document IDs"):
             self.store.save(

@@ -275,6 +275,15 @@ class JsonFileSessionStoreTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), exact_snapshot)
         self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        self.store.save(self._snapshot(active_session_id="work-1"))
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(SessionError):
+            self.store.load()
+
     def test_save_creates_a_missing_parent_directory(self) -> None:
         nested_path = self.path.parent / "nested" / "sessions.json"
 

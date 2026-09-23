@@ -431,6 +431,34 @@ class JsonFileMemoryStoreTests(unittest.TestCase):
         with self.assertRaises(MemoryError):
             self.store.load()
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        created_at = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
+        records = [
+            MemoryRecord(
+                memory_id="memory-1",
+                content="Saved conversation",
+                metadata={"intent": "message"},
+                tags=frozenset({"brain", "conversation"}),
+                created_at=created_at,
+                updated_at=created_at,
+            ),
+            MemoryRecord(
+                memory_id="memory-2",
+                content="Another saved conversation",
+                metadata={"intent": "note"},
+                tags=frozenset({"brain"}),
+                created_at=created_at,
+                updated_at=created_at,
+            ),
+        ]
+        self.store.save(records)
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(MemoryError):
+            self.store.load()
+
     def test_save_and_load_round_trip(self) -> None:
         created_at = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
         record = MemoryRecord(

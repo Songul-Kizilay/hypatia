@@ -549,6 +549,23 @@ class ProgramScopeRevisionStoreTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual(list(self.path.parent.glob("*.tmp")), [])
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        revoked_at = _CONFIRMED + timedelta(minutes=10)
+        first = revision_fixture()
+        replacement = revision_fixture(
+            "revision-2",
+            confirmed_at=revoked_at,
+            expires_at=revoked_at + timedelta(minutes=40),
+        )
+        self.store.save([first])
+        self.store.save([first.revoked(revoked_at), replacement])
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_corrupt_existing_history_blocks_overwrite(self) -> None:
         self.path.parent.mkdir(parents=True)
         self.path.write_bytes(b"{bad json")

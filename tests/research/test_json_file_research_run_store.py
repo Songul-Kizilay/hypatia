@@ -209,6 +209,41 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "observation ID"):
             self.store.load()
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        run = ResearchRun(
+            run_id="run-1",
+            question="Question",
+            status=ResearchRunStatus.COLLECTING,
+            sources=(
+                ResearchSourceRecord(
+                    document_id="document-1",
+                    url="https://example.test/source",
+                    title="Source",
+                    content_type="text/plain",
+                    fetched_at=self.now,
+                    added_at=self.now,
+                    observation_id="observation-1",
+                ),
+            ),
+            failures=(
+                ResearchFailureRecord(
+                    stage="source_discovery",
+                    reason="Timed out.",
+                    occurred_at=self.now,
+                    provider="nvd",
+                ),
+            ),
+            created_at=self.now,
+            updated_at=self.now,
+        )
+        self.store.save([run])
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_loads_v1_without_new_collections_and_rewrites_as_current(self) -> None:
         legacy_document = {
             "schema_version": 1,

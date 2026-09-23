@@ -2,10 +2,25 @@
 
 ## Runtime Version
 
-`v0.3.403 (Genesis)`
+`v0.3.404 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.404 adds 18 fault-injection tests, one per `JsonFile*Store`
+class, each proving that a store given a real previously-saved document
+whose on-disk bytes are then truncated at an interior cut point refuses to
+`load()` it — raising its own existing typed error (`ResearchError`,
+`MemoryError`, `SessionError`, or `KnowledgeError`) — rather than returning
+an empty, partial, or fabricated result. This closes the specific residual
+`docs/Roadmap/Master_Roadmap.md` Phase 7 named: the malformed-content-refuses
+case was already covered, but "the specific truncated-valid-prefix fixture
+itself" was confirmed absent. No `src/` production code changed — every one
+of the 18 stores already failed closed on this fault; this is regression
+coverage for already-correct behavior. The three authority/budget-bearing
+stores among the eighteen were independently security-reviewed to confirm
+fail-closed, not merely fail-noisy, behavior. No authority, budget, scope,
+target, or credential semantics changed.
 
 Version v0.3.403 adds deterministic, code-literal "what would help close this
 gap" guidance to `ResearchMissionGoalExplanation`, derived only from the

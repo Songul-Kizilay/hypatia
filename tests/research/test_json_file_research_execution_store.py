@@ -369,6 +369,25 @@ class JsonFileResearchExecutionStoreTests(unittest.TestCase):
         self.assertTrue(nested.exists())
         self.assertEqual(len(store.load()), 1)
 
+    def test_truncated_valid_prefix_on_load_fails_safely(self) -> None:
+        self.store.save(
+            [
+                snapshot(
+                    plan_id="plan-1",
+                    step_status=ResearchPlanStepStatus.COMPLETED,
+                    work_performed=True,
+                    operation="local_knowledge_search",
+                ),
+                snapshot(plan_id="plan-2"),
+            ]
+        )
+        original_bytes = self.path.read_bytes()
+
+        self.path.write_bytes(original_bytes[: len(original_bytes) // 2])
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_stored_document_carries_no_research_content(self) -> None:
         self.store.save(
             [
