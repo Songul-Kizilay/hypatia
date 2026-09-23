@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Explicit tri-state target-scope resolution (Bug Bounty foundation, step 1) |
 | Base SHA | ad7de6cce455f8a931459190b18849de05bd5826 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: sole implementer (avoids the dual-writer file-conflict risk CLAUDE.md warns against); hypatia-security: independent review pending, primary reviewer for this milestone given its subject matter; hypatia-qa: independent review pending; hypatia-release: pending |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-epistemics: sole implementer (avoided the dual-writer file-conflict risk); hypatia-security: independent review, PASS, no findings, traced every consumer of the new tri-state type and confirmed no path lets `UNCERTAIN`/bare `IN_SCOPE` reach an active action; hypatia-qa: independent review, PASS, extensive mutation testing on unaddressed-host defaulting/exclusion-precedence/subdomain-suffix-matching/unmatched-address handling (all mutations caught), found two minor test-coverage gaps (one fixed with a new wildcard-suffix-trick test, independently verified non-vacuous; one confirmed already accurately scoped, no change needed); hypatia-release delivered v0.3.406 |
 | Blockers | none |
 
 Rationale: user-directed pivot. The user explicitly redirected product
@@ -1115,47 +1115,54 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.405: primary-vs-secondary source evidence type |
-| SHA | 922d1d3ed8c893c61fc561336a71c709886c9cf3 |
-| Linux desktop CI (exact-SHA) | success (run 35871221044) |
-| Windows desktop CI (exact-SHA) | success (run 35871225561) |
+| Milestone | v0.3.406: explicit tri-state target-scope resolution |
+| SHA | bfc0a3c23736d722f44cc394342e1974c7b27d1f |
+| Linux desktop CI (exact-SHA) | success (run 35894553832) |
+| Windows desktop CI (exact-SHA) | success (run 35894559568) |
 | Status | delivered |
-| PR | #384, MERGED 2026-09-23T14:13:18Z, standard merge commit `7110ca345fe800cfaeff055cf1c4a835b89cbdb6` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 922d1d3 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #385, MERGED 2026-09-23T17:27:37Z, standard merge commit `08c8f0ec041146807a5bb9831f5c9ad8827b18a5` |
+| origin/main reachability | verified: `git merge-base --is-ancestor bfc0a3c origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-23, hypatia-lead): PR #384 base `main`,
+Post-merge verification (2026-09-23, hypatia-lead): PR #385 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
 exactly 2 commits (the documentation-only ledger-reconciliation commit
-`06564ff` and v0.3.405's release commit `922d1d3`), 30 files (5 doc/version
-files, 13 `src/` files including the new `ResearchSourceEvidenceType.py`,
-11 test files, one of which — `test_tkinter_desktop_window.py` — carries
-both the original implementation pass and the QA-triggered follow-up fix
-as a single squashed working-tree diff, matching the locked scope exactly),
-`mergeStateStatus: CLEAN`, both PR-triggered `test-build-smoke` checks
-`pass`. Merged with `gh pr merge 384 --merge` — no interactive
+`ad7de6c` and v0.3.406's release commit `bfc0a3c`), 21 files (4 doc/version
+files, 11 `src/` files including 3 new files — `ResearchTargetScopeResolutionStatus.py`,
+`ResearchTargetScopeResolution.py`, `ResearchTargetScopeResolutionApplicationService.py`
+— and 6 test files including 2 new files, matching the locked scope
+exactly), `mergeStateStatus: CLEAN`, both PR-triggered `test-build-smoke`
+checks `pass`. Merged with `gh pr merge 385 --merge` — no interactive
 confirmation prompt. Author/committer identity on both carried commits
 confirmed unchanged (Songül Kızılay via GitHub noreply email, Claude
 Sonnet 5 co-author trailer preserved). Working tree clean after merge.
 
-Note: this milestone's implementation was delegated to hypatia-epistemics,
-resumed from the same agent that performed discovery (avoiding redundant
-rediscovery of the same fan-out map). Independent hypatia-security review
-(PASS, no findings) and independent hypatia-qa review (found one real,
-narrow gap — no end-to-end desktop test proved a non-default
-`evidence_type` survived the UI-to-controller call — fixed by the same
-implementer and independently re-verified non-vacuous via temporary
-mutation testing, restored cleanly) both ran as specialist subagents.
-hypatia-lead ran the full canonical gate suite directly on the integrated
-diff before release: 6652 tests, `OK (skipped=3)` (140.8s), Black/Ruff/MyPy
-all clean, `git diff --check` clean (only pre-existing CRLF-normalization
-advisories, no whitespace errors). The milestone's central safety claim —
-that `evidence_type` cannot become load-bearing — is proved by a
-differential, mutation-tested regression test
-(`tests/integration/test_research_claim_calibration.py::EvidenceTypeInertnessTests`)
-asserting full-object equality of `ResearchClaimCalibration` across all
-four `evidence_type` values on an otherwise-identical, non-trivial fixture.
+Note: this is step 1 of Hypatia's bounded Bug Bounty Researcher roadmap.
+Repository-grounded discovery found a substantial, tested bug-bounty
+program-scope backbone already existed (`ResearchTargetScope`,
+`ResearchProgramScopeRevision`, `ResearchProgramScopeExecutionPolicy`,
+`ResearchProgramScopeEnrollmentService`); the one confirmed gap was that
+matching was strictly boolean, so an explicitly excluded host and an
+unaddressed host produced an identical refusal. This milestone added a
+purely additive `IN_SCOPE`/`OUT_OF_SCOPE`/`UNCERTAIN` tri-state read
+(`ResearchTargetScopeResolutionStatus`/`ResearchTargetScopeResolution`,
+`resolve_hostname`/`resolve_addresses` on the existing `ResearchTargetScope`)
+without modifying `require_hostname`/`require_addresses` at all — proven
+byte-for-byte unchanged by a differential test. Implementation was
+delegated to hypatia-epistemics as sole implementer (avoiding the
+dual-writer file-conflict risk). Independent hypatia-security review
+(PASS, no findings — traced every consumer of the new type and confirmed
+no path lets `UNCERTAIN`/bare `IN_SCOPE` reach an active action) and
+independent hypatia-qa review (PASS — extensive mutation testing on every
+key branch, all caught; found and closed one real test-coverage gap, a
+missing wildcard-suffix-trick regression test, independently re-verified
+non-vacuous) both ran as specialist subagents. hypatia-lead ran the full
+canonical gate suite directly on the integrated diff before release: 6690
+tests, `OK (skipped=3)` (325.4s), Black/Ruff/MyPy all clean, `git diff
+--check` clean (only pre-existing CRLF-normalization advisories, no
+whitespace errors).
 
-Note: v0.3.404 (SHA `cfa8fb7e9b859cc38b63bbc7234c152dd6974178`), v0.3.403
+Note: v0.3.405 (SHA `922d1d3ed8c893c61fc561336a71c709886c9cf3`), v0.3.404
+(SHA `cfa8fb7e9b859cc38b63bbc7234c152dd6974178`), v0.3.403
 (SHA `848b37d23437a3adb038ef924fb1ca0a4c56455c`), v0.3.402 (SHA
 `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401 (SHA
 `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400 (SHA
@@ -1163,7 +1170,7 @@ Note: v0.3.404 (SHA `cfa8fb7e9b859cc38b63bbc7234c152dd6974178`), v0.3.403
 `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.405 (this row), which is now the
+`origin/main` as ancestors of v0.3.406 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not
