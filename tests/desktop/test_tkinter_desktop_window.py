@@ -105,8 +105,9 @@ def _configure_source_judgement(
     applicability: str = "unknown",
     independence: str = "unknown",
     publication_status: str = "unknown",
+    evidence_type: str = "unknown",
 ) -> None:
-    """Attach the four structured judgement inputs the assessment form reads.
+    """Attach the five structured judgement inputs the assessment form reads.
 
     They default to `unknown` because that is what an operator who answered
     nothing has said. A fixture that defaulted them to a favourable value would
@@ -116,6 +117,7 @@ def _configure_source_judgement(
     window._research_source_applicability = RecordingInput(applicability)
     window._research_source_independence = RecordingInput(independence)
     window._research_source_publication_status = RecordingInput(publication_status)
+    window._research_source_evidence_type = RecordingInput(evidence_type)
 
 
 ASSESSMENT_NOW = datetime(2026, 8, 21, tzinfo=UTC)
@@ -5688,9 +5690,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "assessment-original",
             "high",
             # The structured judgement travels with the text, and it travels
-            # exactly as chosen: two dimensions answered, two left unknown.
+            # exactly as chosen: two dimensions answered, three left unknown.
             "useful",
             "direct",
+            "unknown",
             "unknown",
             "unknown",
         )
@@ -5714,6 +5717,60 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
 
         self.assertEqual(controller.assessment_write_previews, [values])
         self.assertEqual(controller.assessment_records, [values])
+        self.assertEqual(
+            responses,
+            [
+                controller.assessment_write_preview_response,
+                controller.assessment_record_response,
+            ],
+        )
+        confirm.assert_called_once()
+
+    def test_authored_assessment_carries_the_chosen_evidence_type_to_the_record(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        values = (
+            "run-123",
+            "document-123",
+            "evidence-123",
+            "Corrected assessment.",
+            "assessment-original",
+            "high",
+            # Every other judgement dimension stays at its unanswered default so
+            # this test isolates the one dimension under test: evidence_type
+            # must survive from the widget's actual (non-default) choice to the
+            # controller call, not merely be present as a parameter.
+            "unknown",
+            "unknown",
+            "unknown",
+            "unknown",
+            "primary",
+        )
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput(values[0])
+        window._research_source_document_id = RecordingInput(values[1])
+        window._research_assessment_evidence_ids = RecordingInput(values[2])
+        window._research_assessment_text = RecordingInput(values[3])
+        window._research_assessment_supersedes_id = RecordingInput(values[4])
+        window._research_information_trust = RecordingInput(values[5])
+        _configure_source_judgement(window, evidence_type="primary")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._preview_and_record_research_source_assessment()
+
+        self.assertEqual(controller.assessment_write_previews, [values])
+        self.assertEqual(controller.assessment_records, [values])
+        self.assertEqual(controller.assessment_write_previews[0][-1], "primary")
+        self.assertEqual(controller.assessment_records[0][-1], "primary")
         self.assertEqual(
             responses,
             [
@@ -7189,6 +7246,7 @@ class RecordingResearchSourceLoadController:
         applicability: str = "unknown",
         independence: str = "unknown",
         publication_status: str = "unknown",
+        evidence_type: str = "unknown",
     ) -> BrainResponse:
         if not evidence_ids.strip():
             raise ValueError("Research assessment evidence IDs cannot be empty.")
@@ -7203,6 +7261,7 @@ class RecordingResearchSourceLoadController:
             applicability,
             independence,
             publication_status,
+            evidence_type,
         )
         self.assessment_write_previews.append(values)
         return self.assessment_write_preview_response
@@ -7256,6 +7315,7 @@ class RecordingResearchSourceLoadController:
         applicability: str = "unknown",
         independence: str = "unknown",
         publication_status: str = "unknown",
+        evidence_type: str = "unknown",
     ) -> BrainResponse:
         values = (
             run_id,
@@ -7268,6 +7328,7 @@ class RecordingResearchSourceLoadController:
             applicability,
             independence,
             publication_status,
+            evidence_type,
         )
         self.assessment_records.append(values)
         return self.assessment_record_response

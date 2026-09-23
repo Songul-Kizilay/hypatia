@@ -14,6 +14,212 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Primary-vs-secondary source evidence type: a fifth operator-authored assessment dimension |
+| Base SHA | 06564ff12eb3a708a6288091125a59bc1459eaf5 |
+| Status | implementation |
+| Specialists | hypatia-epistemics: discovery (complete) + implementation; hypatia-security: independent review pending; hypatia-qa: independent review pending; hypatia-release: pending |
+| Blockers | none |
+
+Rationale: no milestone was open (v0.3.404 delivered and merged to
+`origin/main`; HEAD was a docs-only ledger reconciliation commit). Selected
+from `docs/Roadmap/Master_Roadmap.md`'s "Future direction" section,
+candidate C ("Epistemic (not numeric) source comparison"). The roadmap's
+own text names a concretely missing, safely-boundable slice of that
+candidate: "Adding these as new *operator-authored* fields (citation, not
+inference) would fit the existing discipline" — distinguishing this from
+the auto-*inferring* half of candidate C, which explicitly "must not be
+built without a separate, explicit design pass" and is out of scope here.
+Directly matches this session's product-direction priorities: "primary/
+original evidence should be preferred where appropriate."
+
+Re-verified directly against current code before locking (hypatia-lead +
+hypatia-epistemics discovery, 2026-09-23): `ResearchSourceAssessmentRecord`
+already carries 4 operator-authored closed-vocabulary dimensions
+(`usefulness`, `applicability`, `independence`, `publication_status`), all
+added together in v0.3.195 (schema version 11; current
+`JsonFileResearchRunStore._SCHEMA_VERSION` is 20). The roadmap's claim that
+"directness of evidence" is absent is stale — `applicability`
+(DIRECT/PARTIAL/BACKGROUND_ONLY/UNRELATED) already covers it. What remains
+genuinely absent, confirmed by a repository-wide grep with zero matches:
+any field distinguishing a firsthand/primary source from a secondary
+report of one or a tertiary summary of those.
+
+Fan-out discovery (hypatia-epistemics, read-only, cited file:line):
+`independence` is the one existing dimension with a large, entangled
+footprint (98 occurrences/26 files) because it feeds
+`EvidenceSupportProfile.independence_confirmed`, which changes the claim-
+calibration ceiling (`ResearchClaimCalibrator.py:291-298`), and has
+dedicated consumers in `HypothesisSupportCorrection.py`,
+`ResearchFailureLessonDeriver.py`, `ResearchHypothesisAppraiser.py`,
+`ResearchKnowledgeGapDetector.py`, `ResearchEvidenceCompletionEvaluation.py`
+and its own desktop review module. `publication_status` (36 occurrences/12
+files, all real touch points, zero prose false positives) is the smallest,
+purely presentational existing dimension: stored/validated field, one
+display line per renderer, one entry in the shared symmetric
+`AssessmentWarningRules` table (advisory-only, mutates no canonical
+state), one count-dict in the read-only provider-quality report. The new
+field is modeled on `publication_status`'s footprint, explicitly not on
+`independence`'s.
+
+Scope: a new `src/research/ResearchSourceEvidenceType.py` — a frozen
+`StrEnum` (`UNKNOWN` default, `PRIMARY`/`SECONDARY`/`TERTIARY`) — and a new
+`evidence_type: ResearchSourceEvidenceType = ResearchSourceEvidenceType.UNKNOWN`
+field threaded through exactly the same touch points `publication_status`
+uses today: `ResearchSourceAssessmentRecord.py` (field + `__post_init__`
+isinstance check), `ResearchSourceAssessmentWritePreview.py` (mirrored
+field + check), `ResearchRunManager.py` (`preview_source_assessment_write`,
+`record_source_assessment`, `_normalize_source_judgement`,
+`_identical_assessment` — add as a 5th element of the judgement tuple),
+`JsonFileResearchRunStore.py` (schema version 20 -> 21,
+`_ASSESSMENT_FIELDS_V21 = _ASSESSMENT_FIELDS_V11 | {"evidence_type"}`, one
+more `elif schema_version < 21` branch in `_parse_assessment`'s cascade,
+serialization line), `ResearchRunMarkdownRenderer.py` (one more bullet
+line), `ResearchReflectionGenerator.py`'s `_assessment_revision_detail`
+(one more tuple entry), `ResearchProviderQualityProfile.py` +
+`ResearchProviderQualityEvaluator.py` (one more count-dict field, named
+`evidence_type` to match the field name), `CognitiveEngine.py`'s
+`_research_source_assessment_write_values` (one more
+`research_source_evidence_type` metadata key, defaulting to `"unknown"`
+exactly like the other 4), `DesktopController.py` (`evidence_type` param
+threaded through `preview_research_source_assessment_write`,
+`record_research_source_assessment`,
+`_research_source_assessment_write_metadata`), `TkinterDesktopWindow.py`
+(one more `tk.StringVar`, one more tuple entry in the existing
+label/variable/vocabulary loop that already builds a `ttk.Label` +
+readonly `ttk.Combobox` generically, the fixed-row label below the loop
+bumped by one row, one more display line in the assessment-history/
+current-state f-strings, one more `.get()` feeding the controller call).
+
+`_parse_judgement`'s current single hardcoded `if schema_version < 11`
+threshold (shared by all 4 existing fields because they share a birth
+version) must become per-field-aware — add a `min_version` parameter,
+called with `11` for the 4 existing fields and `21` for `evidence_type` —
+this is the one piece of genuinely new code shape in this milestone, not a
+copy-paste of the existing pattern.
+
+Non-goals: no change to `EvidenceSupportProfile`, `ResearchClaimCalibrator`'s
+ceiling computation, `AssessmentWarningRules` (no new warning-rule entry —
+adding one would mean deciding what combination of primary/secondary/
+tertiary and other state deserves a warning, which is a judgement call
+this milestone deliberately does not make), the reputation ledger, or any
+of `HypothesisSupportCorrection.py`, `ResearchFailureLessonDeriver.py`,
+`ResearchHypothesisAppraiser.py`, `ResearchKnowledgeGapDetector.py`,
+`ResearchEvidenceCompletionEvaluation.py`, `MissionSourceIndependenceReview.py`
+(the last already forward-carries the other dimensions unchanged when
+writing an independence-only revision — `evidence_type` joins that
+unchanged-carry-forward set, not a new special case). No automatic or
+inferred classification of any kind — this is a citation-only field,
+exactly like the 4 that already exist; a build that guessed `primary` from
+a domain name or date would be inventing a judgement nobody made. No
+extension of `SourceAssessmentStepOperation.py`/plan-authored assessments
+— that operation already does not thread any of the 4 existing structured
+dimensions (only `information_trust`), so `evidence_type` inherits the
+same pre-existing gap; extending it is a separate scope decision, not a
+mechanical copy of this milestone's pattern, and is recorded as residual/
+future work. No change to `information_trust`, `usefulness`,
+`applicability`, `independence`, or `publication_status` themselves. No
+new authority, budget, target, or credential primitive of any kind.
+
+Affected modules: `src/research/ResearchSourceEvidenceType.py` (new),
+`ResearchSourceAssessmentRecord.py`, `ResearchSourceAssessmentWritePreview.py`,
+`ResearchRunManager.py`, `JsonFileResearchRunStore.py`,
+`ResearchRunMarkdownRenderer.py`, `ResearchReflectionGenerator.py`,
+`ResearchProviderQualityProfile.py`, `ResearchProviderQualityEvaluator.py`,
+`src/cognition/CognitiveEngine.py`, `src/desktop/DesktopController.py`,
+`src/desktop/TkinterDesktopWindow.py`, plus their corresponding test files.
+
+User-visible outcome: an operator recording a source assessment from the
+desktop's existing assessment-recording panel sees a 5th dropdown —
+primary / secondary / tertiary / unknown — beside the existing usefulness/
+applicability/independence/publication-status dropdowns, using the exact
+same widget pattern. The value is purely descriptive: it appears in the
+assessment display, the assessment-history list, the run's Markdown
+export, and the read-only provider-quality report; it changes no ranking,
+no reputation, no claim, no confidence, and no calibration ceiling.
+
+Acceptance criteria: `ResearchSourceEvidenceType` has exactly 4 values
+(`UNKNOWN` default plus the 3 named above); every one of the touch points
+listed in Scope reflects the new field symmetrically with the existing 4;
+a pre-v21 run store record decodes `evidence_type` as `UNKNOWN` with no
+backfill or inference (legacy-load test, modeled on
+`tests/research/test_json_file_research_run_store.py`'s existing v10/v11
+pattern); an unrecognised `evidence_type` value at v21 fails closed; a
+record missing the `evidence_type` key at exactly v21 fails closed; a
+full save/load round trip is lossless; the desktop combobox is reachable
+through a real constructed `Tk` widget test, not merely a controller-level
+check; `ResearchClaimCalibrator`'s computed warnings/ceilings are
+regression-tested to be byte-for-byte identical with and without a
+non-`UNKNOWN` `evidence_type` on otherwise-identical fixtures, proving the
+field is genuinely inert to calibration; `MissionSourceIndependenceReview`
+carries a non-default `evidence_type` forward unchanged when only
+`independence` is revised; full canonical gates green.
+
+Specialist ownership: hypatia-epistemics owns the full implementation
+(type design already drafted during discovery; the touch points span
+`src/research/` and the `src/desktop/`+`src/cognition/` wiring layer, but
+form one cohesive feature with heavy file overlap across nearly every
+touch point, so a single implementer avoids the multi-writer conflict risk
+this constitution warns against). hypatia-security and hypatia-qa review
+independently after integration. hypatia-release delivers only after both
+reviews and full canonical gates are green.
+
+Test strategy: schema-boundary tests (pre-v21 legacy load, v21 missing-
+key fail-closed, unrecognised-value fail-closed) modeled directly on the
+existing v10/v11 tests; a full round-trip save/load test; a real
+constructed-`Tk`-widget desktop reachability test for the new combobox
+(not a controller-only check); a `ResearchClaimCalibrator`
+non-interaction/inertness regression test (differential, not a substring
+check); a `ResearchReflectionGenerator` revision-detail test naming
+`evidence_type` when it changes; a `ResearchProviderQualityEvaluator`
+count-dict test; a `MissionSourceIndependenceReview` carry-forward test;
+`CognitiveEngine`/`DesktopController` metadata-threading tests mirroring
+the existing 4-dimension pattern.
+
+Security implications: the critical property is that `evidence_type`
+never becomes load-bearing by accident — hypatia-security must
+independently confirm it is not read by `EvidenceSupportProfile`,
+`ResearchClaimCalibrator`'s ceiling logic, the reputation ledger, or any
+authorization/budget/execution path, and that no new warning-rule entry
+was added. Also confirm the new metadata key in `CognitiveEngine.py`
+follows the same untrusted-input handling as the existing 4 (defaults to
+`"unknown"` on anything unrecognised, never raises on malformed desktop
+input, never accepts a value that bypasses the enum's closed vocabulary).
+
+Epistemic implications: this is the core of the milestone. `evidence_type`
+must remain a pure citation (a human saying what kind of witness a source
+is), never an inference from source text, domain name, publication date,
+or any automated heuristic. It must not be conflated with `independence`
+(which answers whether two sources are one witness or two) — a primary
+source that is also the only source is still exactly one source, and
+recording `PRIMARY` must never itself imply, suggest, or contribute to an
+independence or corroboration judgement.
+
+Persistence implications: one new optional-with-default field, additive
+only; `JsonFileResearchRunStore` schema version 20 -> 21; strict
+`set(document) == expected_fields` validation at load, matching the
+existing fail-closed discipline exactly; no backfill or inference for
+pre-v21 records.
+
+Restart/replay implications: none — `evidence_type` carries no status
+transition and is not read by any execution/replay path; it is decoded
+identically on every load regardless of restart history.
+
+Authority/budget/target/credential implications: none — no primitive of
+any kind is created, restored, or altered; this milestone only adds one
+more citation-only descriptive field to an existing, already-reviewed
+operator-authored record.
+
+Provenance requirements: `evidence_type` is always attributed to the
+operator who recorded the assessment (via the existing assessment
+record's `assessment_id`/`recorded_at`), never inferred or attributed to a
+model, source, or automated process; superseded assessments preserve
+their own `evidence_type` value exactly as they do for the other 4
+dimensions today (no rewriting of history).
+
+## Historical scope: v0.3.404 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Truncated-valid-prefix-on-load fault-injection coverage for every durable JSON store |
 | Base SHA | 4c0288476510258d5efcc1bb04e0976187bb3b5d |
 | Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |

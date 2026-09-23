@@ -2,10 +2,29 @@
 
 ## Runtime Version
 
-`v0.3.404 (Genesis)`
+`v0.3.405 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.405 adds a fifth operator-authored, citation-only assessment
+dimension, `evidence_type` (`unknown`/`primary`/`secondary`/`tertiary`),
+alongside the existing `usefulness`/`applicability`/`independence`/
+`publication_status` on `ResearchSourceAssessmentRecord`. It lets an
+operator record how far a source stands from the thing it describes — a
+firsthand account, a report of one, or a summary of reports — and is
+threaded through the exact same touch points `publication_status` already
+uses: the record and write-preview, `ResearchRunManager`,
+`JsonFileResearchRunStore` (schema version 20 -> 21, fail-closed), the
+Markdown renderer, the reflection-diff generator, the provider-quality
+report, `CognitiveEngine`'s Brain-intent metadata, `DesktopController`, and
+a new combobox in the desktop's existing source-assessment panel. This is
+a pure citation, never an inference, and is provably inert to claim
+calibration — a differential, mutation-tested regression test proves
+`ResearchClaimCalibrator`'s output is byte-for-byte identical regardless
+of `evidence_type` — and must not be conflated with `independence`: a
+primary source that is the only source is still exactly one source. No
+authority, budget, scope, target, or credential semantics changed.
 
 Version v0.3.404 adds 18 fault-injection tests, one per `JsonFile*Store`
 class, each proving that a store given a real previously-saved document

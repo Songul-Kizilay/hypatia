@@ -32,6 +32,7 @@ from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import (
@@ -93,7 +94,7 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 20
+    _SCHEMA_VERSION = 21
     _SUPPORTED_SCHEMA_VERSIONS = set(range(1, _SCHEMA_VERSION + 1))
     _DOCUMENT_FIELDS_V1_V18 = {"schema_version", "runs"}
     _DOCUMENT_FIELDS_V19 = _DOCUMENT_FIELDS_V1_V18 | {"source_revalidations"}
@@ -215,6 +216,10 @@ class JsonFileResearchRunStore:
         "independence",
         "publication_status",
     }
+    #: Version 21 records how far the operator judged the source to stand from
+    #: the thing it describes. Anything written before it decodes as `unknown`,
+    #: which is what those records truthfully hold: nobody was ever asked.
+    _ASSESSMENT_FIELDS_V21 = _ASSESSMENT_FIELDS_V11 | {"evidence_type"}
     _CLAIM_FIELDS = {
         "claim_id",
         "text",
@@ -433,6 +438,8 @@ class JsonFileResearchRunStore:
             # Version 19 adds document-level source revalidations, not run fields.
             19: self._RUN_FIELDS_V14,
             20: self._RUN_FIELDS_V14,
+            # Version 21 changed the shape of an assessment, not the run.
+            21: self._RUN_FIELDS_V14,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -693,8 +700,10 @@ class JsonFileResearchRunStore:
             expected_fields = self._ASSESSMENT_FIELDS_V5
         elif schema_version < 11:
             expected_fields = self._ASSESSMENT_FIELDS_V7
-        else:
+        elif schema_version < 21:
             expected_fields = self._ASSESSMENT_FIELDS_V11
+        else:
+            expected_fields = self._ASSESSMENT_FIELDS_V21
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError(
                 "Research run store contains an invalid assessment record."
@@ -720,19 +729,27 @@ class JsonFileResearchRunStore:
                 else self._parse_information_trust(value["information_trust"])
             ),
             usefulness=self._parse_judgement(
-                value, schema_version, "usefulness", ResearchSourceUsefulness
+                value, schema_version, "usefulness", ResearchSourceUsefulness, 11
             ),
             applicability=self._parse_judgement(
-                value, schema_version, "applicability", ResearchSourceApplicability
+                value, schema_version, "applicability", ResearchSourceApplicability, 11
             ),
             independence=self._parse_judgement(
-                value, schema_version, "independence", ResearchSourceIndependence
+                value, schema_version, "independence", ResearchSourceIndependence, 11
             ),
             publication_status=self._parse_judgement(
                 value,
                 schema_version,
                 "publication_status",
                 ResearchSourcePublicationStatus,
+                11,
+            ),
+            evidence_type=self._parse_judgement(
+                value,
+                schema_version,
+                "evidence_type",
+                ResearchSourceEvidenceType,
+                21,
             ),
         )
 
@@ -742,6 +759,7 @@ class JsonFileResearchRunStore:
         schema_version: int,
         field: str,
         vocabulary: type[Any],
+        min_version: int,
     ) -> Any:
         """Return one structured judgement, or `unknown` for a record without one.
 
@@ -749,8 +767,13 @@ class JsonFileResearchRunStore:
         `unknown`. A judgement this build cannot read is a judgement somebody
         made, and quietly showing it as never made would be worse than refusing
         to open the file.
+
+        `min_version` is the schema version this particular dimension was born
+        in. Not every structured judgement arrived together, so a record older
+        than this one's own birth version truthfully has none of it, while a
+        record at or after it is expected to carry it explicitly.
         """
-        if schema_version < 11:
+        if schema_version < min_version:
             return vocabulary("unknown")
         try:
             return vocabulary(value[field])
@@ -1039,6 +1062,7 @@ class JsonFileResearchRunStore:
                     "applicability": assessment.applicability.value,
                     "independence": assessment.independence.value,
                     "publication_status": assessment.publication_status.value,
+                    "evidence_type": assessment.evidence_type.value,
                 }
                 for assessment in run.assessments
             ],

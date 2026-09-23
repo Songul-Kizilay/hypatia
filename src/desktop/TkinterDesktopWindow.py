@@ -114,6 +114,7 @@ from research.ResearchSourceComparisonNoteRecord import (
     MAX_COMPARISON_NOTE_EVIDENCE,
     ResearchSourceComparisonNoteRecord,
 )
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -1154,6 +1155,9 @@ class TkinterDesktopWindow:
         )
         self._research_source_publication_status = tk.StringVar(
             value=ResearchSourcePublicationStatus.UNKNOWN.value
+        )
+        self._research_source_evidence_type = tk.StringVar(
+            value=ResearchSourceEvidenceType.UNKNOWN.value
         )
         self._research_source_dimensions = tk.StringVar(value="")
         self._mission_independence_source = tk.StringVar()
@@ -3229,6 +3233,11 @@ class TkinterDesktopWindow:
                     self._research_source_publication_status,
                     ResearchSourcePublicationStatus,
                 ),
+                (
+                    "Evidence type (operator judgement)",
+                    self._research_source_evidence_type,
+                    ResearchSourceEvidenceType,
+                ),
             )
         ):
             row = 3 + offset
@@ -3259,7 +3268,7 @@ class TkinterDesktopWindow:
             textvariable=self._research_source_dimensions,
             justify="left",
         ).grid(
-            row=7,
+            row=8,
             column=0,
             columnspan=4,
             sticky="w",
@@ -5943,6 +5952,7 @@ class TkinterDesktopWindow:
                 f"applicability={current.applicability.value}, "
                 f"independence={current.independence.value}, "
                 f"publication={current.publication_status.value}, "
+                f"evidence type={current.evidence_type.value}, "
                 f"information trust={current.information_trust.value}"
             )
         reputation = SourceReputationLedger().for_origin(origin_of(source.url), [run])
@@ -6011,6 +6021,7 @@ class TkinterDesktopWindow:
                 ("applicability", record.applicability.value),
                 ("independence", record.independence.value),
                 ("publication", record.publication_status.value),
+                ("evidence type", record.evidence_type.value),
             )
             if value != "unknown"
         )
@@ -9526,6 +9537,7 @@ class TkinterDesktopWindow:
             self._research_source_applicability.get(),
             self._research_source_independence.get(),
             self._research_source_publication_status.get(),
+            self._research_source_evidence_type.get(),
         )
         try:
             preview_response = (

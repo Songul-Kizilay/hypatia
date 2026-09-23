@@ -39,6 +39,7 @@ for entry in (SRC_DIR, ROOT_DIR):
         sys.path.append(str(entry))
 
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from tests.desktop.test_paired_research_journey import (
     DETAIL_URL,
     DOI_URL,
@@ -816,6 +817,62 @@ class BoundCommandSelectionTests(PairedJourneyFixture):
                 ]
                 self.assertEqual(document_id, source.document_id)
         self.assertNotEqual(targets[DOI_URL], targets[DETAIL_URL])
+
+
+class EvidenceTypeComboboxReachabilityTests(unittest.TestCase):
+    """The fifth assessment dropdown must be reachable through the real builder.
+
+    A controller-level test can prove the field is threaded end to end without
+    proving the desktop actually offers it -- a combobox left out of
+    `_build_layout` would still pass every controller-level test. This drives
+    the real, unmodified `TkinterDesktopWindow.__init__`/`_build_layout`, with
+    only the tkinter widget classes replaced by recorders, and inspects the
+    widget those recorders actually captured.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.window, cls.widgets = build_real_window()
+
+    def _combobox_for(self, variable: Any) -> RecordingWidget:
+        matches = [
+            widget
+            for widget in self.widgets
+            if widget.textvariable is variable and "values" in widget.kwargs
+        ]
+        self.assertEqual(
+            len(matches),
+            1,
+            "expected exactly one combobox bound to this variable",
+        )
+        return matches[0]
+
+    def test_the_evidence_type_combobox_is_actually_built(self) -> None:
+        combobox = self._combobox_for(self.window._research_source_evidence_type)
+
+        self.assertEqual(
+            combobox.kwargs["values"],
+            tuple(value.value for value in ResearchSourceEvidenceType),
+        )
+        self.assertEqual(combobox.kwargs.get("state"), "readonly")
+
+    def test_the_evidence_type_variable_defaults_to_unknown(self) -> None:
+        self.assertEqual(
+            self.window._research_source_evidence_type.get(),
+            ResearchSourceEvidenceType.UNKNOWN.value,
+        )
+
+    def test_the_evidence_type_combobox_is_distinct_from_the_other_four(self) -> None:
+        """Reachable and its own widget -- not accidentally sharing a variable."""
+        other_variables = (
+            self.window._research_source_usefulness,
+            self.window._research_source_applicability,
+            self.window._research_source_independence,
+            self.window._research_source_publication_status,
+        )
+        for variable in other_variables:
+            with self.subTest(variable=variable):
+                self.assertIsNot(variable, self.window._research_source_evidence_type)
 
 
 if __name__ == "__main__":

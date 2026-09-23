@@ -169,6 +169,10 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                         "- **Publication status:** "
                         f"{assessment_record.publication_status.value}"
                     ),
+                    (
+                        "- **Evidence type:** "
+                        f"{assessment_record.evidence_type.value}"
+                    ),
                     "- **Evidence IDs:** "
                     + ", ".join(
                         _inline(value) for value in assessment_record.evidence_ids

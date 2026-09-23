@@ -27,6 +27,7 @@ from core.Exceptions import ResearchError
 from research.ProviderSampleSize import ProviderSampleSize, sample_size_of
 from research.ResearchQueryCategory import ResearchQueryCategory
 from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
@@ -51,6 +52,7 @@ class ResearchProviderQualityProfile:
     publication: dict[ResearchSourcePublicationStatus, int] = field(
         default_factory=dict
     )
+    evidence_type: dict[ResearchSourceEvidenceType, int] = field(default_factory=dict)
     sample_document_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -85,6 +87,7 @@ class ResearchProviderQualityProfile:
             ("applicability", ResearchSourceApplicability),
             ("independence", ResearchSourceIndependence),
             ("publication", ResearchSourcePublicationStatus),
+            ("evidence_type", ResearchSourceEvidenceType),
         ):
             counts = getattr(self, name)
             if not isinstance(counts, dict):
@@ -97,7 +100,13 @@ class ResearchProviderQualityProfile:
         # The appraised sources are the unit, so the four dimensions describe the
         # same set and must agree about how big it is. A disagreement means a
         # source was counted on one dimension and lost on another.
-        for name in ("usefulness", "applicability", "independence", "publication"):
+        for name in (
+            "usefulness",
+            "applicability",
+            "independence",
+            "publication",
+            "evidence_type",
+        ):
             if sum(getattr(self, name).values()) != self.assessed_count:
                 raise ResearchError(
                     f"Provider quality {name} does not describe every sample."
@@ -177,5 +186,11 @@ class ResearchProviderQualityProfile:
             count = self.publication.get(publication_value, 0)
             rendered.append(
                 f"    {publication_value.value}: {count} / {self.assessed_count}"
+            )
+        rendered.append(f"  evidence type (of {self.assessed_count} assessed):")
+        for evidence_type_value in ResearchSourceEvidenceType:
+            count = self.evidence_type.get(evidence_type_value, 0)
+            rendered.append(
+                f"    {evidence_type_value.value}: {count} / {self.assessed_count}"
             )
         return tuple(rendered)

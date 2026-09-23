@@ -39,6 +39,7 @@ from cognition.ResearchSourceAcceptanceService import ResearchSourceAcceptanceSe
 from core.Exceptions import ResearchError
 from eventbus.Event import Event
 from eventbus.EventBus import EventBus
+from knowledge.Chunk import Chunk
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
@@ -52,6 +53,7 @@ from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -1272,6 +1274,114 @@ class CalibrationCompositionTests(CalibrationFixture):
             ),
             research_run_manager=self.manager if with_runs else None,
         )
+
+
+class EvidenceTypeInertnessTests(unittest.TestCase):
+    """`evidence_type` must not move a single computed warning or ceiling.
+
+    This is the milestone's central safety claim: a fifth citation-only
+    dimension was added beside `independence`, and nothing here may read it.
+    The proof is differential -- build two otherwise-identical runs that
+    disagree only on `evidence_type`, calibrate both, and require the exact
+    same `ResearchClaimCalibration` object back, not merely a matching verdict.
+    """
+
+    def _calibration(self, evidence_type: str):
+        """Two sources, unknown independence, disagreeing only on `evidence_type`.
+
+        Unknown independence keeps the ceiling below `STRONG_EVIDENCE` on
+        unmodified code. Two resources (rather than one) makes this fixture
+        sensitive to the corroboration/independence ceiling path too, not only
+        the per-source warning tables -- a mutation that let `evidence_type`
+        stand in for `independence` would move this exact ceiling.
+        """
+        manager = ResearchRunManager(
+            clock=lambda: FETCHED,
+            id_factory=lambda: "run-1",
+            evidence_id_factory=iter(
+                f"evidence-{number}" for number in range(1, 3)
+            ).__next__,
+            assessment_id_factory=iter(
+                f"assessment-{number}" for number in range(1, 3)
+            ).__next__,
+            claim_id_factory=lambda: "claim-1",
+        )
+        run_id = manager.create(QUESTION).run_id
+        evidence_ids = []
+        for slug in ("a", "b"):
+            document_id = f"document-{slug}"
+            manager.add_source(
+                run_id,
+                ResearchSource(
+                    url=f"https://example.test/inertness-{slug}",
+                    title=f"Source {slug}",
+                    content="Saturn has a prominent ring system.",
+                    content_type="text/plain",
+                    fetched_at=FETCHED,
+                ),
+                document_id,
+            )
+            manager.add_evidence(
+                run_id,
+                Chunk(
+                    document_id,
+                    0,
+                    "Saturn has a prominent ring system.",
+                    chunk_id=f"chunk-{slug}",
+                ),
+                "Directly relevant.",
+            )
+            evidence_id = manager.get(run_id).evidence[-1].evidence_id
+            manager.record_source_assessment(
+                run_id,
+                document_id,
+                [evidence_id],
+                "Assessed for the inertness test.",
+                None,
+                "medium",
+                "useful",
+                "direct",
+                "unknown",
+                "normal",
+                evidence_type,
+            )
+            evidence_ids.append(evidence_id)
+        manager.record_claim(
+            run_id,
+            evidence_ids,
+            "The rings have a measurable age.",
+            "strong_evidence",
+            "high",
+        )
+        run = manager.get(run_id)
+        for assessment in run.assessments:
+            self.assertEqual(
+                assessment.evidence_type, ResearchSourceEvidenceType(evidence_type)
+            )
+        [calibration] = ResearchClaimCalibrator().calibrate(run)
+        return calibration
+
+    def test_a_primary_evidence_type_produces_a_byte_for_byte_identical_result(
+        self,
+    ) -> None:
+        unknown = self._calibration("unknown")
+        primary = self._calibration("primary")
+
+        # Ground truth first: unknown independence caps the ceiling below
+        # `STRONG_EVIDENCE` and the claim reads as overstated, exactly as it
+        # would without this milestone's field existing at all.
+        self.assertFalse(unknown.profile.independence_confirmed)
+        self.assertIs(unknown.supported_state, ResearchEpistemicState.LIKELY)
+        self.assertIs(unknown.verdict, CalibrationVerdict.OVERSTATED_BOTH)
+
+        self.assertEqual(unknown, primary)
+
+    def test_every_evidence_type_value_is_equally_inert(self) -> None:
+        baseline = self._calibration("unknown")
+
+        for value in ("primary", "secondary", "tertiary"):
+            with self.subTest(evidence_type=value):
+                self.assertEqual(baseline, self._calibration(value))
 
 
 if __name__ == "__main__":

@@ -62,6 +62,7 @@ from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
@@ -547,6 +548,7 @@ class ReflectionDerivationTests(ReflectionFixture):
             applicability=ResearchSourceApplicability.UNRELATED,
             independence=ResearchSourceIndependence.INDEPENDENT,
             publication_status=ResearchSourcePublicationStatus.NORMAL,
+            evidence_type=ResearchSourceEvidenceType.SECONDARY,
         )
         self.manager.record_source_assessment(
             run_id,
@@ -559,6 +561,7 @@ class ReflectionDerivationTests(ReflectionFixture):
             applicability=ResearchSourceApplicability.DIRECT,
             independence=ResearchSourceIndependence.DERIVATIVE,
             publication_status=ResearchSourcePublicationStatus.CORRECTED,
+            evidence_type=ResearchSourceEvidenceType.PRIMARY,
         )
 
         findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
@@ -570,6 +573,7 @@ class ReflectionDerivationTests(ReflectionFixture):
             "applicability from unrelated to direct",
             "independence from independent to derivative",
             "publication status from normal to corrected",
+            "evidence type from secondary to primary",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, findings[0].detail)

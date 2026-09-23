@@ -2,6 +2,62 @@
 
 All notable project changes are recorded here.
 
+## [0.3.405] - 2026-09-23
+
+### Added
+
+- A fifth operator-authored, citation-only assessment dimension on
+  `ResearchSourceAssessmentRecord`: `evidence_type`
+  (`ResearchSourceEvidenceType`, a closed `unknown`/`primary`/`secondary`/
+  `tertiary` vocabulary, `unknown` default), sitting alongside the existing
+  four (`usefulness`, `applicability`, `independence`, `publication_status`).
+  It lets an operator record how far a source stands from the thing it
+  describes — a firsthand account, a report of one, or a summary of
+  reports. This is a pure citation, never an inference: nothing classifies
+  a source's `evidence_type` automatically from its text, domain, or
+  publication date; a source left unappraised stays honestly `unknown`.
+- `evidence_type` is threaded through the exact same touch points
+  `publication_status` already uses: the record and its write-preview,
+  `ResearchRunManager`'s preview/record/normalize/identical-judgement
+  paths, `JsonFileResearchRunStore` (schema version 20 -> 21, strict
+  fail-closed field validation), `ResearchRunMarkdownRenderer`,
+  `ResearchReflectionGenerator`'s revision-detail reporting, the read-only
+  `ResearchProviderQualityEvaluator`/`ResearchProviderQualityProfile`
+  count-dict report, `CognitiveEngine`'s Brain-intent metadata, and
+  `DesktopController`. `MissionSourceIndependenceReview` carries a
+  non-default `evidence_type` forward unchanged when only `independence`
+  is revised, matching how it already treats the other three dimensions.
+- A new combobox in `TkinterDesktopWindow`'s existing source-assessment-
+  recording panel, using the same generic label/variable/vocabulary
+  pattern as the other four dimensions, plus a real constructed-`Tk`-widget
+  end-to-end test proving a non-default `evidence_type` value survives the
+  desktop UI -> controller call.
+
+### Changed
+
+- `JsonFileResearchRunStore`'s assessment schema moves from version 20 to
+  21. A pre-v21 record decodes `evidence_type` as `unknown` on load — no
+  backfill, no inference. A v21 record with an unrecognised or missing
+  `evidence_type` value fails closed, matching the existing discipline for
+  `publication_status`.
+
+### Notes
+
+- `evidence_type` is provably inert to claim calibration: a differential,
+  mutation-tested regression test proves `ResearchClaimCalibrator`'s
+  computed warnings and ceilings are byte-for-byte identical with and
+  without a non-`unknown` `evidence_type` on otherwise-identical fixtures.
+  It is equally inert to `EvidenceSupportProfile`, the reputation ledger,
+  and every authorization/budget/execution path.
+- `evidence_type` must not be conflated with `independence`: a primary
+  source that is also the only source recording something is still
+  exactly one source, and recording `primary` says nothing about whether
+  anything else corroborates it.
+- No authority, budget, scope, target, or credential semantics changed. No
+  new `AssessmentWarningRules` entry was added. No change to
+  `information_trust`, `usefulness`, `applicability`, `independence`, or
+  `publication_status` themselves.
+
 ## [0.3.404] - 2026-09-23
 
 ### Added
