@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Truncated-valid-prefix-on-load fault-injection coverage for every durable JSON store |
 | Base SHA | 4c0288476510258d5efcc1bb04e0976187bb3b5d |
-| Status | implementation |
-| Specialists | hypatia-runtime: implementation; hypatia-security: independent review pending; hypatia-qa: independent review pending; hypatia-release: pending |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-runtime: implementation, 18 new tests across all 18 `JsonFile*Store` classes, no `src/` change needed (every store already failed closed); hypatia-security: independent review, PASS, no findings, independently re-read all three authority/budget-bearing stores' `load()` paths and their downstream consumers; hypatia-qa: independent review, PASS, no findings, verified non-vacuous via temporary mutation testing (reverted a store's fail-closed raise to `return []`, confirmed the new test failed, restored the file, confirmed `git diff` clean); hypatia-release delivered v0.3.404 |
 | Blockers | none |
 
 Rationale: selected from `docs/Roadmap/Master_Roadmap.md`'s own "Default
@@ -727,44 +727,47 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.403: deterministic gap-closing guidance on the goal explanation |
-| SHA | 848b37d23437a3adb038ef924fb1ca0a4c56455c |
-| Linux desktop CI (exact-SHA) | success (run 35786167329) |
-| Windows desktop CI (exact-SHA) | success (run 35786172103) |
+| Milestone | v0.3.404: truncated-valid-prefix load fault-injection coverage |
+| SHA | cfa8fb7e9b859cc38b63bbc7234c152dd6974178 |
+| Linux desktop CI (exact-SHA) | success (run 35848233084) |
+| Windows desktop CI (exact-SHA) | success (run 35848238689) |
 | Status | delivered |
-| PR | #382, MERGED 2026-09-22T21:33:20Z, standard merge commit `52e5223a604592d9cb0df2de8d18b794c43647c7` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 848b37d origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #383, MERGED 2026-09-23T10:35:25Z, standard merge commit `2ca8132ae9f409ee040b8b744a3b0e121654b825` |
+| origin/main reachability | verified: `git merge-base --is-ancestor cfa8fb7 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-22, hypatia-lead): PR #382 base `main`,
+Post-merge verification (2026-09-23, hypatia-lead): PR #383 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 3 commits (the documentation-only ledger-reconciliation commit
-`c0b4134`, the documentation-only skip-count-correction commit `201b1af`,
-and v0.3.403's release commit `848b37d`), 9 files, `mergeStateStatus:
-CLEAN`, both PR-triggered checks `SUCCESS`. Merged with `gh pr merge 382
---merge --subject "..."` — no interactive confirmation prompt.
-Author/committer identity on all three carried commits confirmed
-unchanged (Songül Kızılay via GitHub noreply email). Working tree clean
+exactly 2 commits (the documentation-only ledger-reconciliation commit
+`4c02884` and v0.3.404's release commit `cfa8fb7`), 24 files (6 doc/version
+files plus the 18 new test files, matching the locked scope exactly, no
+`src/` file), `mergeStateStatus: CLEAN`, both PR-triggered
+`test-build-smoke` checks `pass`. Merged with `gh pr merge 383 --merge`
+— no interactive confirmation prompt. Author/committer identity on both
+carried commits confirmed unchanged (Songül Kızılay via GitHub noreply
+email, Claude Sonnet 5 co-author trailer preserved). Working tree clean
 after merge.
 
-Note: this milestone's implementation, independent security review,
-independent QA review, and release were all completed directly by
-hypatia-lead in one continuous session (no delegated specialist agent for
-the single-file literal-mapping implementation itself; hypatia-security
-and hypatia-qa each ran one independent review pass as specialist
-subagents, both PASS with no findings). Full canonical suite on the
-release SHA: 6620 tests, `OK (skipped=3)` — this local skip count is
-genuinely evidenced by this session's own full-suite run
-(`full_suite_out.log`), for this exact commit only; it does not
-retroactively validate or apply to the different, unevidenced v0.3.402
-claim corrected in commit `201b1af`.
+Note: this milestone's implementation was delegated to hypatia-runtime
+(18 new fault-injection tests across all 18 `JsonFile*Store` classes; no
+`src/` file required a fix — every store already failed closed on a
+truncated-valid-prefix load). Independent hypatia-security review (PASS,
+no findings, independently re-traced the three authority/budget-bearing
+stores' `load()` paths and downstream consumers) and independent
+hypatia-qa review (PASS, no findings, proved non-vacuousness via temporary
+mutation testing, restored cleanly) both ran as specialist subagents.
+hypatia-lead ran the full canonical gate suite directly on the integrated
+diff before release: 6638 tests, `OK (skipped=3)` (324.6s), Black/Ruff/MyPy
+all clean, `git diff --check` clean (only pre-existing CRLF-normalization
+advisories on 3 files, no whitespace errors).
 
-Note: v0.3.402 (SHA `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401
-(SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400 (SHA
+Note: v0.3.403 (SHA `848b37d23437a3adb038ef924fb1ca0a4c56455c`), v0.3.402
+(SHA `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401 (SHA
+`32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400 (SHA
 `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
 `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.403 (this row), which is now the
+`origin/main` as ancestors of v0.3.404 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not
