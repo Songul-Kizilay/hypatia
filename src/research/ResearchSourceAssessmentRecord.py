@@ -5,7 +5,8 @@ what did the person conclude about the information they took out of this source.
 The structured dimensions added alongside them answer a different one: what did
 the person conclude about the source itself — whether it was worth reading,
 whether it bears on this run's question, whether it is its own witness or is
-repeating another, and whether the publication still stands.
+repeating another, whether the publication still stands, and how far it sits
+from the thing it describes.
 
 Every dimension defaults to `unknown`, and `unknown` is an answer rather than a
 gap waiting to be filled. Most sources are never appraised, and reading silence
@@ -33,6 +34,7 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
@@ -57,6 +59,7 @@ class ResearchSourceAssessmentRecord:
     publication_status: ResearchSourcePublicationStatus = (
         ResearchSourcePublicationStatus.UNKNOWN
     )
+    evidence_type: ResearchSourceEvidenceType = ResearchSourceEvidenceType.UNKNOWN
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -102,6 +105,7 @@ class ResearchSourceAssessmentRecord:
                 ResearchSourcePublicationStatus,
                 "publication status",
             ),
+            (self.evidence_type, ResearchSourceEvidenceType, "evidence type"),
         ):
             if not isinstance(value, expected):
                 raise ResearchError(f"Research source {label} is invalid.")

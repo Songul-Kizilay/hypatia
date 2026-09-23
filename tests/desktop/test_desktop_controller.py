@@ -955,6 +955,7 @@ class DesktopControllerTests(unittest.TestCase):
             "research_source_applicability": "unknown",
             "research_source_independence": "unknown",
             "research_source_publication_status": "unknown",
+            "research_source_evidence_type": "unknown",
         }
         self.assertEqual(
             preview_request.metadata,

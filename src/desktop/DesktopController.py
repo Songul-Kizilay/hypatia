@@ -32,6 +32,7 @@ from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
@@ -2523,6 +2524,7 @@ class DesktopController:
         applicability: str = ResearchSourceApplicability.UNKNOWN.value,
         independence: str = ResearchSourceIndependence.UNKNOWN.value,
         publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
+        evidence_type: str = ResearchSourceEvidenceType.UNKNOWN.value,
     ) -> BrainResponse:
         """Preview an authored assessment with explicit evidence references."""
         metadata = self._research_source_assessment_write_metadata(
@@ -2536,6 +2538,7 @@ class DesktopController:
             applicability,
             independence,
             publication_status,
+            evidence_type,
         )
         return self._brain.process(
             BrainRequest(
@@ -2560,6 +2563,7 @@ class DesktopController:
         applicability: str = ResearchSourceApplicability.UNKNOWN.value,
         independence: str = ResearchSourceIndependence.UNKNOWN.value,
         publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
+        evidence_type: str = ResearchSourceEvidenceType.UNKNOWN.value,
     ) -> BrainResponse:
         """Submit one assessment only after the desktop confirmation step."""
         metadata = self._research_source_assessment_write_metadata(
@@ -2573,6 +2577,7 @@ class DesktopController:
             applicability,
             independence,
             publication_status,
+            evidence_type,
         )
         return self._brain.process(
             BrainRequest(
@@ -2597,6 +2602,7 @@ class DesktopController:
         applicability: str = ResearchSourceApplicability.UNKNOWN.value,
         independence: str = ResearchSourceIndependence.UNKNOWN.value,
         publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
+        evidence_type: str = ResearchSourceEvidenceType.UNKNOWN.value,
     ) -> dict[str, object]:
         normalized_run_id = research_run_id.strip()
         normalized_document_id = source_document_id.strip()
@@ -2621,6 +2627,9 @@ class DesktopController:
                 ).value,
                 "research_source_publication_status": ResearchSourcePublicationStatus(
                     publication_status.strip()
+                ).value,
+                "research_source_evidence_type": ResearchSourceEvidenceType(
+                    evidence_type.strip()
                 ).value,
             }
         except (AttributeError, ValueError) as error:

@@ -46,6 +46,7 @@ from research.ResearchQueryCategory import ResearchQueryCategory, category_of
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
@@ -190,6 +191,10 @@ def _profile(
         publication=_counts(
             list(ResearchSourcePublicationStatus),
             [assessment.publication_status for _, assessment in assessed],
+        ),
+        evidence_type=_counts(
+            list(ResearchSourceEvidenceType),
+            [assessment.evidence_type for _, assessment in assessed],
         ),
         sample_document_ids=samples[:MAX_REPORTED_SAMPLE_IDS],
     )

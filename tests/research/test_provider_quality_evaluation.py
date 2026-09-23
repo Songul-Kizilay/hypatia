@@ -40,6 +40,7 @@ from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -99,6 +100,7 @@ def assessment(
     publication: ResearchSourcePublicationStatus = (
         ResearchSourcePublicationStatus.UNKNOWN
     ),
+    evidence_type: ResearchSourceEvidenceType = ResearchSourceEvidenceType.UNKNOWN,
 ) -> ResearchSourceAssessmentRecord:
     return ResearchSourceAssessmentRecord(
         assessment_id=f"a-{number}",
@@ -111,6 +113,7 @@ def assessment(
         applicability=applicability,
         independence=independence,
         publication_status=publication,
+        evidence_type=evidence_type,
     )
 
 
@@ -468,6 +471,45 @@ class DimensionTests(EvaluationFixture):
         self.assertEqual(
             scholarly.independence.get(ResearchSourceIndependence.LIKELY_DUPLICATE), 1
         )
+
+    def test_evidence_type_counts_are_exact(self) -> None:
+        """Mirrors `test_independence_counts_are_exact`: a fifth, separate count.
+
+        `evidence_type` is a citation, not a corroboration signal, so its own
+        count-dict must track each value exactly and never fold into or read
+        from the independence counts beside it.
+        """
+        report = ResearchProviderQualityEvaluator().evaluate(
+            [
+                run(
+                    "run-evidence-type",
+                    sources=(source(1, NVD_ONE), source(2, NVD_TWO)),
+                    evidence_records=(evidence(1), evidence(2)),
+                    discoveries=(discovery(1, "nvd", "keyword", (NVD_ONE, NVD_TWO)),),
+                    assessments=(
+                        assessment(
+                            1, 1, evidence_type=ResearchSourceEvidenceType.PRIMARY
+                        ),
+                        assessment(
+                            2, 2, evidence_type=ResearchSourceEvidenceType.TERTIARY
+                        ),
+                    ),
+                )
+            ]
+        )
+        profile = profile_of(report, "nvd", ResearchQueryCategory.KEYWORD)
+
+        assert profile is not None
+        self.assertEqual(
+            profile.evidence_type.get(ResearchSourceEvidenceType.PRIMARY), 1
+        )
+        self.assertEqual(
+            profile.evidence_type.get(ResearchSourceEvidenceType.TERTIARY), 1
+        )
+        self.assertIsNone(
+            profile.evidence_type.get(ResearchSourceEvidenceType.SECONDARY)
+        )
+        self.assertIn("evidence type", "\n".join(profile.lines()))
 
     def test_a_derivative_source_does_not_become_a_useless_one(self) -> None:
         """Both can be true, and collapsing them would hide one of them."""

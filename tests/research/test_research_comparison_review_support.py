@@ -223,7 +223,7 @@ class ComparisonReviewRecordTests(unittest.TestCase):
             store.save([subject])
             document = json.loads(path.read_text(encoding="utf-8"))
 
-            self.assertEqual(document["schema_version"], 20)
+            self.assertEqual(document["schema_version"], 21)
             self.assertEqual(store.load(), [subject])
             document["schema_version"] = 13
             for value in document["runs"]:
@@ -235,6 +235,8 @@ class ComparisonReviewRecordTests(unittest.TestCase):
                     source.pop("observation_id", None)
                     source.pop("revalidation_of_observation_id", None)
                     source.pop("revalidation_execution_id", None)
+                for assessment in value["assessments"]:
+                    assessment.pop("evidence_type", None)
             path.write_text(json.dumps(document), encoding="utf-8")
 
             self.assertEqual(store.load()[0].comparison_reviews, ())

@@ -34,6 +34,7 @@ from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -269,7 +270,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].assessments, ())
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertEqual(rewritten["runs"][0]["evidence"], [])
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
@@ -300,7 +301,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].discoveries, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
@@ -331,7 +332,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].assessments, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
@@ -399,7 +400,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].sources[0].taint_label, "external_untrusted_data")
         self.assertEqual(runs[0].sources[0].instruction_authority, "none")
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertIsNone(
             rewritten["runs"][0]["assessments"][0]["supersedes_assessment_id"]
         )
@@ -444,7 +445,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
@@ -512,7 +513,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             ResearchInformationTrust.UNASSESSED,
         )
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertEqual(
             rewritten["runs"][0]["sources"][0]["taint_label"],
             "external_untrusted_data",
@@ -553,7 +554,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].claims, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
@@ -581,7 +582,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].claims, run.claims)
         self.assertEqual(runs[0].claim_contradictions, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 20)
+        self.assertEqual(rewritten["schema_version"], 21)
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
     def test_v10_keeps_the_venue_and_year_a_candidate_was_discovered_with(
@@ -717,6 +718,9 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             publication_status=ResearchSourcePublicationStatus(
                 judgement.get("publication_status", "unknown")
             ),
+            evidence_type=ResearchSourceEvidenceType(
+                judgement.get("evidence_type", "unknown")
+            ),
         )
         return replace(run, assessments=(assessment,))
 
@@ -747,6 +751,60 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(assessment.text, stored.assessments[0].text)
         self.assertEqual(assessment.recorded_at, stored.assessments[0].recorded_at)
 
+    def test_v21_keeps_the_operators_evidence_type_answer(self) -> None:
+        stored = self._run_with_assessment(
+            usefulness="useful",
+            evidence_type="primary",
+        )
+        self.store.save([stored])
+
+        [loaded] = self.store.load()
+
+        assessment = loaded.assessments[0]
+        self.assertEqual(assessment.evidence_type, ResearchSourceEvidenceType.PRIMARY)
+        self.assertEqual(assessment.usefulness, ResearchSourceUsefulness.USEFUL)
+
+    def test_a_v20_assessment_loads_evidence_type_as_unknown_not_invented(
+        self,
+    ) -> None:
+        """Nobody was ever asked, so `unknown` is what those records hold."""
+        self.store.save([self._run_with_assessment(usefulness="useful")])
+        legacy = json.loads(self.path.read_text(encoding="utf-8"))
+        legacy["schema_version"] = 20
+        legacy["runs"][0]["assessments"][0].pop("evidence_type")
+        self.path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        [loaded] = self.store.load()
+
+        assessment = loaded.assessments[0]
+        self.assertEqual(assessment.evidence_type, ResearchSourceEvidenceType.UNKNOWN)
+        # The dimensions born earlier are unaffected by this later one's absence.
+        self.assertEqual(assessment.usefulness, ResearchSourceUsefulness.USEFUL)
+
+    def test_an_evidence_type_this_build_cannot_read_fails_the_load_at_v21(
+        self,
+    ) -> None:
+        """Showing it as never made would be worse than refusing to open it."""
+        self.store.save([self._run_with_assessment(usefulness="useful")])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["assessments"][0]["evidence_type"] = "primary-source"
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_an_assessment_missing_evidence_type_at_exactly_v21_fails_closed(
+        self,
+    ) -> None:
+        self.store.save([self._run_with_assessment(usefulness="useful")])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(document["schema_version"], 21)
+        document["runs"][0]["assessments"][0].pop("evidence_type")
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
     def test_a_v10_assessment_loads_without_a_judgement_being_invented(self) -> None:
         """Nobody was ever asked, so `unknown` is what those records hold."""
         self.store.save([self._run_with_assessment(usefulness="useful")])
@@ -769,6 +827,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             "applicability",
             "independence",
             "publication_status",
+            "evidence_type",
         ):
             stored_assessment.pop(field)
         self.path.write_text(json.dumps(legacy), encoding="utf-8")

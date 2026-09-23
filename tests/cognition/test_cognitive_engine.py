@@ -87,6 +87,7 @@ from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from response.ResponseComposer import ResponseComposer
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeleteService import SessionDeleteService
@@ -8450,6 +8451,88 @@ class CognitiveEngineTests(unittest.TestCase):
                     self.assertEqual(response.intent, intent)
 
         self.assertEqual(manager.get(run.run_id), run)
+
+    def test_evidence_type_metadata_threads_through_to_the_recorded_assessment(
+        self,
+    ) -> None:
+        """Mirrors the existing four-dimension metadata pattern exactly.
+
+        Absent means the operator did not answer, which is `unknown` -- never a
+        favourable default -- and an explicit answer must reach the persisted
+        record unchanged.
+        """
+        manager = ResearchRunManager(
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+            assessment_id_factory=iter(
+                f"assessment-{number}" for number in range(1, 3)
+            ).__next__,
+        )
+        run = manager.create("Compare local models")
+        source = ResearchSource(
+            "https://example.com/research",
+            "Example research",
+            "Evidence paragraph.",
+            "text/plain",
+            datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        evidence = manager.add_evidence(
+            run.run_id,
+            self.knowledge_engine.search("evidence")[0],
+            "Supports the assessment.",
+        ).evidence[-1]
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        base_metadata = {
+            "research_run_id": run.run_id,
+            "research_source_document_id": document.document_id,
+            "research_assessment_evidence_ids": [evidence.evidence_id],
+            "research_assessment_text": "The source is a firsthand account.",
+        }
+
+        # Absent metadata defaults to unknown, exactly like the other four.
+        absent = engine.process(
+            BrainRequest(
+                "Record assessment",
+                metadata={
+                    "intent": "research_source_assessment_record",
+                    **base_metadata,
+                },
+            )
+        )
+        self.assertTrue(absent.success)
+        self.assertEqual(
+            absent.research_runs[0].assessments[-1].evidence_type,
+            ResearchSourceEvidenceType.UNKNOWN,
+        )
+
+        # An explicit answer reaches the persisted record unchanged.
+        explicit = engine.process(
+            BrainRequest(
+                "Record corrected assessment",
+                metadata={
+                    "intent": "research_source_assessment_record",
+                    **base_metadata,
+                    "research_assessment_text": "Corrected: it is a primary source.",
+                    "research_source_evidence_type": "primary",
+                },
+            )
+        )
+        self.assertTrue(explicit.success)
+        self.assertEqual(
+            explicit.research_runs[0].assessments[-1].evidence_type,
+            ResearchSourceEvidenceType.PRIMARY,
+        )
 
     def test_failed_authored_assessment_save_is_not_published(self) -> None:
         store = ToggleResearchRunStore()

@@ -10,6 +10,7 @@ from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -35,6 +36,7 @@ class ResearchSourceAssessmentWritePreview:
     publication_status: ResearchSourcePublicationStatus = (
         ResearchSourcePublicationStatus.UNKNOWN
     )
+    evidence_type: ResearchSourceEvidenceType = ResearchSourceEvidenceType.UNKNOWN
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -53,6 +55,7 @@ class ResearchSourceAssessmentWritePreview:
             (self.applicability, ResearchSourceApplicability),
             (self.independence, ResearchSourceIndependence),
             (self.publication_status, ResearchSourcePublicationStatus),
+            (self.evidence_type, ResearchSourceEvidenceType),
         ):
             if not isinstance(value, expected):
                 raise ResearchError("Research assessment preview judgement is invalid.")

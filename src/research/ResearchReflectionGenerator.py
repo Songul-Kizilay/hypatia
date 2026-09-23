@@ -233,6 +233,11 @@ class ResearchReflectionGenerator:
                 earlier.publication_status.value,
                 later.publication_status.value,
             ),
+            (
+                "evidence type",
+                earlier.evidence_type.value,
+                later.evidence_type.value,
+            ),
         ):
             if before != after:
                 changes.append(f"{label} from {before} to {after}")

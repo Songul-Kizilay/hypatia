@@ -499,13 +499,21 @@ and directness of evidence — not simply which position has more URLs.
 Existing partial support: `[x]` operator-authored comparison notes and
 reviews already exist (Phase 4/6 territory) and already preserve
 unresolved disagreement rather than forcing a winner (`[x]` "possible
-agreement != supported comparison"). Genuinely absent: any structured
-field for methodology/sample/primary-vs-secondary/directness — today
-only a flat operator-authored `information_trust` label exists. Adding
-these as new *operator-authored* fields (citation, not inference) would
-fit the existing discipline; auto-*inferring* source quality from text
-would not, and must not be built without a separate, explicit design
-pass on where the line is.
+agreement != supported comparison"). `applicability`
+(`ResearchSourceApplicability`: DIRECT/PARTIAL/BACKGROUND_ONLY/UNRELATED)
+already covers directness of evidence — this predates this candidate's
+text and was already true when v0.3.195 added it. As of v0.3.405, `[x]`
+`evidence_type` (`ResearchSourceEvidenceType`:
+UNKNOWN/PRIMARY/SECONDARY/TERTIARY) closes the primary-vs-secondary gap
+specifically: a new operator-authored, citation-only dimension on
+`ResearchSourceAssessmentRecord`, provably inert to claim calibration and
+kept distinct from `independence` (a primary source that is the only
+source is still exactly one source). Genuinely still absent: any
+structured field for methodology or sample/population. Adding those as
+new *operator-authored* fields (citation, not inference) would fit the
+existing discipline; auto-*inferring* source quality from text would not,
+and must not be built without a separate, explicit design pass on where
+the line is.
 
 **D. Confidence and uncertainty made visible** — `[~]` partially covered
 by existing capability. `ResearchMissionGoalExplanation`'s

@@ -20,6 +20,7 @@ from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourceRecord import ResearchSourceRecord
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
@@ -58,6 +59,7 @@ def assessment(
     suffix: str = "",
     *,
     independence: ResearchSourceIndependence = ResearchSourceIndependence.UNKNOWN,
+    evidence_type: ResearchSourceEvidenceType = ResearchSourceEvidenceType.UNKNOWN,
     supersedes: str | None = None,
 ) -> ResearchSourceAssessmentRecord:
     return ResearchSourceAssessmentRecord(
@@ -70,6 +72,7 @@ def assessment(
         information_trust=ResearchInformationTrust.MEDIUM,
         usefulness=ResearchSourceUsefulness.USEFUL,
         independence=independence,
+        evidence_type=evidence_type,
     )
 
 
@@ -146,7 +149,42 @@ class MissionSourceIndependenceReviewTests(unittest.TestCase):
         self.assertIn("not model output, not a verified claim", values[3])
         self.assertEqual(
             values[4:],
-            ("assessment-1", "medium", "useful", "unknown", "independent", "unknown"),
+            (
+                "assessment-1",
+                "medium",
+                "useful",
+                "unknown",
+                "independent",
+                "unknown",
+                "unknown",
+            ),
+        )
+
+    def test_arguments_carry_a_non_default_evidence_type_forward_unchanged(self):
+        """`evidence_type` is not part of the independence question being asked.
+
+        Revising only `independence` must not reset or drop whatever the
+        operator separately recorded about how far the source stands from its
+        subject -- that is a different dimension, answered independently.
+        """
+        run = mission_run(
+            assessment(1, evidence_type=ResearchSourceEvidenceType.PRIMARY),
+            assessment(2),
+        )
+
+        values = independence_assessment_arguments(run, "doc-1", "independent")
+
+        self.assertEqual(
+            values[4:],
+            (
+                "assessment-1",
+                "medium",
+                "useful",
+                "unknown",
+                "independent",
+                "unknown",
+                "primary",
+            ),
         )
 
     def test_arguments_refuse_injected_source_and_invalid_value(self):

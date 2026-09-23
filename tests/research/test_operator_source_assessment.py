@@ -32,6 +32,7 @@ from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRelevanceRanker import ResearchSourceRelevanceRanker
@@ -137,6 +138,7 @@ class AssessmentDomainTests(OperatorAssessmentTestCase):
             "applicability",
             "independence",
             "publication_status",
+            "evidence_type",
         ):
             with self.subTest(field=field):
                 with self.assertRaises(ResearchError):
@@ -156,6 +158,7 @@ class AssessmentDomainTests(OperatorAssessmentTestCase):
         self.assertEqual(
             record.publication_status, ResearchSourcePublicationStatus.UNKNOWN
         )
+        self.assertEqual(record.evidence_type, ResearchSourceEvidenceType.UNKNOWN)
 
     def test_notes_stay_bounded(self) -> None:
         with self.assertRaises(ResearchError):
@@ -274,6 +277,7 @@ class SeparationTests(OperatorAssessmentTestCase):
             usefulness="not_useful",
             applicability="unrelated",
             publication_status="retracted",
+            evidence_type="primary",
         )
 
         after = ledger.for_origin("doi.org", [self.manager.get(self.run_id)])
@@ -281,6 +285,17 @@ class SeparationTests(OperatorAssessmentTestCase):
             (before.high_count, before.medium_count, before.low_count),
             (after.high_count, after.medium_count, after.low_count),
         )
+
+    def test_an_evidence_type_answer_does_not_move_independence(self) -> None:
+        """A primary source that is the only source is still exactly one source.
+
+        `evidence_type` answers a different question than `independence`, and
+        recording `primary` must never itself read as, or contribute to, a
+        corroboration judgement.
+        """
+        record = self.assess(evidence_type="primary")
+
+        self.assertEqual(record.independence, ResearchSourceIndependence.UNKNOWN)
 
     def test_assessment_creates_no_evidence_and_no_claim(self) -> None:
         before = self.manager.get(self.run_id)
@@ -640,6 +655,7 @@ class AuthorityTests(OperatorAssessmentTestCase):
             "applicability",
             "independence",
             "publication_status",
+            "evidence_type",
         ):
             with self.subTest(absent=absent):
                 self.assertNotIn(absent, step_source)

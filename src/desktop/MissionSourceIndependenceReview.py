@@ -156,4 +156,5 @@ def independence_assessment_arguments(
         current.applicability.value if current else "unknown",
         value.value,
         current.publication_status.value if current else "unknown",
+        current.evidence_type.value if current else "unknown",
     )

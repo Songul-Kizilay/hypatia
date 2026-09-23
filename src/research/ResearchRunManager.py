@@ -96,6 +96,7 @@ from research.ResearchSourceComparisonPreview import (
     ResearchSourceComparisonPreview,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -1088,6 +1089,9 @@ class ResearchRunManager:
         publication_status: ResearchSourcePublicationStatus | str = (
             ResearchSourcePublicationStatus.UNKNOWN
         ),
+        evidence_type: ResearchSourceEvidenceType | str = (
+            ResearchSourceEvidenceType.UNKNOWN
+        ),
     ) -> ResearchSourceAssessmentWritePreview:
         """Validate one authored assessment without mutating persisted state."""
         normalized_run_id = self._normalize_run_id(run_id)
@@ -1105,6 +1109,7 @@ class ResearchRunManager:
             applicability,
             independence,
             publication_status,
+            evidence_type,
         )
         with self._lock:
             _, run = self._find_with_index(normalized_run_id)
@@ -1162,6 +1167,7 @@ class ResearchRunManager:
                 applicability=normalized_judgement[1],
                 independence=normalized_judgement[2],
                 publication_status=normalized_judgement[3],
+                evidence_type=normalized_judgement[4],
             )
 
     def preview_claim_write(
@@ -1518,6 +1524,9 @@ class ResearchRunManager:
         publication_status: ResearchSourcePublicationStatus | str = (
             ResearchSourcePublicationStatus.UNKNOWN
         ),
+        evidence_type: ResearchSourceEvidenceType | str = (
+            ResearchSourceEvidenceType.UNKNOWN
+        ),
     ) -> ResearchRun:
         """Revalidate and atomically append one user-authored assessment."""
         normalized_run_id = self._normalize_run_id(run_id)
@@ -1535,6 +1544,7 @@ class ResearchRunManager:
             applicability,
             independence,
             publication_status,
+            evidence_type,
         )
         with self._lock:
             index, run = self._find_with_index(normalized_run_id)
@@ -1578,6 +1588,7 @@ class ResearchRunManager:
                 applicability=normalized_judgement[1],
                 independence=normalized_judgement[2],
                 publication_status=normalized_judgement[3],
+                evidence_type=normalized_judgement[4],
             )
             updated = ResearchRun(
                 run_id=run.run_id,
@@ -2254,6 +2265,7 @@ class ResearchRunManager:
             ResearchSourceApplicability,
             ResearchSourceIndependence,
             ResearchSourcePublicationStatus,
+            ResearchSourceEvidenceType,
         ],
     ) -> ResearchSourceAssessmentRecord | None:
         return next(
@@ -2270,6 +2282,7 @@ class ResearchRunManager:
                     record.applicability,
                     record.independence,
                     record.publication_status,
+                    record.evidence_type,
                 )
                 == judgement
             ),
@@ -2634,13 +2647,15 @@ class ResearchRunManager:
         applicability: ResearchSourceApplicability | str,
         independence: ResearchSourceIndependence | str,
         publication_status: ResearchSourcePublicationStatus | str,
+        evidence_type: ResearchSourceEvidenceType | str,
     ) -> tuple[
         ResearchSourceUsefulness,
         ResearchSourceApplicability,
         ResearchSourceIndependence,
         ResearchSourcePublicationStatus,
+        ResearchSourceEvidenceType,
     ]:
-        """Return the four structured judgements, refusing anything unlisted.
+        """Return the five structured judgements, refusing anything unlisted.
 
         An unrecognised value is refused rather than folded into `unknown`. A
         typo that silently became `unknown` would read as an appraisal somebody
@@ -2652,6 +2667,7 @@ class ResearchRunManager:
                 ResearchSourceApplicability(applicability),
                 ResearchSourceIndependence(independence),
                 ResearchSourcePublicationStatus(publication_status),
+                ResearchSourceEvidenceType(evidence_type),
             )
         except (TypeError, ValueError) as error:
             raise ResearchError("Research source judgement is invalid.") from error
