@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Bug Bounty recon result ingestion + normalization foundation (Bug Bounty foundation, step 3) |
 | Base SHA | 45cc713a9a6532db159eb3ff208ca405c452324a |
-| Status | release |
-| Specialists | hypatia-epistemics: sole implementer (continuity with v0.3.407's identity/provenance domain, and the new files span `src/research/` + the `src/cognition/` service layer as one cohesive feature); hypatia-security: independent review complete (PASS, no findings); hypatia-qa: independent review complete (two test-coverage gaps found and closed with mutation-verified tests); hypatia-release: delivering v0.3.408 |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-epistemics: sole implementer (continuity with v0.3.407's identity/provenance domain, and the new files span `src/research/` + the `src/cognition/` service layer as one cohesive feature); hypatia-security: independent review complete (PASS, no findings); hypatia-qa: independent review complete (two test-coverage gaps found and closed with mutation-verified tests); hypatia-release: delivered v0.3.408 |
 | Blockers | none |
 
 Rationale: user-directed continuation of the bounded Bug Bounty Researcher
@@ -1537,6 +1537,57 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.408: bug bounty recon result ingestion + normalization foundation |
+| SHA | 1a4848cfbcc1618ad3b6f12343e7bc0e4607929b |
+| Linux desktop CI (exact-SHA) | success (run 36065535503) |
+| Windows desktop CI (exact-SHA) | success (run 36065539096) |
+| Status | delivered |
+| PR | #387, MERGED 2026-09-24T22:17:33Z, standard merge commit `8821844120b01fd61545b1423d90206df0b48e42` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 1a4848c origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`4b82d71`, `1a4848c`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-24, hypatia-lead): PR #387 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 3 commits (the documentation-only ledger-reconciliation commit
+`45cc713`, the documentation-only milestone-lock commit `8611955`, and
+v0.3.408's release commit `1a4848c`), 25 files, `mergeStateStatus: CLEAN`,
+both PR-triggered checks `pass` (Linux run 36066052863, Windows run
+36066052904). Merged with `gh pr merge 387 --merge --subject "..."` — no
+interactive confirmation prompt. Author/committer identity on the release
+commit confirmed unchanged (Songül Kızılay via GitHub noreply email).
+Working tree clean after merge except this ledger edit.
+
+Note: step 3 of the bounded Bug Bounty Researcher roadmap (recon result
+ingestion). The Lead discovered that Hypatia's existing `DNS_RECORD_LOOKUP`
+Kali operation (`dig +short`) was the only existing result producer
+structured enough to ingest honestly, locked a bounded slice (A/AAAA only,
+no CNAME, no `HTTPS_HEADER_LOOKUP`), and dispatched hypatia-epistemics as
+sole implementer. That implementation agent was interrupted mid-verification
+(an accidental ESC) after substantially completing the full slice — new
+`KALI_OPERATION_RESULT` provenance kind, a fail-closed 1:1
+provenance/digest-forgery binding shared by observations and relations, a
+store schema v1->v2 bump with honest legacy decode, a pure DNS-result parser,
+service/Brain/desktop wiring, and 172 passing tests. The Lead inspected the
+full diff directly (not re-derived), ran two of its own mutation checks
+(forged-provenance-digest binding, disabled IP-version check; both caught),
+then continued the lifecycle. Independent hypatia-security review found no
+authority widening across all 8 reviewed properties (scope reachability,
+provenance forgery, program isolation, untrusted-tool-output handling, no
+new execution/network capability, replay/restart, schema/persistence,
+no new credential/budget/target primitive) — zero defects. Independent
+hypatia-qa review mutation-tested 3 of 12 checklist points and found two
+genuine test-coverage gaps: no multi-address test proved the hostname
+observation is recorded exactly once per run rather than once per resolved
+address (a named milestone acceptance criterion), and the parser's `argv`
+shape guard was untested dead code from a test-coverage perspective. Both
+were closed by the Lead directly with new mutation-verified tests (174
+tests passing afterward). Full canonical gates on the integrated tree: 6929
+tests, `OK (skipped=3)`, Black (2 files reformatted first), Ruff, MyPy,
+`git diff --check` all clean.
+
+## Historical scope: v0.3.407 (delivered)
 
 | Field | Value |
 | --- | --- |
