@@ -825,15 +825,84 @@ Unchanged — confirmed not started.
 
 ## Phase 17 — Authorized pentest agent
 
-Unchanged — confirmed not started.
-
 - [ ] Authorized lab/CTF/owned/explicitly approved targets only
 - [ ] Recon, enumeration, vulnerability hypotheses, verification, evidence
       collection, finding creation, reporting
 - [ ] Tool allowlists, per-action authority, credential boundaries,
-      destructive-action boundaries, scope-escape prevention, recovery,
-      replay safety
+      destructive-action boundaries, scope-escape prevention (**partial,
+      v0.3.406**: an explicit `IN_SCOPE`/`OUT_OF_SCOPE`/`UNCERTAIN` tri-state
+      read, `ResearchTargetScope.resolve_hostname`/`resolve_addresses`, now
+      makes the difference between an explicitly excluded target and a
+      target no rule addresses legible and testable, over the pre-existing
+      `ResearchTargetScope`/`ResearchProgramScopeRevision`/
+      `ResearchProgramScopeEnrollmentService` scope backbone; this is a
+      read-only explanatory addition, not the tool-allowlist/credential-
+      boundary/destructive-action-boundary framework the rest of this line
+      still needs, so the compound box stays unchecked), recovery, replay
+      safety
 - [-] Unrestricted autonomous pentesting
+
+### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
+product-direction only — not scoped as a whole, not authorized as a whole,
+not started beyond the one delivered step named below)
+
+This is long-term product direction for Phase 16/17, not a locked
+milestone. It gives Hypatia's future bug-bounty-research capability a
+concrete, dependency-ordered shape so later milestones have a known next
+step instead of re-deriving priority from scratch each time. Locking any
+one step below into an actual milestone still requires the same
+repository-grounded discovery, scope lock, and review discipline every
+other milestone in this document has used — this list is not permission to
+skip that.
+
+Recorded priority order (each item depends on the ones above it being
+real, not merely named):
+
+1. Asset Inventory + canonical asset identity
+2. Recon Result Ingestion / normalization
+3. HTTP Evidence model
+4. Authentication / identity / session contexts
+5. Credential + secret boundary
+6. Security Hypothesis model
+7. Finding lifecycle
+8. Business-logic/state-transition model
+9. Validation recipes
+10. False-positive / root-cause correlation
+11. Safe capability-based tool gateway
+12. PII/sensitive-data guard
+13. Impact reasoning
+14. Report composer + validator
+15. Evaluation harness
+16. Bounty-session checkpoint/resume
+17. Companion / Teaching / available-time modes
+18. Bounded Bug Bounty Research Session
+19. Evidence saturation / stopping reasoning
+
+**Delivered so far**: v0.3.406 — explicit tri-state target-scope
+resolution (`ResearchTargetScopeResolutionStatus`/
+`ResearchTargetScopeResolution`), a foundation step underneath item 1
+(canonical asset identity needs an unambiguous in/out/uncertain scope read
+before an asset inventory can attach real authority to anything it
+records) rather than item 1 itself. `require_hostname`/`require_addresses`
+remain the only real enforcement gates; the tri-state read is additive and
+explanatory only, and was independently security-reviewed to confirm no
+path lets `UNCERTAIN` or a bare `IN_SCOPE` read reach an active action.
+
+**Companion product principle** (preserve for future UI/roadmap work):
+Hypatia is intended to be both a bounded security research partner and a
+teaching/companion assistant for the operator. Personality and
+conversation must remain structurally separate from security authority —
+friendly language must never weaken enforcement, and a warm explanation of
+a refusal is still a refusal. A future Teaching/Companion mode (item 17
+above) should be able to explain what was observed, why it was
+interesting, what hypothesis it suggested, what evidence supports or
+contradicts it, and how the operator could reproduce the reasoning
+manually — none of which is itself authority, exactly as this file's
+existing "evaluation creates information, proposal creates strategy, only
+explicit authorization creates permission" invariant already requires.
+This principle is not implemented by any milestone yet; it is recorded
+here so a future Companion/Teaching milestone does not have to rediscover
+it from conversation history.
 
 ## Phase 18 — Findings / reporting
 

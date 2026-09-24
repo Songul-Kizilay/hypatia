@@ -26,6 +26,9 @@ from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
+from research.ResearchAssetInventoryEntry import ResearchAssetInventoryEntry
+from research.ResearchAssetObservationRecord import ResearchAssetObservationRecord
+from research.ResearchAssetRelationRecord import ResearchAssetRelationRecord
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
 from research.ResearchClaimContradictionPreview import (
@@ -246,3 +249,7 @@ class BrainResponse:
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None
     research_target_scope_resolution: ResearchTargetScopeResolution | None = None
+    research_asset_observation_record: ResearchAssetObservationRecord | None = None
+    research_asset_relation_record: ResearchAssetRelationRecord | None = None
+    research_asset_inventory: tuple[ResearchAssetInventoryEntry, ...] = ()
+    research_asset_relations: tuple[ResearchAssetRelationRecord, ...] = ()

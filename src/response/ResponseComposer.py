@@ -32,6 +32,9 @@ from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
+from research.ResearchAssetInventoryEntry import ResearchAssetInventoryEntry
+from research.ResearchAssetObservationRecord import ResearchAssetObservationRecord
+from research.ResearchAssetRelationRecord import ResearchAssetRelationRecord
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
@@ -1178,6 +1181,148 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_target_scope_resolution_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_asset_observation_record(
+        self,
+        request: BrainRequest,
+        observation: ResearchAssetObservationRecord,
+    ) -> BrainResponse:
+        """Confirm one durable, operator-authored asset observation."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Asset observation recorded:",
+                    f"Program: {observation.program_id}",
+                    f"Kind: {observation.kind.value}",
+                    f"Canonical value: {observation.canonical_value}",
+                    f"Provenance: {observation.provenance.value}",
+                    "(observation only; not a scope decision or an"
+                    " authorization to fetch or execute)",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_asset_observation_record",
+            memory_count=0,
+            research_asset_observation_record=observation,
+        )
+
+    def research_asset_observation_record_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid asset observation write."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Asset observation rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_asset_observation_record",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_asset_relation_record(
+        self,
+        request: BrainRequest,
+        relation: ResearchAssetRelationRecord,
+    ) -> BrainResponse:
+        """Confirm one durable, operator-authored asset relation."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Asset relation recorded:",
+                    f"Program: {relation.program_id}",
+                    f"Kind: {relation.kind.value}",
+                    f"Source: {relation.source_kind.value}:{relation.source_value}",
+                    "Related: "
+                    f"{relation.related_kind.value}:{relation.related_value}",
+                    "(a relation carries no scope of its own; it never widens"
+                    " or implies scope for either asset)",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_asset_relation_record",
+            memory_count=0,
+            research_asset_relation_record=relation,
+        )
+
+    def research_asset_relation_record_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid asset relation write."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Asset relation rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_asset_relation_record",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_asset_inventory_preview(
+        self,
+        request: BrainRequest,
+        entries: tuple[ResearchAssetInventoryEntry, ...],
+        relations: tuple[ResearchAssetRelationRecord, ...],
+    ) -> BrainResponse:
+        """Report the derived, read-only asset inventory for one program.
+
+        Every scope column is explicitly labelled recomputed-live; this
+        listing itself performs no fetch, scan, or authorization.
+        """
+        lines = [f"Asset inventory: {len(entries)} asset(s)"]
+        for entry in entries:
+            asset = entry.asset
+            if entry.scope.has_active_scope_revision and entry.scope.resolution:
+                scope_text = (
+                    f"{entry.scope.resolution.status.value} "
+                    "(recomputed live from active policy, not stored)"
+                )
+            else:
+                scope_text = "no active scope revision for this program"
+            lines.append(
+                f"- {asset.kind.value}:{asset.canonical_value} "
+                f"({len(asset.observations)} observation(s), "
+                f"scope: {scope_text})"
+            )
+        lines.append(f"Relations: {len(relations)}")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_asset_inventory_preview",
+            memory_count=0,
+            research_asset_inventory=entries,
+            research_asset_relations=relations,
+        )
+
+    def research_asset_inventory_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid asset inventory preview."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Asset inventory preview rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_asset_inventory_preview",
             memory_count=0,
             success=False,
         )

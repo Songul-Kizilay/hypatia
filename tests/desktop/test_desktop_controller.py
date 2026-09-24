@@ -16,6 +16,8 @@ from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
+from research.ResearchAssetKind import ResearchAssetKind
+from research.ResearchAssetRelationKind import ResearchAssetRelationKind
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -1207,6 +1209,133 @@ class DesktopControllerTests(unittest.TestCase):
         )
         self.assertIs(request.metadata["research_target_scope"], scope)
         self.assertEqual(request.metadata["hostname"], "example.test")
+
+    def test_record_research_asset_observation_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.record_research_asset_observation(
+            "  program-a  ", "ip_address", "  93.184.216.34  ", "  note text  "
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_asset_observation_record",
+                "program_id": "program-a",
+                "kind": ResearchAssetKind.IP_ADDRESS,
+                "value": "93.184.216.34",
+                "note": "note text",
+            },
+        )
+
+    def test_record_research_asset_observation_rejects_invalid_kind_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "kind is invalid"):
+            self.controller.record_research_asset_observation(
+                "program-a", "not-a-kind", "example.test"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_record_research_asset_observation_rejects_empty_program_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
+            self.controller.record_research_asset_observation(
+                "  ", "hostname", "example.test"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_record_research_asset_relation_sends_structured_metadata(self) -> None:
+        response = self.controller.record_research_asset_relation(
+            "  program-a  ",
+            "hostname",
+            "  example.test  ",
+            "ip_address",
+            "  93.184.216.34  ",
+            "resolves_to",
+            "  a note  ",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_asset_relation_record",
+                "program_id": "program-a",
+                "source_kind": ResearchAssetKind.HOSTNAME,
+                "source_value": "example.test",
+                "related_kind": ResearchAssetKind.IP_ADDRESS,
+                "related_value": "93.184.216.34",
+                "kind": ResearchAssetRelationKind.RESOLVES_TO,
+                "note": "a note",
+            },
+        )
+
+    def test_record_research_asset_relation_rejects_invalid_kinds_locally(
+        self,
+    ) -> None:
+        invalid_calls = (
+            ("program-a", "not-a-kind", "example.test", "ip_address", "1.2.3.4"),
+            ("program-a", "hostname", "example.test", "not-a-kind", "1.2.3.4"),
+        )
+        for values in invalid_calls:
+            with self.subTest(values=values):
+                with self.assertRaisesRegex(ValueError, "asset kind is invalid"):
+                    self.controller.record_research_asset_relation(*values)
+        with self.assertRaisesRegex(ValueError, "relation kind is invalid"):
+            self.controller.record_research_asset_relation(
+                "program-a",
+                "hostname",
+                "example.test",
+                "ip_address",
+                "1.2.3.4",
+                "not-a-relation-kind",
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_record_research_asset_relation_rejects_empty_program_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
+            self.controller.record_research_asset_relation(
+                "  ", "hostname", "example.test", "ip_address", "1.2.3.4"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_preview_research_asset_inventory_sends_structured_metadata(self) -> None:
+        response = self.controller.preview_research_asset_inventory("  program-a  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_asset_inventory_preview",
+                "program_id": "program-a",
+            },
+        )
+
+    def test_preview_research_asset_inventory_rejects_empty_program_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
+            self.controller.preview_research_asset_inventory("  ")
+
+        self.assertEqual(self.brain.requests, [])
 
 
 if __name__ == "__main__":

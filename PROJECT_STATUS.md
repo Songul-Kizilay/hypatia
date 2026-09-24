@@ -2,10 +2,40 @@
 
 ## Runtime Version
 
-`v0.3.406 (Genesis)`
+`v0.3.407 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.407 adds Hypatia's first asset entity of any kind: a new
+operator-authored Bug Bounty asset inventory built on a deliberately
+minimal vocabulary — `ResearchAssetKind` (`HOSTNAME`/`IP_ADDRESS` only),
+`ResearchAssetProvenanceKind` (`OPERATOR_AUTHORED` only) and
+`ResearchAssetRelationKind` (`RESOLVES_TO` only) — with append-only
+`ResearchAssetObservationRecord`/`ResearchAssetRelationRecord` facts, a
+derived-only `ResearchAsset` projection recomputed fresh on every read by
+`assets_for_program` and never persisted as a merged entity, a new atomic
+`JsonFileResearchAssetInventoryStore` (schema version 1, strict field sets,
+bounded counts, duplicate-ID refusal), a
+`ResearchAssetInventoryApplicationService` exposing three Brain intents,
+and a desktop "Asset Inventory" panel. Hostname identity reuses
+`ResearchTargetScope`'s own tested normalization through one new additive
+public wrapper, `canonical_dns_hostname`, so asset identity and
+scope-hostname matching cannot silently diverge; IP identity uses stdlib
+parsing and refuses zone-scoped addresses because the scope layer refuses
+them too. Description is not authority: asset existence, an observation, or
+a `RESOLVES_TO` relation is never a scope grant and never permission to
+touch anything, and nothing here performs recon, probing, scanning,
+fetching, DNS resolution, process execution or background work of any kind.
+Every scope reading is live-only — recomputed against the currently active
+program-scope revision on each read, never persisted, cached or restored,
+with an explicit "no active scope revision" signal instead of a fabricated
+resolution. Assets and relations are strictly program-scoped and
+cross-program access fails closed; provenance is always operator-authored
+and never taken from request metadata. This is step 2 of Hypatia's bounded
+Bug Bounty Researcher roadmap. No new authority, budget, target or
+credential primitive, and `ResearchTargetScope`'s existing behavior is
+byte-for-byte unchanged.
 
 Version v0.3.406 adds a new explicit tri-state scope-resolution read
 (`IN_SCOPE`/`OUT_OF_SCOPE`/`UNCERTAIN`) over Hypatia's existing bug-bounty

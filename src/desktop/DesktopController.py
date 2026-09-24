@@ -18,6 +18,8 @@ from research.OneShotDeferredExecutionScheduleView import (
     OneShotDeferredExecutionScheduleView,
 )
 from research.ProviderComparisonRequest import ProviderComparisonRequest
+from research.ResearchAssetKind import ResearchAssetKind
+from research.ResearchAssetRelationKind import ResearchAssetRelationKind
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
@@ -303,6 +305,93 @@ class DesktopController:
                     "intent": "research_target_scope_resolution_preview",
                     "research_target_scope": scope,
                     "hostname": hostname.strip(),
+                },
+            )
+        )
+
+    def record_research_asset_observation(
+        self,
+        program_id: str,
+        kind: str,
+        value: str,
+        note: str = "",
+    ) -> BrainResponse:
+        """Record one durable, operator-authored asset observation."""
+        try:
+            normalized_kind = ResearchAssetKind(kind.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Asset observation kind is invalid.") from error
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                "Record asset observation",
+                metadata={
+                    "intent": "research_asset_observation_record",
+                    "program_id": normalized_program_id,
+                    "kind": normalized_kind,
+                    "value": value.strip(),
+                    "note": note.strip(),
+                },
+            )
+        )
+
+    def record_research_asset_relation(
+        self,
+        program_id: str,
+        source_kind: str,
+        source_value: str,
+        related_kind: str,
+        related_value: str,
+        kind: str = ResearchAssetRelationKind.RESOLVES_TO.value,
+        note: str = "",
+    ) -> BrainResponse:
+        """Record one durable, operator-authored relation between two assets."""
+        try:
+            normalized_source_kind = ResearchAssetKind(source_kind.strip())
+            normalized_related_kind = ResearchAssetKind(related_kind.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Asset relation asset kind is invalid.") from error
+        try:
+            normalized_kind = ResearchAssetRelationKind(kind.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Asset relation kind is invalid.") from error
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                "Record asset relation",
+                metadata={
+                    "intent": "research_asset_relation_record",
+                    "program_id": normalized_program_id,
+                    "source_kind": normalized_source_kind,
+                    "source_value": source_value.strip(),
+                    "related_kind": normalized_related_kind,
+                    "related_value": related_value.strip(),
+                    "kind": normalized_kind,
+                    "note": note.strip(),
+                },
+            )
+        )
+
+    def preview_research_asset_inventory(self, program_id: str) -> BrainResponse:
+        """Read-only listing of one program's derived assets and relations.
+
+        Any scope column in the response is recomputed live by the Brain
+        from the currently active program-scope revision; this call itself
+        performs no fetch, scan, or authorization.
+        """
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                "Preview asset inventory",
+                metadata={
+                    "intent": "research_asset_inventory_preview",
+                    "program_id": normalized_program_id,
                 },
             )
         )
