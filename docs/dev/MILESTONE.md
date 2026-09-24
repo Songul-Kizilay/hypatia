@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Bug Bounty recon result ingestion + normalization foundation (Bug Bounty foundation, step 3) |
 | Base SHA | 45cc713a9a6532db159eb3ff208ca405c452324a |
-| Status | planned |
-| Specialists | hypatia-epistemics: sole implementer (continuity with v0.3.407's identity/provenance domain, and the new files span `src/research/` + the `src/cognition/` service layer as one cohesive feature); hypatia-security and hypatia-qa: independent review after integration; hypatia-release: delivers after both reviews and full canonical gates are green |
+| Status | release |
+| Specialists | hypatia-epistemics: sole implementer (continuity with v0.3.407's identity/provenance domain, and the new files span `src/research/` + the `src/cognition/` service layer as one cohesive feature); hypatia-security: independent review complete (PASS, no findings); hypatia-qa: independent review complete (two test-coverage gaps found and closed with mutation-verified tests); hypatia-release: delivering v0.3.408 |
 | Blockers | none |
 
 Rationale: user-directed continuation of the bounded Bug Bounty Researcher

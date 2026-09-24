@@ -916,6 +916,28 @@ class CognitiveEngine:
                 request
             )
 
+        if ResearchAssetInventoryApplicationService.is_dns_ingestion_preview_request(
+            request
+        ):
+            if self._research_asset_inventory_service is None:
+                composer = self._response_composer
+                fail = composer.research_asset_dns_ingestion_preview_failure
+                return fail(request, "Asset inventory is not available.")
+            return self._research_asset_inventory_service.process_dns_ingestion_preview(
+                request
+            )
+
+        if ResearchAssetInventoryApplicationService.is_dns_ingestion_record_request(
+            request
+        ):
+            if self._research_asset_inventory_service is None:
+                composer = self._response_composer
+                fail = composer.research_asset_dns_ingestion_record_failure
+                return fail(request, "Asset inventory is not available.")
+            return self._research_asset_inventory_service.process_dns_ingestion_record(
+                request
+            )
+
         if KaliOperationPreviewApplicationService.is_preview_request(request):
             if self._kali_operation_preview_service is None:
                 return self._response_composer.kali_operation_preview_failure(

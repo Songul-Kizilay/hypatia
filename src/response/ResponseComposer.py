@@ -32,6 +32,10 @@ from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
+from research.ResearchAssetDnsIngestion import (
+    ResearchAssetDnsIngestionPreview,
+    ResearchAssetDnsIngestionResult,
+)
 from research.ResearchAssetInventoryEntry import ResearchAssetInventoryEntry
 from research.ResearchAssetObservationRecord import ResearchAssetObservationRecord
 from research.ResearchAssetRelationRecord import ResearchAssetRelationRecord
@@ -1323,6 +1327,113 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_asset_inventory_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_asset_dns_ingestion_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchAssetDnsIngestionPreview,
+    ) -> BrainResponse:
+        """Report a side-effect-free DNS ingestion preview; nothing is recorded."""
+        lines = [
+            "DNS ingestion preview:",
+            f"Program: {preview.program_id}",
+            f"Operation digest: {preview.operation_digest}",
+            f"Record type: {preview.record_type.value}",
+            "Hostname: "
+            f"{preview.hostname_asset.canonical_value} "
+            + ("(already known)" if preview.hostname_asset.already_known else "(new)"),
+        ]
+        for address in preview.address_assets:
+            lines.append(
+                "Address: "
+                f"{address.asset.canonical_value} "
+                + ("(already known)" if address.asset.already_known else "(new)")
+                + ", relation "
+                + (
+                    "already known"
+                    if address.resolves_to_relation_already_known
+                    else "new"
+                )
+            )
+        for row in preview.rejected_rows:
+            lines.append(f"Rejected: {row.raw_line!r} — {row.reason}")
+        lines.append("(preview only; nothing has been recorded)")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_asset_dns_ingestion_preview",
+            memory_count=0,
+            research_asset_dns_ingestion_preview=preview,
+        )
+
+    def research_asset_dns_ingestion_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid DNS ingestion preview."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "DNS ingestion preview rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_asset_dns_ingestion_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_asset_dns_ingestion_record(
+        self,
+        request: BrainRequest,
+        result: ResearchAssetDnsIngestionResult,
+    ) -> BrainResponse:
+        """Confirm one DNS ingestion's durable write; report what was created."""
+        lines = [
+            "DNS ingestion recorded:",
+            f"Program: {result.program_id}",
+            f"Operation digest: {result.operation_digest}",
+            f"Hostname: {result.hostname_observation.canonical_value}",
+            f"Addresses recorded: {len(result.address_observations)}",
+            f"Relations recorded: {len(result.relations)}",
+        ]
+        for observation in result.address_observations:
+            lines.append(f"Address: {observation.canonical_value}")
+        for row in result.rejected_rows:
+            lines.append(f"Rejected: {row.raw_line!r} — {row.reason}")
+        lines.append(
+            "(a DNS result only says what was queried and returned; it does"
+            " not imply reachability, ownership, or current-world truth, and"
+            " it never changes scope)"
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_asset_dns_ingestion_record",
+            memory_count=0,
+            research_asset_dns_ingestion_result=result,
+        )
+
+    def research_asset_dns_ingestion_record_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid DNS ingestion record write."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "DNS ingestion record rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_asset_dns_ingestion_record",
             memory_count=0,
             success=False,
         )

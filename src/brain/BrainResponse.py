@@ -26,6 +26,10 @@ from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
+from research.ResearchAssetDnsIngestion import (
+    ResearchAssetDnsIngestionPreview,
+    ResearchAssetDnsIngestionResult,
+)
 from research.ResearchAssetInventoryEntry import ResearchAssetInventoryEntry
 from research.ResearchAssetObservationRecord import ResearchAssetObservationRecord
 from research.ResearchAssetRelationRecord import ResearchAssetRelationRecord
@@ -253,3 +257,5 @@ class BrainResponse:
     research_asset_relation_record: ResearchAssetRelationRecord | None = None
     research_asset_inventory: tuple[ResearchAssetInventoryEntry, ...] = ()
     research_asset_relations: tuple[ResearchAssetRelationRecord, ...] = ()
+    research_asset_dns_ingestion_preview: ResearchAssetDnsIngestionPreview | None = None
+    research_asset_dns_ingestion_result: ResearchAssetDnsIngestionResult | None = None
