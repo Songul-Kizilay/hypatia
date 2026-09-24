@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Bug Bounty asset inventory: canonical asset identity (Bug Bounty foundation, step 2) |
 | Base SHA | be1d13b274c88bf7b7e3e32398397dec43b2ce41 |
-| Status | release |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
 | Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review complete (no authority widening; one medium zone-scoped-address identity/scope divergence defect plus four low/informational findings, all fixed); hypatia-qa: independent review complete (three high-severity test gaps — window reachability, Bootstrap wiring, behavioral scope freshness — plus medium gaps, all closed); Lead verified the new tests with seven mutations, all caught; hypatia-release: delivering v0.3.407 |
 | Blockers | none |
 
@@ -1358,6 +1358,65 @@ provenance.
 
 | Field | Value |
 | --- | --- |
+| Milestone | v0.3.407: bug bounty asset inventory canonical identity |
+| SHA | 2d55e762ca43a5eb9884544c2d86aa0c9ba26f89 |
+| Linux desktop CI (exact-SHA) | success (run 36037376068) |
+| Windows desktop CI (exact-SHA) | success (run 36037379943) |
+| Status | delivered |
+| PR | #386, MERGED 2026-09-24T18:06:17Z, standard merge commit `4b82d71cba2e2a0f8cb6b530522a1314898c4c33` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 2d55e76 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`08c8f0e`, `2d55e76`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-24, hypatia-lead): PR #386 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 2 commits (the documentation-only ledger/roadmap commit `be1d13b`
+and v0.3.407's release commit `2d55e76`), 31 files, `mergeStateStatus:
+CLEAN`, both PR-triggered checks `SUCCESS` (Linux run 36038289241, Windows
+run 36038289320). Merged with `gh pr merge 386 --merge --subject "..."` —
+no interactive confirmation prompt. Author/committer identity on both
+carried commits confirmed unchanged (Songül Kızılay via GitHub noreply
+email). Working tree clean after merge except this ledger edit.
+
+Note: step 2 of the bounded Bug Bounty Researcher roadmap. The work was
+already implemented in the working tree when this session resumed; the Lead
+verified it against this file's own locked scope rather than re-deriving it,
+then ran the milestone's remaining lifecycle. Two formatting findings (Black
+on two files, one 89-character line) were fixed first. Independent
+hypatia-security review found no authority widening and verified nine safety
+properties with file:line evidence, plus one medium defect — a zone-scoped
+address (`fe80::1%eth0`) was accepted as asset identity while
+`ResearchTargetScope` refuses every address containing "%", so an
+append-only record could have wedged a program's whole inventory read path
+irrecoverably — now refused at canonicalization, and four low/informational
+findings (read/write revision-store type narrowed to a read-only reader
+protocol; provenance pinned to `OPERATOR_AUTHORED` instead of read from
+request metadata; the kind dispatch names `IP_ADDRESS` explicitly and raises
+otherwise, with `ResearchAsset` validating its own `StrEnum` kind; note text
+rendered on a single line so it cannot forge `Provenance:`/`Recorded at:`
+field lines), all fixed. Independent hypatia-qa review found no weakened
+pins but three high-severity gaps where the implementation could have been
+wrong with the whole suite green — the panel was never proven reachable from
+the application window, Bootstrap wiring was untested, and scope freshness
+was asserted structurally (a `__dataclass_fields__` name check) rather than
+behaviorally — plus medium gaps (no "nothing was persisted" assertion after
+a refused write, preview entries never checked per-asset, a persisted
+non-canonical value never proven to fail closed, thin restart determinism, a
+vacuous panel failure-path test); all were closed with roughly 25 new tests.
+The store file was renamed to `research_asset_inventory.json` for the
+`research_*` sibling convention before any release existed to carry the old
+name. The Lead then mutation-verified the new tests: seven deliberate
+breakages (cached scope readings; the window never building the panel;
+Bootstrap dropping the store; the store normalizing values on load; the
+preview reusing the first asset's reading; scoped addresses accepted again;
+provenance read from metadata) were each caught by a failing test. Two of
+the first mutation attempts were themselves faulty (one read a cache it
+never populated) and were corrected rather than counted as passes. Full
+canonical gates on the integrated tree: 6846 tests, `OK (skipped=3)`,
+Black/Ruff/MyPy clean, `git diff --check` clean.
+
+## Historical scope: v0.3.406 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | v0.3.406: explicit tri-state target-scope resolution |
 | SHA | bfc0a3c23736d722f44cc394342e1974c7b27d1f |
 | Linux desktop CI (exact-SHA) | success (run 35894553832) |
@@ -1404,7 +1463,8 @@ tests, `OK (skipped=3)` (325.4s), Black/Ruff/MyPy all clean, `git diff
 --check` clean (only pre-existing CRLF-normalization advisories, no
 whitespace errors).
 
-Note: v0.3.405 (SHA `922d1d3ed8c893c61fc561336a71c709886c9cf3`), v0.3.404
+Note: v0.3.406 (SHA `bfc0a3c23736d722f44cc394342e1974c7b27d1f`), v0.3.405
+(SHA `922d1d3ed8c893c61fc561336a71c709886c9cf3`), v0.3.404
 (SHA `cfa8fb7e9b859cc38b63bbc7234c152dd6974178`), v0.3.403
 (SHA `848b37d23437a3adb038ef924fb1ca0a4c56455c`), v0.3.402 (SHA
 `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401 (SHA
