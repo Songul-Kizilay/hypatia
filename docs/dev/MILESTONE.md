@@ -14,6 +14,188 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Bug Bounty recon result ingestion + normalization foundation (Bug Bounty foundation, step 3) |
+| Base SHA | 45cc713a9a6532db159eb3ff208ca405c452324a |
+| Status | planned |
+| Specialists | hypatia-epistemics: sole implementer (continuity with v0.3.407's identity/provenance domain, and the new files span `src/research/` + the `src/cognition/` service layer as one cohesive feature); hypatia-security and hypatia-qa: independent review after integration; hypatia-release: delivers after both reviews and full canonical gates are green |
+| Blockers | none |
+
+Rationale: user-directed continuation of the bounded Bug Bounty Researcher
+roadmap immediately after v0.3.407 (Asset Inventory + canonical asset
+identity), independently re-verified reachable from `origin/main` with green
+exact-SHA Linux/Windows CI before this milestone was locked. Selected per the
+user's own preferred order: prefer integrating an EXISTING real Hypatia
+result producer over inventing support for an external tool Hypatia cannot
+yet execute.
+
+Discovery (hypatia-lead, direct repository inspection, 2026-09-24) confirmed
+the exact gap the roadmap names: `ResearchAssetProvenanceKind` has exactly
+one member, `OPERATOR_AUTHORED` — its own docstring says extending it is
+"explicitly recon-result-ingestion's job, a later milestone, not this one."
+`ResearchKaliOperationRun`/`ResearchKaliOperationProcessResult`
+(`src/research/ResearchKaliOperationExecution.py`) already produce a
+completed, reviewed, authorization-gated process result whose `stdout_lines`
+are raw, untrusted, unparsed text — nothing in `src/` today turns that text
+into a structured asset fact.
+`kali_operation_evidence_candidate_for_run` derives only a review-only,
+zero-side-effect candidate view (`evidence_recorded`/`claim_created`/
+`source_accepted`/`memory_written` all hard-pinned `False`), establishing the
+precedent this milestone reuses: an ingestion path must offer the same kind
+of side-effect-free preview before any durable write.
+
+The one existing operation kind whose result is deterministically structured
+is `DNS_RECORD_LOOKUP`: its reviewed command plan
+(`kali_operation_command_plan` in `ResearchKaliOperationPreview.py`) is
+always exactly `dig +time=5 +tries=1 +short <hostname> <A|AAAA|CNAME>` — a
+fixed, code-owned argv the operator cannot alter — so `argv[4]`/`argv[5]`
+deterministically name the queried hostname and record type, and `+short`
+output is either one address per line (A/AAAA) or one hostname per line
+(CNAME chain). `HTTPS_HEADER_LOOKUP` (`curl --head`) has no corresponding
+structured asset kind to populate yet (no `SERVICE`/`ENDPOINT` kind exists,
+and v0.3.407 deliberately deferred them) and is out of scope here — one
+honest ingestion path, not several shallow ones.
+
+Scope: exactly one ingestion slice — `DNS_RECORD_LOOKUP` (`A`/`AAAA` only;
+`CNAME`-type runs are rejected with a bounded, explicit "not supported by
+this milestone's hostname-to-address relation" reason, since no
+hostname-to-hostname relation kind exists to honestly hold a CNAME chain
+result) — into the existing v0.3.407 Asset Inventory. No new store, no new
+canonicalization, no new relation kind, no external tool parser.
+
+1. `ResearchAssetProvenanceKind` gains exactly one new member,
+   `KALI_OPERATION_RESULT`, naming the one real automated producer that now
+   exists (a completed, authorization-gated `ResearchKaliOperationRun`).
+
+2. `ResearchAssetObservationRecord` and `ResearchAssetRelationRecord` each
+   gain one new additive field, `source_operation_digest: str | None = None`
+   (a valid Kali operation digest per `is_kali_operation_digest`). Fail-closed
+   1:1 binding enforced in `__post_init__`: `None` exactly when
+   `provenance is OPERATOR_AUTHORED` (unchanged default for every existing
+   and future hand-authored record — a human cannot forge automated
+   provenance by supplying a digest), and a valid digest string exactly when
+   `provenance is KALI_OPERATION_RESULT` (an automated result cannot
+   masquerade as `OPERATOR_AUTHORED` by omitting it). `ResearchAssetRelationRecord`
+   also gains a `provenance: ResearchAssetProvenanceKind` field for the same
+   reason: a `RESOLVES_TO` relation created from a real DNS result must not
+   read as an unattributed/implicitly-operator claim.
+
+3. `JsonFileResearchAssetInventoryStore` schema version 1 -> 2 (the v0.3.405
+   `evidence_type` precedent: `_OBSERVATION_FIELDS`/`_RELATION_FIELDS`
+   become version-aware field sets; a v1-persisted record without
+   `provenance`/`source_operation_digest` on relations, or without
+   `source_operation_digest` on observations, decodes as
+   `OPERATOR_AUTHORED`/`None` with no backfill or inference of a false
+   automated origin; a v2 record missing either field fails closed;
+   round-trip lossless at v2).
+
+4. A new pure parser, `src/research/ResearchDnsLookupResultParser.py`:
+   validates the run is `DNS_RECORD_LOOKUP` with record type `A`/`AAAA`
+   (else raises `ResearchError`, whole run rejected — not silently
+   downgraded); re-derives the queried hostname from `argv[4]` and
+   re-canonicalizes it through the existing `canonical_dns_hostname` (never
+   trusting the Kali preview's own simpler `.lower().removesuffix(".")`
+   normalization as sufficient — v0.3.406's own discipline is that only
+   `_dns_name`/`canonical_dns_hostname` may decide hostname identity);
+   classifies each `stdout_lines` entry as either a valid address of the
+   record type's IP version (accepted) or not (rejected, with a bounded,
+   generic, literal reason string — the raw line is preserved as inert data
+   for operator display, never interpreted); an empty result (NXDOMAIN, zero
+   lines, `exit_code == 0`) yields zero accepted rows, not an error; a
+   nonzero `exit_code` or `timed_out=True` yields zero accepted rows with an
+   explicit "operation did not complete successfully" reason. Deterministic,
+   no network, no process, no model call — a pure function over an
+   already-completed `ResearchKaliOperationRun`.
+
+5. A new application-service method (or a small dedicated service reusing
+   `ResearchAssetInventoryApplicationService`'s existing `record_observation`/
+   `record_relation`, both of which already accept a `provenance` parameter
+   today — extended with the new `source_operation_digest` parameter) that:
+   previews the parse result with zero durable writes (mirroring
+   `kali_operation_evidence_candidate_for_run`'s side-effect-free
+   discipline); on explicit confirmation, records exactly one `HOSTNAME`
+   observation for the queried hostname (once per run, not once per
+   resolved address) and one `IP_ADDRESS` observation plus one `RESOLVES_TO`
+   relation per accepted resolved address, all stamped
+   `provenance=KALI_OPERATION_RESULT` and `source_operation_digest=run
+   .operation_digest`; always uses `run.program_id` (never a
+   separately-supplied program ID), so program isolation is structural, not
+   a runtime check that could be bypassed.
+
+6. Desktop: extend `KaliOperationPanel.py`'s existing
+   "1. Önizle → 2. Onayla → 3. Çalıştır" flow with a 4th step, available only
+   after a successful `DNS_RECORD_LOOKUP` run, that previews then (after an
+   explicit confirm dialog, matching the existing `messagebox.askyesno`
+   pattern used by steps 2/3) records the resulting observations/relations,
+   displaying created/already-known assets, created relations, and rejected
+   rows in the same bounded output pane.
+
+Non-goals: no `HTTPS_HEADER_LOOKUP` ingestion (deferred — no structured
+asset kind exists for header data yet); no `CNAME`-chain ingestion (no
+hostname-to-hostname relation kind exists); no new relation kind; no new
+asset kind; no external tool parser (Nmap/httpx/etc.); no vulnerability,
+hypothesis, or finding of any kind; no change to
+`KaliOperationRunApplicationService`, `KaliOperationAuthorizationApplicationService`,
+`ScopedPublicHttpsUrlValidator`, or any authorization/execution gate; no
+widening of the DNS lookup operation's own authority; no automatic ingestion
+(every write requires the same explicit operator confirmation discipline as
+every other durable write in this codebase); no new active recon capability
+of any kind.
+
+Security implications: the central property is that a recon result can
+never manufacture authority. hypatia-security must independently verify: no
+code path lets a `KALI_OPERATION_RESULT` observation, its derived asset, or
+its `RESOLVES_TO` relation reach `ResearchTargetScope`/scope resolution as
+anything but the existing unchanged live `resolve_hostname`/
+`resolve_addresses` call; a forged `source_operation_digest` cannot be
+supplied for `OPERATOR_AUTHORED` provenance and vice versa; program
+isolation holds because the ingestion path only ever uses `run.program_id`;
+the parser performs no network/process/shell operation and a rejected line's
+raw text is only ever displayed as inert data, never interpreted as an
+instruction, intent, or control-flow input (adversarial test required); a
+replayed identical run cannot create authority or a duplicate canonical
+asset (only allowed to grow observations, per v0.3.407's existing
+identity-derivation semantics); restart/reload cannot resurrect a stale
+scope reading.
+
+Epistemic implications: provenance must be literal and non-forgeable in
+both directions. A DNS result is a fact about what was queried and returned
+at one point in time — it does not imply reachability, ownership, or
+current truth. `RESOLVES_TO` continues to carry no scope semantics of its
+own.
+
+Persistence implications: `JsonFileResearchAssetInventoryStore` schema
+version 1 -> 2, additive only, legacy v1 records decode honestly with no
+inferred automated origin.
+
+Restart/replay implications: identical to v0.3.407's existing
+derived-projection guarantees, now proven under a second provenance kind:
+`assets_for_program` still recomputes deterministically; replay cannot
+create a duplicate canonical asset or new authority.
+
+Authority/budget/target/credential implications: none created, widened, or
+restored. This milestone only teaches the existing, unchanged Asset
+Inventory to honestly attribute one more class of already-authorized,
+already-executed, already-reviewed process result.
+
+Test strategy: valid-result parsing (A and AAAA); hostname/IP
+canonicalization reuse (differential against `canonical_dns_hostname`/
+`canonicalize_asset_value`, proving no second normalization implementation
+was created); dedup (replaying the same run does not duplicate the
+canonical asset); provenance round-trip and forgery rejection in both
+directions; program isolation (a run bound to program A cannot write into
+program B); scope integration (ingested asset resolves fresh against the
+active policy, ingestion itself never changes the resolution); restart
+survival; malformed/unsupported rows (non-address lines, wrong IP version,
+nonzero exit code, timeout, CNAME-type run) all reject/skip safely; at least
+one adversarial untrusted-tool-output case proving a shell/instruction-like
+line remains inert data; a no-network/no-process proof that the ingestion
+stage itself starts no process and opens no socket; legacy v1 store
+round-trip; full canonical gates green.
+
+## Historical scope: v0.3.407 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Bug Bounty asset inventory: canonical asset identity (Bug Bounty foundation, step 2) |
 | Base SHA | be1d13b274c88bf7b7e3e32398397dec43b2ce41 |
 | Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
