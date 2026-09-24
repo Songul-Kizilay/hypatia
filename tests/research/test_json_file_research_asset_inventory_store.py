@@ -50,6 +50,10 @@ def observation(
 def relation(
     relation_id: str = "relation-1",
     program_id: str = "program-a",
+    provenance: ResearchAssetProvenanceKind = (
+        ResearchAssetProvenanceKind.OPERATOR_AUTHORED
+    ),
+    source_operation_digest: str | None = None,
 ) -> ResearchAssetRelationRecord:
     return ResearchAssetRelationRecord(
         relation_id=relation_id,
@@ -59,8 +63,10 @@ def relation(
         related_kind=ResearchAssetKind.IP_ADDRESS,
         related_value="93.184.216.34",
         kind=ResearchAssetRelationKind.RESOLVES_TO,
+        provenance=provenance,
         note="",
         recorded_at=RECORDED,
+        source_operation_digest=source_operation_digest,
     )
 
 
@@ -235,10 +241,23 @@ class JsonFileResearchAssetInventoryStoreTests(unittest.TestCase):
                     self.store.load()
 
     def test_unsupported_schema_version_is_rejected(self) -> None:
-        self._write_raw({"schema_version": 2, "observations": [], "relations": []})
+        self._write_raw({"schema_version": 3, "observations": [], "relations": []})
 
         with self.assertRaisesRegex(ResearchError, "schema version"):
             self.store.load()
+
+    def test_zero_and_negative_and_boolean_schema_versions_are_rejected(self) -> None:
+        for schema_version in (0, -1, True):
+            with self.subTest(schema_version=schema_version):
+                self._write_raw(
+                    {
+                        "schema_version": schema_version,
+                        "observations": [],
+                        "relations": [],
+                    }
+                )
+                with self.assertRaisesRegex(ResearchError, "schema version"):
+                    self.store.load()
 
     def test_non_list_observations_or_relations_are_rejected(self) -> None:
         self._write_raw(
@@ -545,12 +564,214 @@ class JsonFileResearchAssetInventoryStoreTests(unittest.TestCase):
         with self.assertRaises(ResearchError):
             self.store.load()
 
-    def test_the_on_disk_document_declares_schema_version_one(self) -> None:
+    def test_the_on_disk_document_declares_schema_version_two(self) -> None:
         self.store.save(ResearchAssetInventoryDocument(observations=(observation(),)))
 
         document = json.loads(self.path.read_text(encoding="utf-8"))
 
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
+
+    # -- schema version 1 -> 2 migration ------------------------------------
+
+    _FAKE_DIGEST = "a" * 64
+
+    def test_legacy_v1_document_decodes_honestly_with_no_backfill(self) -> None:
+        """A v1 record never lists provenance/digest fields it never had.
+
+        Loading must supply exactly the one provenance that could possibly be
+        true at v1 (`OPERATOR_AUTHORED`) and `None` for a digest field that did
+        not exist yet — never a guess, never a fabricated automated origin.
+        """
+        self._write_raw(
+            {
+                "schema_version": 1,
+                "observations": [
+                    {
+                        "observation_id": "o1",
+                        "program_id": "program-a",
+                        "kind": "hostname",
+                        "canonical_value": "example.test",
+                        "provenance": "operator_authored",
+                        "note": "",
+                        "recorded_at": RECORDED.isoformat(),
+                    },
+                    {
+                        "observation_id": "o2",
+                        "program_id": "program-a",
+                        "kind": "ip_address",
+                        "canonical_value": "93.184.216.34",
+                        "provenance": "operator_authored",
+                        "note": "",
+                        "recorded_at": RECORDED.isoformat(),
+                    },
+                ],
+                "relations": [
+                    {
+                        "relation_id": "r1",
+                        "program_id": "program-a",
+                        "source_kind": "hostname",
+                        "source_value": "example.test",
+                        "related_kind": "ip_address",
+                        "related_value": "93.184.216.34",
+                        "kind": "resolves_to",
+                        "note": "",
+                        "recorded_at": RECORDED.isoformat(),
+                    }
+                ],
+            }
+        )
+
+        document = self.store.load()
+
+        for record in (*document.observations, *document.relations):
+            self.assertIsNone(record.source_operation_digest)
+        for relation_record in document.relations:
+            self.assertIs(
+                relation_record.provenance,
+                ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
+            )
+
+    def test_v2_document_round_trips_kali_operation_result_provenance(self) -> None:
+        hostname_observation = ResearchAssetObservationRecord(
+            observation_id="o1",
+            program_id="program-a",
+            kind=ResearchAssetKind.HOSTNAME,
+            canonical_value="example.test",
+            provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+            note="",
+            recorded_at=RECORDED,
+            source_operation_digest=self._FAKE_DIGEST,
+        )
+        address_observation = ResearchAssetObservationRecord(
+            observation_id="o2",
+            program_id="program-a",
+            kind=ResearchAssetKind.IP_ADDRESS,
+            canonical_value="93.184.216.34",
+            provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+            note="",
+            recorded_at=RECORDED,
+            source_operation_digest=self._FAKE_DIGEST,
+        )
+        ingested_relation = relation(
+            provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+            source_operation_digest=self._FAKE_DIGEST,
+        )
+        document = ResearchAssetInventoryDocument(
+            observations=(hostname_observation, address_observation),
+            relations=(ingested_relation,),
+        )
+
+        self.store.save(document)
+        reloaded = self.store.load()
+
+        self.assertEqual(reloaded, document)
+        for record in (*reloaded.observations, *reloaded.relations):
+            self.assertEqual(record.source_operation_digest, self._FAKE_DIGEST)
+
+    def test_v2_observation_missing_source_operation_digest_field_fails_closed(
+        self,
+    ) -> None:
+        self._write_raw(
+            {
+                "schema_version": 2,
+                "observations": [
+                    {
+                        "observation_id": "o1",
+                        "program_id": "program-a",
+                        "kind": "hostname",
+                        "canonical_value": "example.test",
+                        "provenance": "operator_authored",
+                        "note": "",
+                        "recorded_at": RECORDED.isoformat(),
+                        # missing source_operation_digest
+                    }
+                ],
+                "relations": [],
+            }
+        )
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_v2_relation_missing_provenance_or_digest_field_fails_closed(self) -> None:
+        base_relation = {
+            "relation_id": "r1",
+            "program_id": "program-a",
+            "source_kind": "hostname",
+            "source_value": "example.test",
+            "related_kind": "ip_address",
+            "related_value": "93.184.216.34",
+            "kind": "resolves_to",
+            "provenance": "operator_authored",
+            "note": "",
+            "recorded_at": RECORDED.isoformat(),
+            "source_operation_digest": None,
+        }
+        base_observations = [
+            {
+                "observation_id": "o1",
+                "program_id": "program-a",
+                "kind": "hostname",
+                "canonical_value": "example.test",
+                "provenance": "operator_authored",
+                "note": "",
+                "recorded_at": RECORDED.isoformat(),
+                "source_operation_digest": None,
+            },
+            {
+                "observation_id": "o2",
+                "program_id": "program-a",
+                "kind": "ip_address",
+                "canonical_value": "93.184.216.34",
+                "provenance": "operator_authored",
+                "note": "",
+                "recorded_at": RECORDED.isoformat(),
+                "source_operation_digest": None,
+            },
+        ]
+        # missing "provenance" entirely
+        missing_provenance = dict(base_relation)
+        del missing_provenance["provenance"]
+        self._write_raw(
+            {
+                "schema_version": 2,
+                "observations": base_observations,
+                "relations": [missing_provenance],
+            }
+        )
+        with self.assertRaises(ResearchError):
+            self.store.load()
+        # missing "source_operation_digest" entirely
+        missing_digest = dict(base_relation, provenance="operator_authored")
+        del missing_digest["source_operation_digest"]
+        self._write_raw(
+            {
+                "schema_version": 2,
+                "observations": base_observations,
+                "relations": [missing_digest],
+            }
+        )
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_v2_forged_provenance_digest_binding_fails_closed(self) -> None:
+        """Storage cannot smuggle a forged binding past the record type's check."""
+        observations = [
+            {
+                "observation_id": "o1",
+                "program_id": "program-a",
+                "kind": "hostname",
+                "canonical_value": "example.test",
+                "provenance": "operator_authored",
+                "note": "",
+                "recorded_at": RECORDED.isoformat(),
+                "source_operation_digest": self._FAKE_DIGEST,
+            }
+        ]
+        self._write_raw(
+            {"schema_version": 2, "observations": observations, "relations": []}
+        )
+        with self.assertRaises(ResearchError):
+            self.store.load()
 
     def test_the_declared_ceilings_are_the_reviewed_values(self) -> None:
         """Pin the real limits; every other test patches them down to 1."""

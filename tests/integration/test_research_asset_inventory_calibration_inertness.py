@@ -176,6 +176,7 @@ class AssetInventoryCalibrationInertnessTests(unittest.TestCase):
             related_kind=ResearchAssetKind.IP_ADDRESS,
             related_value="93.184.216.34",
             kind=ResearchAssetRelationKind.RESOLVES_TO,
+            provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
             note="",
             recorded_at=FETCHED + timedelta(minutes=10),
         )

@@ -1,13 +1,21 @@
 """Atomic file persistence for the append-only asset observation/relation log.
 
-One new store, schema version 1 — a brand-new store, no legacy version to
-carry. Modeled on `JsonFileFailureLessonStore`'s simpler flat-list atomic-
-store shape, not `JsonFileResearchProgramScopeRevisionStore`'s stricter
-forced-append-only-history constraint (specific to that store's revocation
-semantics, not needed here since observations/relations are already
-inherently append-only by construction — this store never mutates a
-previously saved record in place, it only ever replaces the whole list with
-one that is a superset of what a caller already validated).
+Schema version 2. Version 1 shipped with exactly one provenance kind
+(`OPERATOR_AUTHORED`) and no `source_operation_digest`/relation `provenance`
+fields; version 2 adds both, additively, following the same versioned-
+field-set, `min_version`-parameterized decode cascade
+`JsonFileResearchRunStore` established for `evidence_type`
+(`_ASSESSMENT_FIELDS_V11`/`_ASSESSMENT_FIELDS_V21`). A v1-persisted record
+decodes honestly as `OPERATOR_AUTHORED`/`None` — the only provenance that
+could possibly be true when it was written, not a guess — and a v2 record
+missing either new field fails closed. Modeled on
+`JsonFileFailureLessonStore`'s simpler flat-list atomic-store shape, not
+`JsonFileResearchProgramScopeRevisionStore`'s stricter forced-append-only-
+history constraint (specific to that store's revocation semantics, not needed
+here since observations/relations are already inherently append-only by
+construction — this store never mutates a previously saved record in place,
+it only ever replaces the whole list with one that is a superset of what a
+caller already validated).
 """
 
 from __future__ import annotations
@@ -37,9 +45,10 @@ MAX_ASSET_INVENTORY_STORE_BYTES = 4 * 1024 * 1024
 MAX_ASSET_OBSERVATIONS = 5_000
 MAX_ASSET_RELATIONS = 5_000
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_SUPPORTED_SCHEMA_VERSIONS = frozenset(range(1, _SCHEMA_VERSION + 1))
 _DOCUMENT_FIELDS = frozenset({"schema_version", "observations", "relations"})
-_OBSERVATION_FIELDS = frozenset(
+_OBSERVATION_FIELDS_V1 = frozenset(
     {
         "observation_id",
         "program_id",
@@ -50,7 +59,8 @@ _OBSERVATION_FIELDS = frozenset(
         "recorded_at",
     }
 )
-_RELATION_FIELDS = frozenset(
+_OBSERVATION_FIELDS_V2 = _OBSERVATION_FIELDS_V1 | {"source_operation_digest"}
+_RELATION_FIELDS_V1 = frozenset(
     {
         "relation_id",
         "program_id",
@@ -63,6 +73,7 @@ _RELATION_FIELDS = frozenset(
         "recorded_at",
     }
 )
+_RELATION_FIELDS_V2 = _RELATION_FIELDS_V1 | {"provenance", "source_operation_digest"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +236,7 @@ class JsonFileResearchAssetInventoryStore:
             "provenance": observation.provenance.value,
             "note": observation.note,
             "recorded_at": observation.recorded_at.isoformat(),
+            "source_operation_digest": observation.source_operation_digest,
         }
 
     @staticmethod
@@ -237,14 +249,21 @@ class JsonFileResearchAssetInventoryStore:
             "related_kind": relation.related_kind.value,
             "related_value": relation.related_value,
             "kind": relation.kind.value,
+            "provenance": relation.provenance.value,
             "note": relation.note,
             "recorded_at": relation.recorded_at.isoformat(),
+            "source_operation_digest": relation.source_operation_digest,
         }
 
     def _parse_document(self, document: object) -> ResearchAssetInventoryDocument:
         if not isinstance(document, dict) or set(document) != _DOCUMENT_FIELDS:
             raise ResearchError("The asset inventory document is invalid.")
-        if document["schema_version"] != _SCHEMA_VERSION:
+        schema_version = document["schema_version"]
+        if (
+            isinstance(schema_version, bool)
+            or not isinstance(schema_version, int)
+            or schema_version not in _SUPPORTED_SCHEMA_VERSIONS
+        ):
             raise ResearchError(
                 "The asset inventory store schema version is not supported."
             )
@@ -259,16 +278,24 @@ class JsonFileResearchAssetInventoryStore:
         if len(relations_value) > MAX_ASSET_RELATIONS:
             raise ResearchError("The asset inventory has too many relations.")
         observations = tuple(
-            self._parse_observation(value) for value in observations_value
+            self._parse_observation(value, schema_version)
+            for value in observations_value
         )
-        relations = tuple(self._parse_relation(value) for value in relations_value)
+        relations = tuple(
+            self._parse_relation(value, schema_version) for value in relations_value
+        )
         return ResearchAssetInventoryDocument(
             observations=observations, relations=relations
         )
 
     @staticmethod
-    def _parse_observation(document: object) -> ResearchAssetObservationRecord:
-        if not isinstance(document, dict) or set(document) != _OBSERVATION_FIELDS:
+    def _parse_observation(
+        document: object, schema_version: int
+    ) -> ResearchAssetObservationRecord:
+        expected_fields = (
+            _OBSERVATION_FIELDS_V1 if schema_version < 2 else _OBSERVATION_FIELDS_V2
+        )
+        if not isinstance(document, dict) or set(document) != expected_fields:
             raise ResearchError("An asset observation document is invalid.")
         store = JsonFileResearchAssetInventoryStore
         return ResearchAssetObservationRecord(
@@ -279,11 +306,21 @@ class JsonFileResearchAssetInventoryStore:
             provenance=store._provenance(document["provenance"]),
             note=store._optional_text(document["note"]),
             recorded_at=store._timestamp(document["recorded_at"]),
+            source_operation_digest=(
+                None
+                if schema_version < 2
+                else store._optional_digest(document["source_operation_digest"])
+            ),
         )
 
     @staticmethod
-    def _parse_relation(document: object) -> ResearchAssetRelationRecord:
-        if not isinstance(document, dict) or set(document) != _RELATION_FIELDS:
+    def _parse_relation(
+        document: object, schema_version: int
+    ) -> ResearchAssetRelationRecord:
+        expected_fields = (
+            _RELATION_FIELDS_V1 if schema_version < 2 else _RELATION_FIELDS_V2
+        )
+        if not isinstance(document, dict) or set(document) != expected_fields:
             raise ResearchError("An asset relation document is invalid.")
         store = JsonFileResearchAssetInventoryStore
         return ResearchAssetRelationRecord(
@@ -294,8 +331,18 @@ class JsonFileResearchAssetInventoryStore:
             related_kind=store._kind(document["related_kind"]),
             related_value=store._text(document["related_value"]),
             kind=store._relation_kind(document["kind"]),
+            provenance=(
+                ResearchAssetProvenanceKind.OPERATOR_AUTHORED
+                if schema_version < 2
+                else store._provenance(document["provenance"])
+            ),
             note=store._optional_text(document["note"]),
             recorded_at=store._timestamp(document["recorded_at"]),
+            source_operation_digest=(
+                None
+                if schema_version < 2
+                else store._optional_digest(document["source_operation_digest"])
+            ),
         )
 
     @staticmethod
@@ -308,6 +355,14 @@ class JsonFileResearchAssetInventoryStore:
     def _optional_text(value: object) -> str:
         if not isinstance(value, str):
             raise ResearchError("An asset inventory text field is invalid.")
+        return value
+
+    @staticmethod
+    def _optional_digest(value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ResearchError("An asset inventory operation digest is invalid.")
         return value
 
     @staticmethod

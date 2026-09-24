@@ -25,6 +25,7 @@ from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchKaliOperationExecution import ResearchKaliOperationRun
 from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
 from research.ResearchMissionAuditExport import ResearchMissionAuditExportPreview
 from research.ResearchPlanDigest import plan_digest
@@ -465,6 +466,38 @@ class DesktopController:
                     "intent": "kali_operation_run",
                     "authorization_id": authorization_id,
                     "operator_opt_in": operator_opt_in,
+                },
+            )
+        )
+
+    def preview_research_asset_dns_ingestion(
+        self, run: ResearchKaliOperationRun
+    ) -> BrainResponse:
+        """Read-only preview of ingesting one completed DNS lookup run.
+
+        Passes the already-completed, already-authorized run through
+        unchanged; this call itself performs no fetch, scan, or write.
+        """
+        return self._brain.process(
+            BrainRequest(
+                "Preview DNS ingestion",
+                metadata={
+                    "intent": "research_asset_dns_ingestion_preview",
+                    "kali_operation_run": run,
+                },
+            )
+        )
+
+    def record_research_asset_dns_ingestion(
+        self, run: ResearchKaliOperationRun
+    ) -> BrainResponse:
+        """Confirm one completed DNS lookup run's parsed result into the inventory."""
+        return self._brain.process(
+            BrainRequest(
+                "Record DNS ingestion",
+                metadata={
+                    "intent": "research_asset_dns_ingestion_record",
+                    "kali_operation_run": run,
                 },
             )
         )

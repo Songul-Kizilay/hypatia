@@ -1,11 +1,11 @@
-"""One immutable, append-only, operator-authored asset observation fact.
+"""One immutable, append-only asset observation fact.
 
-An observation only says: this operator recorded this canonical hostname or
-address, with this note, at this time. It never says the asset is currently
-reachable, currently resolves the same way, or is in scope for anything —
-`ResearchAsset`/`assets_for_program` derive identity from these facts, and
-`ResearchTargetScope.resolve_hostname`/`resolve_addresses` (always called
-fresh, never cached here) are the only source of a scope answer.
+An observation only says: this attested source recorded this canonical
+hostname or address, with this note, at this time. It never says the asset is
+currently reachable, currently resolves the same way, or is in scope for
+anything — `ResearchAsset`/`assets_for_program` derive identity from these
+facts, and `ResearchTargetScope.resolve_hostname`/`resolve_addresses` (always
+called fresh, never cached here) are the only source of a scope answer.
 
 `canonical_value` must already be canonical for its `kind` when this record
 is constructed: unchanged under `ResearchTargetScope.canonical_dns_hostname`
@@ -13,6 +13,13 @@ for `HOSTNAME`, unchanged under `str(ipaddress.ip_address(value))` for
 `IP_ADDRESS`. This fails closed rather than silently normalizing, so a
 canonicalization decision is always made once, explicitly, by the caller that
 already holds raw operator input — never repeated or second-guessed here.
+
+`source_operation_digest` and `provenance` are fail-closed 1:1 bound:
+`source_operation_digest` is `None` exactly when `provenance` is
+`OPERATOR_AUTHORED` (a human cannot forge automated provenance by supplying a
+digest), and a valid `is_kali_operation_digest` value exactly when
+`provenance` is `KALI_OPERATION_RESULT` (an automated result cannot
+masquerade as operator-authored by omitting it).
 """
 
 from __future__ import annotations
@@ -24,6 +31,7 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetProvenanceKind import ResearchAssetProvenanceKind
+from research.ResearchKaliOperationPreview import is_kali_operation_digest
 from research.ResearchTargetScope import canonical_dns_hostname
 
 MAX_ASSET_OBSERVATION_ID_CHARACTERS = 200
@@ -62,6 +70,35 @@ def canonicalize_asset_value(kind: ResearchAssetKind, value: str) -> str:
     return str(parsed)
 
 
+def require_bound_provenance_digest(
+    provenance: ResearchAssetProvenanceKind,
+    source_operation_digest: str | None,
+    label: str,
+) -> None:
+    """Fail closed unless `source_operation_digest` matches `provenance` 1:1.
+
+    Shared by `ResearchAssetObservationRecord` and `ResearchAssetRelationRecord`
+    so the forgery-rejection rule can never silently diverge between the two
+    record types.
+    """
+    if not isinstance(provenance, ResearchAssetProvenanceKind):
+        raise ResearchError(f"{label} provenance is invalid.")
+    if provenance is ResearchAssetProvenanceKind.OPERATOR_AUTHORED:
+        if source_operation_digest is not None:
+            raise ResearchError(
+                f"{label} cannot carry an operation digest for operator-authored"
+                " provenance."
+            )
+    elif provenance is ResearchAssetProvenanceKind.KALI_OPERATION_RESULT:
+        if not is_kali_operation_digest(source_operation_digest):
+            raise ResearchError(
+                f"{label} requires a valid Kali operation digest for automated"
+                " provenance."
+            )
+    else:
+        raise ResearchError(f"{label} provenance is invalid.")
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchAssetObservationRecord:
     """One recorded fact: this canonical asset was observed by an operator."""
@@ -73,6 +110,7 @@ class ResearchAssetObservationRecord:
     provenance: ResearchAssetProvenanceKind
     note: str
     recorded_at: datetime
+    source_operation_digest: str | None = None
 
     def __post_init__(self) -> None:
         observation_id = self._bounded_id(
@@ -87,8 +125,9 @@ class ResearchAssetObservationRecord:
         )
         if not isinstance(self.kind, ResearchAssetKind):
             raise ResearchError("Asset observation kind is invalid.")
-        if not isinstance(self.provenance, ResearchAssetProvenanceKind):
-            raise ResearchError("Asset observation provenance is invalid.")
+        require_bound_provenance_digest(
+            self.provenance, self.source_operation_digest, "Asset observation"
+        )
         if (
             not isinstance(self.canonical_value, str)
             or not self.canonical_value

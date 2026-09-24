@@ -10,7 +10,11 @@ from tkinter import messagebox, scrolledtext, ttk
 from brain.BrainResponse import BrainResponse
 from core.Exceptions import HypatiaError
 from desktop.DesktopController import DesktopController
-from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
+from research.ResearchKaliOperationExecution import ResearchKaliOperationRun
+from research.ResearchKaliOperationPreview import (
+    ResearchKaliOperationKind,
+    ResearchKaliOperationPreview,
+)
 from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 
 _OPERATIONS = {
@@ -37,6 +41,7 @@ class KaliOperationPanel:
         self._generation = 0
         self._preview: ResearchKaliOperationPreview | None = None
         self._authorization_id: str | None = None
+        self._kali_operation_run: ResearchKaliOperationRun | None = None
         self._scope_choices: dict[str, ResearchProgramScopeRevision] = {}
         self.scope = tk.StringVar(master=parent)
         self.hostname = tk.StringVar(master=parent)
@@ -84,6 +89,7 @@ class KaliOperationPanel:
             ("1. Önizle", self.preview),
             ("2. Onayla", self.authorize),
             ("3. Çalıştır", self.run),
+            ("4. Envantere aktar", self.ingest),
         ):
             ttk.Button(actions, text=label, command=command).pack(side=tk.LEFT, padx=4)
         ttk.Label(parent, textvariable=self.status, wraplength=900).grid(
@@ -106,6 +112,7 @@ class KaliOperationPanel:
         self._generation += 1
         self._preview = None
         self._authorization_id = None
+        self._kali_operation_run = None
         self.record_selector.configure(
             state=(
                 "readonly"
@@ -168,6 +175,8 @@ class KaliOperationPanel:
                     and authorization.operation_digest == self._preview.operation_digest
                 ):
                     self._authorization_id = authorization.authorization_id
+            elif stage == "Çalıştır":
+                self._kali_operation_run = response.kali_operation_run
             self.status.set(f"{stage} tamamlandı. Sonucu aşağıdan inceleyebilirsin.")
 
         self._dispatch(action, complete, f"Kali · {stage}")
@@ -224,4 +233,77 @@ class KaliOperationPanel:
                 preview, authorization_id, operator_opt_in=True
             ),
             "Çalıştır",
+        )
+
+    def ingest(self) -> None:
+        run = self._kali_operation_run
+        if (
+            run is None
+            or run.operation_kind != ResearchKaliOperationKind.DNS_RECORD_LOOKUP
+        ):
+            self.status.set(
+                "Önce başarılı bir DNS kaydı sorgusu çalıştır (3. Çalıştır)."
+            )
+            return
+        generation = self._generation
+
+        def show(response: BrainResponse) -> None:
+            self.output.configure(state=tk.NORMAL)
+            self.output.delete("1.0", tk.END)
+            self.output.insert(tk.END, response.message)
+            self.output.configure(state=tk.DISABLED)
+
+        def preview_complete(response: BrainResponse) -> None:
+            if generation != self._generation:
+                self.status.set(
+                    "Seçim değişti; önceki yanıtla işlem yapılamaz. Yeniden önizle."
+                )
+                return
+            show(response)
+            if not response.success:
+                self.status.set(
+                    "Envantere aktarma önizlemesi başarısız. Ayrıntılar aşağıda."
+                )
+                return
+            preview = response.research_asset_dns_ingestion_preview
+            if preview is None:
+                self.status.set(
+                    "Envantere aktarma önizlemesi başarısız. Ayrıntılar aşağıda."
+                )
+                return
+            if not messagebox.askyesno(
+                "Envantere aktar",
+                f"Hedef: {preview.hostname_asset.canonical_value}\n"
+                f"Kayıt türü: {preview.record_type.value}\n"
+                f"Program: {preview.program_id}\n"
+                f"Bulunan adres sayısı: {len(preview.address_assets)}\n\n"
+                "Bu DNS sonucu envantere kaydedilsin mi?",
+                parent=self.output,
+            ):
+                self.status.set("Envantere aktarma iptal edildi.")
+                return
+            self._dispatch(
+                lambda: self._controller.record_research_asset_dns_ingestion(run),
+                record_complete,
+                "Kali · Envantere aktar (kaydet)",
+            )
+
+        def record_complete(response: BrainResponse) -> None:
+            if generation != self._generation:
+                self.status.set(
+                    "Seçim değişti; önceki yanıtla işlem yapılamaz. Yeniden önizle."
+                )
+                return
+            show(response)
+            if not response.success:
+                self.status.set("Envantere aktarma tamamlanamadı. Ayrıntılar aşağıda.")
+                return
+            self.status.set(
+                "Envantere aktarma tamamlandı. Sonucu aşağıdan inceleyebilirsin."
+            )
+
+        self._dispatch(
+            lambda: self._controller.preview_research_asset_dns_ingestion(run),
+            preview_complete,
+            "Kali · Envantere aktar (önizle)",
         )

@@ -2,10 +2,43 @@
 
 ## Runtime Version
 
-`v0.3.407 (Genesis)`
+`v0.3.408 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.408 ingests the result of one already-completed,
+already-authorized Kali `DNS_RECORD_LOOKUP` operation (`dig +short`,
+`A`/`AAAA` only — `CNAME` is rejected outright, since no hostname-to-hostname
+relation kind exists to hold it) into the v0.3.407 Asset Inventory.
+`ResearchAssetProvenanceKind` gains its first non-`OPERATOR_AUTHORED` member,
+`KALI_OPERATION_RESULT`. A new `source_operation_digest: str | None` field on
+both `ResearchAssetObservationRecord` and `ResearchAssetRelationRecord`, plus
+a new `provenance` field on `ResearchAssetRelationRecord`, are bound 1:1 by a
+new shared `require_bound_provenance_digest` function, fail-closed in both
+directions: a human cannot forge automated provenance by supplying a digest,
+and an automated result cannot masquerade as operator-authored by omitting
+one. A new pure parser, `ResearchDnsLookupResultParser`, re-derives and
+re-canonicalizes the queried hostname from the reviewed command plan's argv
+through the same `canonical_dns_hostname` scope matching itself uses, and
+classifies each output line as an accepted address of the correct IP
+version or a rejected row with a bounded literal reason — a rejected line's
+raw text is preserved only as inert display data, never interpreted. A new
+`ResearchAssetInventoryApplicationService.preview_dns_ingestion`/
+`record_dns_ingestion` pair mirrors the existing side-effect-free-preview
+discipline; recording always uses `run.program_id`, making program isolation
+structural. Two new Brain intents and a 4th desktop step ("4. Envantere
+aktar") on the existing Kali operation panel extend the
+preview→authorize→run flow, gated by the same explicit confirm-dialog
+discipline as the existing steps.
+`JsonFileResearchAssetInventoryStore` schema version 1 -> 2, additive only, a
+legacy v1 record decodes honestly with no backfilled automated origin. No
+new active recon capability, no vulnerability/hypothesis/finding of any
+kind, no `HTTPS_HEADER_LOOKUP` ingestion, no new relation or asset kind, no
+widening of any existing authorization/execution gate — ingestion can only
+ever reach scope resolution through the existing, unchanged, live
+`resolve_hostname`/`resolve_addresses`. This is step 3 of Hypatia's bounded
+Bug Bounty Researcher roadmap.
 
 Version v0.3.407 adds Hypatia's first asset entity of any kind: a new
 operator-authored Bug Bounty asset inventory built on a deliberately

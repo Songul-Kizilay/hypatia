@@ -68,6 +68,10 @@ def relation(
     kind: ResearchAssetRelationKind = ResearchAssetRelationKind.RESOLVES_TO,
     note: str = "",
     recorded_at: datetime = RECORDED,
+    provenance: ResearchAssetProvenanceKind = (
+        ResearchAssetProvenanceKind.OPERATOR_AUTHORED
+    ),
+    source_operation_digest: str | None = None,
 ) -> ResearchAssetRelationRecord:
     return ResearchAssetRelationRecord(
         relation_id=relation_id,
@@ -77,8 +81,10 @@ def relation(
         related_kind=related_kind,
         related_value=canonicalize_asset_value(related_kind, related_value),
         kind=kind,
+        provenance=provenance,
         note=note,
         recorded_at=recorded_at,
+        source_operation_digest=source_operation_digest,
     )
 
 
@@ -109,6 +115,7 @@ class ResearchAssetObservationRecordTests(unittest.TestCase):
                 related_kind=ResearchAssetKind.IP_ADDRESS,
                 related_value="2606:4700:0000:0000:0000:0000:0000:1111",
                 kind=ResearchAssetRelationKind.RESOLVES_TO,
+                provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
                 note="",
                 recorded_at=RECORDED,
             )
@@ -188,6 +195,66 @@ class ResearchAssetObservationRecordTests(unittest.TestCase):
         self.assertEqual(record.note, "a note")
 
 
+class ObservationProvenanceDigestBindingTests(unittest.TestCase):
+    """A human cannot forge automated provenance in either direction."""
+
+    _FAKE_DIGEST = "b" * 64
+
+    def test_operator_authored_with_a_digest_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "cannot carry an operation digest"):
+            ResearchAssetObservationRecord(
+                observation_id="observation-1",
+                program_id="program-a",
+                kind=ResearchAssetKind.HOSTNAME,
+                canonical_value="example.test",
+                provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
+                note="",
+                recorded_at=RECORDED,
+                source_operation_digest=self._FAKE_DIGEST,
+            )
+
+    def test_kali_operation_result_without_a_digest_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "requires a valid Kali operation"):
+            ResearchAssetObservationRecord(
+                observation_id="observation-1",
+                program_id="program-a",
+                kind=ResearchAssetKind.HOSTNAME,
+                canonical_value="example.test",
+                provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+                note="",
+                recorded_at=RECORDED,
+                source_operation_digest=None,
+            )
+
+    def test_kali_operation_result_with_an_invalid_digest_is_rejected(self) -> None:
+        for bad_digest in ("not-a-digest", "a" * 63, "A" * 64, ""):
+            with self.subTest(bad_digest=bad_digest):
+                with self.assertRaises(ResearchError):
+                    ResearchAssetObservationRecord(
+                        observation_id="observation-1",
+                        program_id="program-a",
+                        kind=ResearchAssetKind.HOSTNAME,
+                        canonical_value="example.test",
+                        provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+                        note="",
+                        recorded_at=RECORDED,
+                        source_operation_digest=bad_digest,
+                    )
+
+    def test_kali_operation_result_with_a_valid_digest_constructs(self) -> None:
+        record = ResearchAssetObservationRecord(
+            observation_id="observation-1",
+            program_id="program-a",
+            kind=ResearchAssetKind.HOSTNAME,
+            canonical_value="example.test",
+            provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+            note="",
+            recorded_at=RECORDED,
+            source_operation_digest=self._FAKE_DIGEST,
+        )
+        self.assertEqual(record.source_operation_digest, self._FAKE_DIGEST)
+
+
 class ResearchAssetRelationRecordTests(unittest.TestCase):
     def test_valid_relation_constructs(self) -> None:
         record = relation()
@@ -229,6 +296,7 @@ class ResearchAssetRelationRecordTests(unittest.TestCase):
                 related_kind=ResearchAssetKind.IP_ADDRESS,
                 related_value="93.184.216.34",
                 kind=ResearchAssetRelationKind.RESOLVES_TO,
+                provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
                 note="",
                 recorded_at=RECORDED,
             )
@@ -270,6 +338,7 @@ class ResearchAssetRelationRecordTests(unittest.TestCase):
                         related_kind=related_kind,
                         related_value=related_value,
                         kind=ResearchAssetRelationKind.RESOLVES_TO,
+                        provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
                         note="",
                         recorded_at=RECORDED,
                     )
@@ -284,6 +353,7 @@ class ResearchAssetRelationRecordTests(unittest.TestCase):
                 related_kind=ResearchAssetKind.IP_ADDRESS,
                 related_value="93.184.216.34",
                 kind="resolves_to",  # type: ignore[arg-type]
+                provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
                 note="",
                 recorded_at=RECORDED,
             )
@@ -295,6 +365,40 @@ class ResearchAssetRelationRecordTests(unittest.TestCase):
     def test_note_over_bound_raises(self) -> None:
         with self.assertRaises(ResearchError):
             relation(note="x" * 2001)
+
+
+class RelationProvenanceDigestBindingTests(unittest.TestCase):
+    """The same fail-closed 1:1 binding applies to relations, not only
+    observations — a `RESOLVES_TO` relation created from a real DNS result
+    must not read as an unattributed/implicitly-operator claim, and an
+    operator cannot forge automated provenance on a relation either.
+    """
+
+    _FAKE_DIGEST = "c" * 64
+
+    def test_operator_authored_with_a_digest_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "cannot carry an operation digest"):
+            relation(
+                provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
+                source_operation_digest=self._FAKE_DIGEST,
+            )
+
+    def test_kali_operation_result_without_a_digest_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "requires a valid Kali operation"):
+            relation(
+                provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+                source_operation_digest=None,
+            )
+
+    def test_kali_operation_result_with_a_valid_digest_constructs(self) -> None:
+        record = relation(
+            provenance=ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+            source_operation_digest=self._FAKE_DIGEST,
+        )
+        self.assertEqual(record.source_operation_digest, self._FAKE_DIGEST)
+        self.assertIs(
+            record.provenance, ResearchAssetProvenanceKind.KALI_OPERATION_RESULT
+        )
 
 
 class ResearchAssetTests(unittest.TestCase):
@@ -513,10 +617,13 @@ class VocabularyBoundaryTests(unittest.TestCase):
             (ResearchAssetKind.HOSTNAME, ResearchAssetKind.IP_ADDRESS),
         )
 
-    def test_provenance_has_exactly_one_operator_authored_member(self) -> None:
+    def test_provenance_has_exactly_the_two_real_producers(self) -> None:
         self.assertEqual(
             tuple(ResearchAssetProvenanceKind),
-            (ResearchAssetProvenanceKind.OPERATOR_AUTHORED,),
+            (
+                ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
+                ResearchAssetProvenanceKind.KALI_OPERATION_RESULT,
+            ),
         )
 
     def test_relation_kinds_are_resolves_to_only(self) -> None:

@@ -21,8 +21,14 @@ from cognition.KaliOperationPreviewApplicationService import (
 from cognition.KaliOperationRunApplicationService import (
     KaliOperationRunApplicationService,
 )
+from cognition.ResearchAssetInventoryApplicationService import (
+    ResearchAssetInventoryApplicationService,
+)
 from desktop.DesktopController import DesktopController
 from desktop.KaliOperationPanel import KaliOperationPanel
+from research.JsonFileResearchAssetInventoryStore import (
+    ResearchAssetInventoryDocument,
+)
 from research.JsonFileResearchKaliOperationAuthorizationStore import (
     JsonFileResearchKaliOperationAuthorizationStore,
 )
@@ -45,6 +51,17 @@ from tests.desktop.test_research_command_bindings import (
     RecordingWidget,
     build_real_window,
 )
+
+
+class InMemoryAssetInventoryStore:
+    def __init__(self) -> None:
+        self._document = ResearchAssetInventoryDocument()
+
+    def load(self) -> ResearchAssetInventoryDocument:
+        return self._document
+
+    def save(self, document: ResearchAssetInventoryDocument) -> None:
+        self._document = document
 
 
 class TracedVariable(RecordingVariable):
@@ -90,6 +107,12 @@ class KaliOperationPanelTests(unittest.TestCase):
         self.runs = KaliOperationRunApplicationService(
             composer, self.previews, self.store, ReadyKaliRuntimeProbe(), self.adapter
         )
+        self.asset_inventory_store = InMemoryAssetInventoryStore()
+        self.assets = ResearchAssetInventoryApplicationService(
+            self.asset_inventory_store,
+            composer,
+            program_scope_revision_store=self.scopes,
+        )
         self.requests = []
         brain = Mock()
 
@@ -99,6 +122,12 @@ class KaliOperationPanelTests(unittest.TestCase):
                 "kali_operation_preview": self.previews.process_preview,
                 "kali_operation_authorization": self.approvals.process_authorization,
                 "kali_operation_run": self.runs.process_run,
+                "research_asset_dns_ingestion_preview": (
+                    self.assets.process_dns_ingestion_preview
+                ),
+                "research_asset_dns_ingestion_record": (
+                    self.assets.process_dns_ingestion_record
+                ),
             }[request.metadata["intent"]](request)
 
         brain.process.side_effect = process
@@ -145,6 +174,7 @@ class KaliOperationPanelTests(unittest.TestCase):
             ("1. Önizle", "preview"),
             ("2. Onayla", "authorize"),
             ("3. Çalıştır", "run"),
+            ("4. Envantere aktar", "ingest"),
         ):
             button = next(widget for widget in self.widgets if widget.text == label)
             self.assertEqual(button.command, getattr(self.panel, method))
@@ -330,6 +360,107 @@ class KaliOperationPanelTests(unittest.TestCase):
         self.assertIsInstance(window._kali_panel, KaliOperationPanel)
         self.assertIn("1. Önizle", [widget.text for widget in widgets])
         service.revisions.assert_not_called()
+
+    def _complete_dns_run(self, stdout_lines=("93.184.216.34",), exit_code=0):
+        self.preview_and_approve()
+        preview = self.panel._preview
+        self.adapter.run.return_value = ResearchKaliOperationProcessResult(
+            preview.command_plan, exit_code, stdout_lines
+        )
+        self.panel.run()
+        self.finish()
+
+
+class KaliOperationPanelDnsIngestionTests(unittest.TestCase):
+    """Step 4 ("Envantere aktar"), built on the same real-widget fixture.
+
+    Reuses `KaliOperationPanelTests`' fixture methods directly (not by
+    subclassing it, which would re-run every one of its test methods a
+    second time under this class name too).
+    """
+
+    setUp = KaliOperationPanelTests.setUp
+    finish = KaliOperationPanelTests.finish
+    preview_and_approve = KaliOperationPanelTests.preview_and_approve
+    _complete_dns_run = KaliOperationPanelTests._complete_dns_run
+
+    def test_ingest_before_any_run_reports_status_without_dispatching(self):
+        self.panel.ingest()
+
+        self.assertEqual(self.pending, [])
+        self.assertIn("Önce başarılı", self.panel.status.get())
+
+    def test_an_https_run_cannot_be_ingested(self):
+        self.panel.operation.set("HTTPS başlıklarını oku (curl)")
+        self.preview_and_approve()
+        self.adapter.run.return_value = ResearchKaliOperationProcessResult(
+            self.panel._preview.command_plan, 0, ("HTTP/1.1 200 OK",)
+        )
+        self.panel.run()
+        self.finish()
+
+        self.panel.ingest()
+
+        self.assertEqual(self.pending, [])
+        self.assertIn("Önce başarılı", self.panel.status.get())
+
+    def test_preview_then_confirm_records_hostname_address_and_relation(self):
+        self._complete_dns_run()
+        self.assertIsNotNone(self.panel._kali_operation_run)
+
+        self.panel.ingest()
+        # First pending action is the side-effect-free ingestion preview.
+        self.finish()
+        self.assertEqual(self.asset_inventory_store.load().observations, ())
+        # The confirm dialog (patched to return True) queued the record call.
+        self.finish()
+
+        document = self.asset_inventory_store.load()
+        self.assertEqual(len(document.observations), 2)
+        self.assertEqual(len(document.relations), 1)
+        self.assertIn("Envantere aktarma tamamlandı", self.panel.status.get())
+
+    def test_declining_the_confirm_dialog_sends_no_record_request(self):
+        self._complete_dns_run()
+
+        self.dialog.return_value = False
+        self.panel.ingest()
+        self.finish()
+
+        self.assertEqual(self.pending, [])
+        self.assertEqual(self.asset_inventory_store.load().observations, ())
+        self.assertIn("iptal edildi", self.panel.status.get())
+
+    def test_a_non_address_line_is_rejected_and_only_the_hostname_is_recorded(self):
+        self._complete_dns_run(stdout_lines=("; rm -rf / #",))
+
+        self.panel.ingest()
+        self.finish()
+        self.finish()
+
+        document = self.asset_inventory_store.load()
+        self.assertEqual(len(document.observations), 1)
+        self.assertEqual(document.relations, ())
+
+    def test_changing_selection_after_a_run_invalidates_the_stored_run(self):
+        self._complete_dns_run()
+        self.panel.hostname.set("www.example.test")
+
+        self.assertIsNone(self.panel._kali_operation_run)
+        self.panel.ingest()
+        self.assertEqual(self.pending, [])
+
+    def test_recording_the_same_run_twice_grows_observations_not_assets(self):
+        self._complete_dns_run()
+
+        for _ in range(2):
+            self.panel.ingest()
+            self.finish()
+            self.finish()
+
+        document = self.asset_inventory_store.load()
+        self.assertEqual(len(document.observations), 4)
+        self.assertEqual(len(document.relations), 2)
 
 
 if __name__ == "__main__":

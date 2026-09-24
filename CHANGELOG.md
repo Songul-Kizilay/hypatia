@@ -2,6 +2,69 @@
 
 All notable project changes are recorded here.
 
+## [0.3.408] - 2026-09-25
+
+### Added
+
+- Ingestion of the result of one already-completed, already-authorized Kali
+  `DNS_RECORD_LOOKUP` operation (`dig +short`, `A`/`AAAA` only — `CNAME` is
+  rejected outright, since no hostname-to-hostname relation kind exists to
+  hold it) into the existing Asset Inventory. `ResearchAssetProvenanceKind`
+  gains its first non-`OPERATOR_AUTHORED` member, `KALI_OPERATION_RESULT`,
+  naming the one real automated producer that exists today.
+- A new `source_operation_digest: str | None` field on both
+  `ResearchAssetObservationRecord` and `ResearchAssetRelationRecord`, plus a
+  new `provenance` field on `ResearchAssetRelationRecord` (a relation was
+  previously implicitly operator-authored by omission). Both fields are
+  bound 1:1 by a new shared `require_bound_provenance_digest` function: a
+  human cannot forge automated provenance by supplying a digest, and an
+  automated result cannot masquerade as operator-authored by omitting one.
+- A new pure parser, `ResearchDnsLookupResultParser`, that re-derives and
+  re-canonicalizes the queried hostname from the reviewed command plan's
+  argv through the same `canonical_dns_hostname` scope matching itself
+  uses — never trusting the Kali preview's own simpler normalization — and
+  classifies each `stdout_lines` entry as an accepted address of the
+  correct IP version or a rejected row with a bounded literal reason (the
+  raw line is preserved only as inert display text, never interpreted). A
+  nonzero exit code or timeout yields zero accepted rows with an explicit
+  reason; empty output is a valid NXDOMAIN-shaped zero-address result, not
+  an error.
+- `ResearchAssetInventoryApplicationService.preview_dns_ingestion`/
+  `record_dns_ingestion`, mirroring the existing
+  `kali_operation_evidence_candidate_for_run` side-effect-free-preview
+  discipline: recording writes exactly one `HOSTNAME` observation per run
+  (not once per address) plus one `IP_ADDRESS` observation and one
+  `RESOLVES_TO` relation per accepted address, always using
+  `run.program_id` (never externally supplied), making program isolation
+  structural. Two new Brain intents wired through
+  `CognitiveEngine`/`DesktopController`, and a 4th desktop step ("4.
+  Envantere aktar") on the existing Kali operation panel's
+  preview→authorize→run flow, gated by the same explicit
+  `messagebox.askyesno` confirmation discipline as the existing 3 steps.
+- `JsonFileResearchAssetInventoryStore` schema version 1 -> 2 (the v0.3.405
+  `evidence_type` precedent): a legacy v1 record decodes honestly as
+  `OPERATOR_AUTHORED`/`None` with no backfill; a v2 record missing either
+  new field fails closed.
+
+### Boundaries
+
+- No new active recon capability, no vulnerability/hypothesis/finding of
+  any kind, no `HTTPS_HEADER_LOOKUP` ingestion (deferred — no structured
+  asset kind exists for header data), no new relation kind, no new asset
+  kind, no widening of any existing authorization/execution gate.
+- A recon result can never manufacture authority: no path lets ingestion
+  reach scope resolution except the existing, unchanged, live
+  `resolve_hostname`/`resolve_addresses`. Provenance forgery is rejected in
+  both directions, including at the store's persisted-document layer.
+  Program isolation is structural, not a runtime check that could be
+  bypassed.
+- Untrusted `stdout_lines` content can only ever become an accepted IP
+  address or inert rejected-row display text — never an instruction,
+  intent, or control-flow input. No new socket or process capability is
+  introduced; the parser is a pure function over an already-completed run.
+- Replay cannot duplicate a canonical asset or fabricate authority; a
+  legacy v1 document decodes honestly with no inferred automated origin.
+
 ## [0.3.407] - 2026-09-24
 
 ### Added

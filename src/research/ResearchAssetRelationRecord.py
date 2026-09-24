@@ -1,4 +1,4 @@
-"""One immutable, append-only, operator-authored relationship between assets.
+"""One immutable, append-only relationship between two assets.
 
 References both sides by `(kind, canonical_value)`, not a synthetic asset ID —
 matching the derived-projection identity model `ResearchAsset` uses (assets
@@ -7,6 +7,13 @@ A relation carries no scope semantics of its own: recording `RESOLVES_TO`
 between two assets never widens, implies, or substitutes for either asset's
 scope resolution, which is always a fresh call into
 `ResearchTargetScope.resolve_hostname`/`resolve_addresses`.
+
+Every relation now carries an explicit `provenance` — a relation is no longer
+implicitly operator-authored by omission. `source_operation_digest` is bound
+1:1 to `provenance` by the same fail-closed rule
+`ResearchAssetObservationRecord` enforces (see
+`require_bound_provenance_digest`): `None` exactly for `OPERATOR_AUTHORED`, a
+valid Kali operation digest exactly for `KALI_OPERATION_RESULT`.
 """
 
 from __future__ import annotations
@@ -19,7 +26,9 @@ from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetObservationRecord import (
     MAX_ASSET_CANONICAL_VALUE_CHARACTERS,
     canonicalize_asset_value,
+    require_bound_provenance_digest,
 )
+from research.ResearchAssetProvenanceKind import ResearchAssetProvenanceKind
 from research.ResearchAssetRelationKind import ResearchAssetRelationKind
 
 MAX_ASSET_RELATION_ID_CHARACTERS = 200
@@ -38,8 +47,10 @@ class ResearchAssetRelationRecord:
     related_kind: ResearchAssetKind
     related_value: str
     kind: ResearchAssetRelationKind
+    provenance: ResearchAssetProvenanceKind
     note: str
     recorded_at: datetime
+    source_operation_digest: str | None = None
 
     def __post_init__(self) -> None:
         relation_id = self._bounded_id(
@@ -54,6 +65,9 @@ class ResearchAssetRelationRecord:
         )
         if not isinstance(self.kind, ResearchAssetRelationKind):
             raise ResearchError("Asset relation kind is invalid.")
+        require_bound_provenance_digest(
+            self.provenance, self.source_operation_digest, "Asset relation"
+        )
         source_value = self._require_canonical_value(
             self.source_kind, self.source_value, "source"
         )
