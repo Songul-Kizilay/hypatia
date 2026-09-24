@@ -65,6 +65,10 @@ from cognition.ProviderQualityApplicationService import (
 from cognition.ReflectionApplicationService import (
     ReflectionApplicationService,
 )
+from cognition.ResearchAssetInventoryApplicationService import (
+    ResearchAssetInventoryApplicationService,
+    ResearchAssetInventoryStore,
+)
 from cognition.ResearchAuthoredHistoryApplicationService import (
     ResearchAuthoredHistoryApplicationService,
 )
@@ -333,6 +337,7 @@ class CognitiveEngine:
         ) = None,
         program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
+        asset_inventory_store: ResearchAssetInventoryStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -715,6 +720,17 @@ class CognitiveEngine:
         self._research_target_scope_resolution_service = (
             ResearchTargetScopeResolutionApplicationService(response_composer)
         )
+        self._research_asset_inventory_service: (
+            ResearchAssetInventoryApplicationService | None
+        ) = None
+        if asset_inventory_store is not None:
+            self._research_asset_inventory_service = (
+                ResearchAssetInventoryApplicationService(
+                    asset_inventory_store,
+                    response_composer,
+                    program_scope_revision_store=program_scope_revision_store,
+                )
+            )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
@@ -866,6 +882,37 @@ class CognitiveEngine:
 
         if self._research_target_scope_resolution_service.is_preview_request(request):
             return self._research_target_scope_resolution_service.process_preview(
+                request
+            )
+
+        if ResearchAssetInventoryApplicationService.is_observation_record_request(
+            request
+        ):
+            if self._research_asset_inventory_service is None:
+                composer = self._response_composer
+                fail = composer.research_asset_observation_record_failure
+                return fail(request, "Asset inventory is not available.")
+            return self._research_asset_inventory_service.process_observation_record(
+                request
+            )
+
+        if ResearchAssetInventoryApplicationService.is_relation_record_request(request):
+            if self._research_asset_inventory_service is None:
+                composer = self._response_composer
+                fail = composer.research_asset_relation_record_failure
+                return fail(request, "Asset inventory is not available.")
+            return self._research_asset_inventory_service.process_relation_record(
+                request
+            )
+
+        if ResearchAssetInventoryApplicationService.is_inventory_preview_request(
+            request
+        ):
+            if self._research_asset_inventory_service is None:
+                composer = self._response_composer
+                fail = composer.research_asset_inventory_preview_failure
+                return fail(request, "Asset inventory is not available.")
+            return self._research_asset_inventory_service.process_inventory_preview(
                 request
             )
 

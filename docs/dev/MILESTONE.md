@@ -14,6 +14,249 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Bug Bounty asset inventory: canonical asset identity (Bug Bounty foundation, step 2) |
+| Base SHA | be1d13b274c88bf7b7e3e32398397dec43b2ce41 |
+| Status | release |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review complete (no authority widening; one medium zone-scoped-address identity/scope divergence defect plus four low/informational findings, all fixed); hypatia-qa: independent review complete (three high-severity test gaps — window reachability, Bootstrap wiring, behavioral scope freshness — plus medium gaps, all closed); Lead verified the new tests with seven mutations, all caught; hypatia-release: delivering v0.3.407 |
+| Blockers | none |
+
+Rationale: continuing the bounded Bug Bounty Researcher roadmap immediately
+after v0.3.406 (tri-state scope resolution). Two parallel read-only
+discovery specialists (hypatia-runtime: existing target/URL/asset
+representations, persistence and desktop UI precedents; hypatia-epistemics:
+provenance/identity/relationship semantics) confirmed, with file:line
+citations, that **no asset entity of any kind exists anywhere in `src/`
+today** — every hostname/IP/URL representation found is either
+`ResearchTargetScope`/`TargetHostRule` (scope-authorization policy, not a
+discovered-asset record) or a bare `str` field on an unrelated value object
+(research-source citation URLs, transport parameters, Kali operation
+preview inputs). The two existing Kali operation kinds
+(`DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP`) produce only raw, unparsed
+`stdout_lines`/`candidate_lines` text — no structured resolved-address or
+header data exists anywhere to seed an asset record from. This confirms
+recon-result ingestion (the roadmap's next step) has nothing to ingest
+into yet, and that this milestone's only honest population path is
+operator-authored entry, mirroring how `ResearchTargetScope` itself is
+already desktop-authored today.
+
+Discovery also found the two strongest reusable precedents: (1)
+`src/research/ResearchSourceTemporalHistory.py` — a canonical
+`resource_identity: str` field kept structurally separate from a tuple of
+dated, independently-recorded observations, derived fresh from already-
+recorded data on every read and never itself persisted as a merged/mutated
+entity (`temporal_history_for()`); this is the exact identity/observation
+split this milestone adopts. (2) `ResearchAuthorizer`'s own docstring
+discipline against adding an enum member "for symmetry" before a real
+capability needs it — directly applied to the new provenance vocabulary
+below (exactly one member, not a speculative set). Discovery further
+confirmed `program_id` is a purely opaque, unregistered `str` everywhere
+in this codebase (no `Program` entity exists to extend or duplicate), and
+that `SourceIdentity.identity_of`'s `www.`-stripping/resource-identity
+normalization is the wrong tool for hostname identity (it is calibrated
+for "same research document," not "same network host") — hostname
+canonicalization instead reuses `ResearchTargetScope`'s own tested
+`_dns_name` normalization directly, so asset identity and scope-matching
+can never silently drift apart.
+
+Scope: five new frozen types in `src/research/`:
+- `ResearchAssetKind` (`StrEnum`: `HOSTNAME`, `IP_ADDRESS` only — `URL`/
+  `SERVICE`/`ENDPOINT` explicitly deferred, since no structured data exists
+  yet to populate them honestly, and a URL asset kind risks conflating with
+  the existing, conceptually distinct `ResearchSourceRecord.url` citation
+  field without a dedicated design pass).
+- `ResearchAssetProvenanceKind` (`StrEnum`: exactly one member,
+  `OPERATOR_AUTHORED` — no `IMPORTED_TOOL_RESULT`/`PASSIVE_DISCOVERY`
+  member yet, since nothing in this codebase produces that data; extending
+  this enum is explicitly recon-result-ingestion's job, a later milestone).
+- `ResearchAssetRelationKind` (`StrEnum`: exactly one member,
+  `RESOLVES_TO` — directional, hostname-to-address only).
+- `ResearchAssetObservationRecord` (frozen dataclass: `observation_id`,
+  `program_id`, `kind`, `canonical_value`, `provenance`, `note`,
+  `recorded_at`) — one immutable, append-only fact. `canonical_value` must
+  already be canonical at construction (fail-closed `__post_init__`
+  re-validation via the kind-appropriate canonicalizer — never silently
+  normalized/fixed up).
+- `ResearchAssetRelationRecord` (frozen dataclass: `relation_id`,
+  `program_id`, `source_kind`, `source_value`, `related_kind`,
+  `related_value`, `kind`, `note`, `recorded_at`) — references assets by
+  `(kind, canonical_value)`, not a synthetic asset ID (matching the
+  derived-projection identity model below); self-relation rejected.
+- `ResearchAsset` (frozen dataclass, the derived read-model: `program_id`,
+  `kind`, `canonical_value`, `observations: tuple[ResearchAssetObservationRecord, ...]`,
+  `first_seen`/`last_seen` derived as min/max of its observations'
+  `recorded_at`) plus a pure `assets_for_program(program_id, observations)
+  -> tuple[ResearchAsset, ...]` builder in the same file, grouping the flat
+  observation list by `(program_id, kind, canonical_value)` — modeled
+  directly on `ResearchSourceTemporalHistory.py`'s type-plus-builder shape.
+  **Never persisted as a merged entity** — recomputed fresh from the raw
+  observation list on every read, so there is no "find an existing asset
+  and mutate it" persistence logic anywhere.
+
+One new public function on the existing `ResearchTargetScope.py` (zero
+changes to any existing function, class, or line — purely additive, same
+discipline as v0.3.406): a public wrapper exposing `_dns_name`'s
+normalization for reuse by the new asset-identity module, so hostname
+canonicalization and scope-hostname-matching normalization can never
+silently diverge. IP canonicalization reuses the stdlib
+`ipaddress.ip_address(value)` directly (already used elsewhere in this
+codebase), no new function needed.
+
+New persistence: `JsonFileResearchAssetInventoryStore` (`src/research/`) —
+one atomic file holding two flat lists (`ResearchAssetObservationRecord`,
+`ResearchAssetRelationRecord`), schema version 1 (a brand-new store, no
+legacy version to carry), strict field-set validation, bounded max counts,
+globally-unique `observation_id`/`relation_id` rejection on save — modeled
+on `JsonFileFailureLessonStore`'s simpler flat-list-atomic-store shape
+(not `JsonFileResearchProgramScopeRevisionStore`'s stricter forced-
+append-only-history constraint, which is specific to that store's
+revocation semantics and not needed here since observations are already
+inherently append-only by construction).
+
+New service layer: `ResearchAssetInventoryApplicationService`
+(`src/cognition/`, mirroring `ResearchProgramScopeEnrollmentService`'s
+shape rather than the heavier `ResearchRunManager`) — validates
+canonicalization, enforces program isolation (an asset/relation belongs to
+exactly one `program_id`; relations may only reference two assets already
+observed in that same program — fail closed on cross-program references),
+records observations/relations, and derives `assets_for_program`/
+`relations_for_program` read projections. New read-only scope-integration
+function: given one `ResearchAsset` and the *currently active*
+`ResearchProgramScopeRevision` for its program (looked up fresh, never
+cached), dispatch to the existing v0.3.406 `resolve_hostname`/
+`resolve_addresses` by `asset.kind` and return the tri-state
+`ResearchTargetScopeResolution` — never persisted, always recomputed.
+
+Desktop: a new "Asset Inventory" panel reusing the exact `ttk.Treeview` +
+scrollbar + `<<TreeviewSelect>>` + `iid -> detail-text` dict pattern
+already established by the v0.3.399 mission-audit traceability view (no
+new widget-construction idiom introduced), listing assets per program with
+kind/canonical value/observation count/first-last-seen and a "current
+scope resolution (recomputed live from active policy)" column explicitly
+labelled as such — never a stored/stale label. Simple entry fields for an
+operator to record a new observation (kind + value + note) and a new
+relation (two known assets + kind + note), wired through new Brain
+intents mirroring the existing preview-then-record pattern used throughout
+this codebase.
+
+Non-goals: no active recon of any kind (no Nmap/httpx/ffuf/feroxbuster/
+Nuclei/subfinder/amass execution, no DNS brute force, no HTTP probing, no
+port scanning, no fuzzing, no exploitation, no automatic validation) — this
+milestone only builds the model recon-result ingestion will later populate.
+No `URL`/`SERVICE`/`ENDPOINT` asset kinds (deferred). No relationship kinds
+beyond `RESOLVES_TO` (no `HAS_SUBDOMAIN`/`EXPOSES_SERVICE`/`HOSTED_ON`/
+`OBSERVED_REDIRECT_TO` yet — deferred, each needs its own asset-kind
+prerequisite this milestone doesn't build). No provenance kind beyond
+`OPERATOR_AUTHORED`. No global, cross-program asset graph — assets and
+relations are strictly program-scoped by field, matching
+`ResearchProgramScopeRevision`'s own opaque-`program_id` convention, not a
+new `Program` entity. No change to `ResearchTargetScope.py`'s existing
+`require_hostname`/`require_addresses`/`resolve_hostname`/
+`resolve_addresses`/`TargetHostRule`/`_dns_name` behavior — the only
+change to that file is one new additive public wrapper function. No change
+to `ResearchProgramScopeEnrollmentService`'s create/revoke workflow, to
+`SourceIdentity`, or to any authorization/execution gate. Persisted scope
+resolution as durable authority is explicitly forbidden — every rendered
+scope status is recomputed live, and a restart/reload must never let an
+old `IN_SCOPE` reading substitute for a fresh check against the active
+revision. No new authority, budget, target, or credential primitive.
+
+Acceptance criteria: canonical hostname identity is case-normalized,
+trailing-dot-normalized, and validated via the same `_dns_name` logic
+`ResearchTargetScope` already uses (proven by a differential test showing
+the wrapper's output is byte-identical to calling the existing scope
+matching path); sibling hosts (`api.example.com`/`www.example.com`) and
+suffix-trick lookalikes (`attackerexample.com` vs `example.com`) never
+collapse into the same canonical identity; repeated observations of the
+same `(program_id, kind, canonical_value)` produce one derived `ResearchAsset`
+with multiple preserved observations, never a duplicate asset; IP
+canonicalization is deterministic for both IPv4 and IPv6 (where the
+existing engine already supports IPv6); a `RESOLVES_TO` relation can only
+be recorded between two assets already observed in the same program
+(fail-closed cross-program/cross-observation rejection); asset existence
+alone never appears anywhere as sufficient grounds for a resolve-to-`IN_SCOPE`
+claim — scope resolution is always a fresh call into the unchanged
+v0.3.406 resolver against the currently active revision; a
+CNAME/vendor/redirect-style relationship never widens or implies scope
+(structurally true here since `RESOLVES_TO` carries no scope semantics of
+its own — proven by a differential/inertness test mirroring v0.3.405/
+v0.3.406's pattern); restart/reload produces identical derived assets from
+the same persisted observation list, and never fabricates a fresher scope
+reading than a live check would produce; malformed/duplicate/cross-program
+observation or relation writes fail closed; full canonical gates green.
+
+Specialist ownership: hypatia-epistemics is the sole implementer (matches
+this milestone's domain — identity/provenance/relationship semantics —
+and avoids the dual-writer file-conflict risk). hypatia-security is the
+primary independent reviewer, given the asset-existence-is-not-authority
+invariant is the central safety property of this milestone; hypatia-qa
+reviews independently afterward; hypatia-release delivers only after both
+reviews and full canonical gates are green.
+
+Security implications: the critical property is that no code path anywhere
+treats asset existence, an asset relationship, or a persisted observation
+as sufficient grounds for an active action or a scope grant. hypatia-security
+must independently verify: recorded assets/relations never feed
+`ResearchTargetScope`/`ResearchClaimCalibrator`/any authorization path
+except through the unchanged, always-live `resolve_hostname`/
+`resolve_addresses` calls; a `RESOLVES_TO` relation cannot be read as
+"the related address is now authorized"; program isolation is real (no
+code path can read one program's asset/relation records while resolving
+another program's scope); restart/reload cannot make a stale resolution
+substitute for a fresh one; malformed canonical values fail closed rather
+than silently coercing into a plausible-looking hostname/address.
+
+Epistemic implications: this is the core of the milestone. Canonical
+identity must never conflate genuinely distinct hosts (siblings, suffix
+lookalikes, apex-vs-subdomain) and must never silently merge two
+observations that only coincidentally share surface text. Provenance
+(`OPERATOR_AUTHORED`) must be literal and attributable, never inferred or
+model-generated on the asset's behalf. Discovery is not authority: nothing
+about recording, linking, or re-observing an asset may itself imply
+current-world truth or testing permission, mirroring this file's existing
+"historical observation != current-world truth" and "revalidation !=
+freshness" invariants.
+
+Persistence implications: one new store, schema version 1 (new store, not
+a version bump on an existing one); strictly append-only observation/
+relation records; no mutation-in-place of any persisted record; derived
+`ResearchAsset` projections are never themselves written to disk.
+
+Restart/replay implications: the derived-projection design makes this
+structurally safe — `assets_for_program` recomputes identical output from
+the same persisted observation list on every call, and the scope-
+resolution dispatch always re-queries the active program-scope revision
+live, so a restart can neither fabricate a new asset nor resurrect a stale
+`IN_SCOPE` reading as current authority.
+
+Authority/budget/target/credential implications: none created, widened,
+or restored. This milestone adds a purely descriptive inventory layer over
+already-existing, already-reviewed scope-authorization infrastructure; the
+only real authority gates (`require_hostname`/`require_addresses`, program-
+scope revision validity) remain completely untouched.
+
+Test strategy: canonicalization tests (hostname case/trailing-dot
+normalization matching `ResearchTargetScope`'s own behavior exactly via a
+differential test; sibling-host and suffix-trick non-collapse; IPv4/IPv6
+canonicalization); dedup tests (repeated observation of the same identity
+produces one derived asset with growing, order-preserved observations, not
+a duplicate); relation tests (`RESOLVES_TO` creation, self-relation
+rejection, cross-program rejection, reference-to-unobserved-asset
+rejection); scope-integration tests (known asset + `IN_SCOPE` policy ->
+current resolution `IN_SCOPE`; + explicit exclusion -> `OUT_OF_SCOPE`; + no
+matching policy -> `UNCERTAIN`; persisted asset does not become authorized
+on restart; a `RESOLVES_TO` relation never moves the resolution); an
+inertness/differential test proving asset inventory data never changes
+`ResearchClaimCalibrator`/`EvidenceSupportProfile`/any existing consumer's
+output (mirroring the v0.3.405/v0.3.406 pattern); persistence tests
+(round-trip, malformed-state fail-closed, duplicate-ID rejection, bounded
+size ceilings); a real constructed-widget desktop reachability test for
+the new panel, including a non-default value proven to survive end-to-end
+(learning directly from the exact gap QA found and closed in v0.3.405).
+
+## Historical scope: v0.3.406 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Explicit tri-state target-scope resolution (Bug Bounty foundation, step 1) |
 | Base SHA | ad7de6cce455f8a931459190b18849de05bd5826 |
 | Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |

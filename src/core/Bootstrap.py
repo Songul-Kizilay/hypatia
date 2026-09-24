@@ -99,6 +99,9 @@ from research.JsonFileOneShotDeferredExecutionScheduleStore import (
 from research.JsonFileReflectionReportStore import (
     JsonFileReflectionReportStore,
 )
+from research.JsonFileResearchAssetInventoryStore import (
+    JsonFileResearchAssetInventoryStore,
+)
 from research.JsonFileResearchExecutionStore import (
     JsonFileResearchExecutionStore,
 )
@@ -578,6 +581,7 @@ class Bootstrap:
         kali_operation_authorization_store = self._kali_operation_authorization_store()
         program_scope_revision_store = self._program_scope_revision_store()
         vulnerability_graph_store = self._vulnerability_graph_store()
+        asset_inventory_store = self._asset_inventory_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -679,6 +683,7 @@ class Bootstrap:
             kali_operation_process_adapter=self._kali_operation_process_adapter,
             program_scope_revision_store=program_scope_revision_store,
             vulnerability_graph_store=vulnerability_graph_store,
+            asset_inventory_store=asset_inventory_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -972,6 +977,15 @@ class Bootstrap:
                 self._memory_path,
                 self._research_run_path,
             )
+        )
+
+    def _asset_inventory_store(self) -> JsonFileResearchAssetInventoryStore:
+        """Create the operator-authored Bug Bounty asset inventory store."""
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchAssetInventoryStore(
+            run_path.with_name("research_asset_inventory.json")
         )
 
     def _kali_operation_authorization_store(

@@ -35,6 +35,18 @@ def _dns_name(value: str) -> str:
     return name
 
 
+def canonical_dns_hostname(hostname: str) -> str:
+    """Expose `_dns_name`'s exact normalization for reuse outside this module.
+
+    Purely additive: this calls the same private normalization
+    `require_hostname`/`resolve_hostname`/`TargetHostRule` already use,
+    unchanged, so hostname asset identity and scope-hostname-matching
+    normalization can never silently diverge. Zero behavior of `_dns_name`
+    itself is altered by this wrapper.
+    """
+    return _dns_name(hostname)
+
+
 @dataclass(frozen=True, slots=True)
 class TargetHostRule:
     """Match one host, or descendants only (the equivalent of *.host).

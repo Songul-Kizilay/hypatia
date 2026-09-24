@@ -36,6 +36,7 @@ from desktop.MissionSourceIndependenceReview import (
     independence_review_text,
 )
 from desktop.QuestionResearchDraft import QuestionResearchDraft
+from desktop.ResearchAssetInventoryPanel import ResearchAssetInventoryPanel
 from desktop.ResearchSourcePreviewPanel import ResearchSourcePreviewPanel
 from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
 from desktop.ResearchWorkspaceReadModel import (
@@ -1621,6 +1622,14 @@ class TkinterDesktopWindow:
                 kali_tab,
                 self._controller,
                 self._program_scope_enrollment_service.revisions,
+                self._start_request,
+            )
+            asset_inventory_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(asset_inventory_tab, text="Asset Inventory")
+            tabs.append(asset_inventory_tab)
+            self._asset_inventory_panel = ResearchAssetInventoryPanel(
+                asset_inventory_tab,
+                self._controller,
                 self._start_request,
             )
         # The Tools tab appears only when a console was composed. An empty

@@ -2,6 +2,69 @@
 
 All notable project changes are recorded here.
 
+## [0.3.407] - 2026-09-24
+
+### Added
+
+- A new operator-authored Bug Bounty asset inventory — the first asset
+  entity of any kind in this codebase. Discovery confirmed, with citations,
+  that every existing hostname/IP/URL representation is either
+  `ResearchTargetScope`/`TargetHostRule` (scope-authorization policy, not a
+  discovered-asset record) or a bare `str` on an unrelated value object, so
+  nothing was extended or duplicated here. The new vocabulary is
+  deliberately minimal — exactly what this codebase can honestly populate
+  today, never a member added for symmetry: `ResearchAssetKind`
+  (`HOSTNAME` and `IP_ADDRESS` only), `ResearchAssetProvenanceKind`
+  (`OPERATOR_AUTHORED` only), and `ResearchAssetRelationKind`
+  (`RESOLVES_TO` only).
+- The identity/observation split is modelled on
+  `ResearchSourceTemporalHistory`'s existing discipline: append-only
+  `ResearchAssetObservationRecord` and `ResearchAssetRelationRecord` hold
+  the durable, independently dated facts, and the `ResearchAsset`
+  projection — built fresh on every read by `assets_for_program` — is
+  derived-only and never itself persisted as a merged entity.
+  `ResearchAssetInventoryEntry`/`ResearchAssetScopeResolutionView` pair one
+  derived asset with its live scope reading for display.
+- A new atomic `JsonFileResearchAssetInventoryStore` (schema version 1,
+  strict field sets on the document and on every record, bounded
+  observation/relation counts and bounded document bytes, duplicate-ID
+  refusal on both load and save), a
+  `ResearchAssetInventoryApplicationService` exposing three Brain intents
+  (`research_asset_observation_record`, `research_asset_relation_record`,
+  `research_asset_inventory_preview`) through `CognitiveEngine` and
+  `DesktopController`, and a new desktop "Asset Inventory" panel.
+- Hostname asset identity reuses `ResearchTargetScope`'s own tested
+  normalization through exactly one new additive public wrapper,
+  `canonical_dns_hostname`, which calls the same private `_dns_name`
+  `require_hostname`/`resolve_hostname`/`TargetHostRule` already use, so
+  asset identity and scope-hostname matching cannot silently diverge. IP
+  asset identity uses stdlib `ipaddress` parsing and refuses zone-scoped
+  addresses, because the scope layer refuses them too — an asset the scope
+  layer could never match must not be recordable under an identity the
+  scope layer would reject.
+
+### Boundaries
+
+- No recon, probing, scanning, fetching, DNS resolution, process execution
+  or background work of any kind. An asset exists because an operator
+  wrote it down, not because anything looked.
+- Asset existence, an observation, or a `RESOLVES_TO` relation is never
+  authority and never a scope grant. Recording that a hostname resolves to
+  an address says nothing about whether either one may be touched.
+- Every scope reading is recomputed live against the currently active
+  program-scope revision and is never persisted, cached or restored. When
+  no active scope revision exists, the inventory emits an explicit "no
+  active scope revision" signal (`has_active_scope_revision=False`,
+  `resolution=None`, enforced by validation) instead of fabricating a
+  resolution.
+- Assets and relations are strictly program-scoped: cross-program writes
+  and reads fail closed. Provenance is always operator-authored and is
+  never taken from request metadata. Derived assets are never persisted as
+  merged entities.
+- No new authority, budget, target or credential primitive.
+  `ResearchTargetScope`'s existing behavior is byte-for-byte unchanged —
+  the only edit to that module is the additive wrapper above.
+
 ## [0.3.406] - 2026-09-23
 
 ### Added
