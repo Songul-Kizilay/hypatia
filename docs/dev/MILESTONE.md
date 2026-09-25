@@ -14,6 +14,88 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Asset Inventory note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
+| Base SHA | eb3219f302b09f67354e81e07a0bb0df8eb41b72 |
+| Status | implementation |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-release: delivery |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 5, "Credential + secret
+boundary", after delivered v0.3.411. v0.3.411 enforced
+`ResearchSensitiveInputPolicy` on every operator-authored free-text field of
+`ResearchSessionContextRecord` (the newest persistence surface at the time),
+but explicitly scoped no further. Repository-grounded re-check (2026-09-25,
+hypatia-lead): `ResearchSensitiveInputPolicy` is imported in exactly one file
+(`ResearchSessionContextRecord.py`). Two older, still-live operator-authored
+free-text `note` fields predate that boundary and remain completely
+unclassified: `ResearchAssetObservationRecord.note` and
+`ResearchAssetRelationRecord.note` (both from v0.3.407, both bounded to 2,000
+characters — identical to the policy's own
+`MAX_RESEARCH_SENSITIVE_INPUT_CHARACTERS` ceiling). An operator recording an
+asset observation or relation can paste a real credential into either note
+today with zero refusal, exactly the gap item 5 exists to close. Both fields
+are validated in `__post_init__`, on the same record classes the asset
+inventory store already round-trips through on save and load, so enforcing
+here automatically covers both the write path and the malicious-persisted-
+document-on-load path, mirroring v0.3.411's own discipline.
+
+Scope: import the existing, unmodified, already-reviewed
+`ResearchSensitiveInputPolicy` into `ResearchAssetObservationRecord.py` and
+`ResearchAssetRelationRecord.py`; refuse `note` in each record's
+`__post_init__` exactly as `ResearchSessionContextRecord` already refuses its
+own free-text fields (fixed category-only message, never the candidate
+value); add a one-line "never enter a secret" caption to
+`src/desktop/ResearchAssetInventoryPanel.py` near its observation/relation
+note entry fields, mirroring the existing Session Contexts panel caption; add
+normal/refusal/persistence(load)/service regression tests to
+`tests/research/test_research_asset_inventory.py` and
+`tests/research/test_json_file_research_asset_inventory_store.py`.
+
+Non-goals: no change to `ResearchSensitiveInputPolicy` itself (reused
+byte-for-byte, no new category, no pattern change); no change to
+`canonical_value`, `observation_id`, `program_id`, `relation_id`, or any
+non-note field on either record (a canonical hostname/IP cannot syntactically
+carry a secret past `canonicalize_asset_value`, so classifying it would be
+inert ceremony, not a real boundary); no change to
+`ResearchSessionContextRecord` (already covered); no widening to the other
+`note: str` fields found elsewhere in `src/research/`
+(`ResearchClaimContradictionRecord`, `ResearchClaimContradictionWritePreview`,
+`ResearchComparisonReviewRecord`, `ResearchContradictionAuthorization`,
+`ResearchEvidenceAuthorization`, `ResearchEvidenceRecord`) — these are a
+mixed set of authorization records and derived/auto-populated fields that
+need their own scoping pass, not a mechanical copy of this milestone's
+pattern, and are recorded here as explicit residual future work under item 5.
+No secret storage, encryption, hashing, masking-and-keeping, credential
+reference/use, login, network/process capability, or any authority/budget/
+target/execution change.
+
+Security invariants: classification stays deterministic, local, bounded, and
+side-effect-free, invoked before persistence on both the write and load
+paths. A refusal exposes only its fixed category, never the candidate value,
+in the raised error, any Brain response, or any log. A malicious persisted
+asset-inventory document (a note containing a sentinel secret written
+directly to the store's file, bypassing the service) must fail closed on
+load with the same typed error the store already raises for other malformed
+content — never a partial or fabricated asset. Benign asset/relation notes
+that merely discuss credentials descriptively (e.g. "no auth header was
+sent") must remain valid, matching the existing benign-near-miss discipline.
+
+Test strategy: reuse the exact category/case/whitespace/benign-near-miss test
+shapes already proven in `tests/research/test_research_session_context*`
+(construction access confirmed, not assumed) against both
+`ResearchAssetObservationRecord.note` and `ResearchAssetRelationRecord.note`;
+a differential test proving every existing asset-inventory record/service/
+store fixture's accept/refuse outcome for non-note fields is unchanged; a
+save-a-malicious-note-directly-to-disk-then-load fail-closed test on
+`JsonFileResearchAssetInventoryStore`, modeled on v0.3.411's own store-level
+test; a desktop-reachability check that the new caption text is present on
+the panel; impacted suites focused first, full canonical gates once at
+release.
+
+## Historical scope: v0.3.411 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Research session-context secret-ingress boundary foundation (Bug Bounty foundation, step 6) |
 | Base SHA | 2d2ac281768a4739911b00f5e6eed4bc79c12519 |
 | Status | delivered |
