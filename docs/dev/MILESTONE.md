@@ -14,6 +14,99 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Research-run note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
+| Base SHA | acf37a351ed3338c2f807b88aa5500336baf5fd4 |
+| Status | implementation |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 5, "Credential + secret
+boundary", after delivered v0.3.412. v0.3.412's own non-goals text explicitly
+named six other `note: str` fields in `src/research/` as residual future
+work, pending a scoping pass to separate genuinely operator-authored
+persisted notes from transient authorization/preview objects. That scoping
+pass (2026-09-25, hypatia-lead): `ResearchClaimContradictionRecord.note`
+(persisted append-only, populated directly from a caller-supplied `note`
+parameter in `ResearchRunManager.record_claim_contradiction`),
+`ResearchComparisonReviewRecord.note` (persisted append-only, the operator's
+authored reason for a supported/not-supported review decision), and
+`ResearchEvidenceRecord.note` (persisted, populated from a caller-supplied
+`note` parameter in `ResearchRunManager.add_evidence` — distinct from
+`excerpt`, which is raw fetched source content, not operator input, and stays
+out of scope exactly as `canonical_value` did in v0.3.412) are all genuinely
+operator-authored persisted free text with no sensitive-input check today.
+`ResearchContradictionAuthorization.note`, `ResearchEvidenceAuthorization.note`,
+and `ResearchClaimContradictionWritePreview.note` are transient
+authorization/preview objects, not persisted records: every value they carry
+must still pass through one of the three constructors above before becoming
+durable, so — mirroring v0.3.412's own reasoning for not touching
+`*WritePreview` types — enforcing at the three persisted-record constructors
+is the single interception point that covers every path (direct manager call
+or plan-step-authorized delegated path) without needing a second check
+upstream. All three record types are held on `ResearchRun` and round-trip
+through the existing `JsonFileResearchRunStore`, so enforcing in
+`__post_init__` again covers both the write and the load path in one place.
+
+Scope: import the existing, unmodified, already-reviewed
+`ResearchSensitiveInputPolicy` into `ResearchClaimContradictionRecord.py`,
+`ResearchComparisonReviewRecord.py`, and `ResearchEvidenceRecord.py`; refuse
+`note` in each record's `__post_init__`, exactly the same
+`_refuse_sensitive_input` helper shape already used in
+`ResearchSessionContextRecord.py`/`ResearchAssetObservationRecord.py`/
+`ResearchAssetRelationRecord.py` (fixed category-only message, never the
+candidate value); add normal/refusal/benign-near-miss regression tests to
+each record's existing test file
+(`tests/research/test_research_claim_contradiction_record.py`,
+`tests/research/test_research_comparison_review_support.py`,
+`tests/research/test_research_evidence_record.py`); add a
+malicious-persisted-note-fails-closed-on-load fault-injection test to
+`tests/research/test_json_file_research_run_store.py` for each of the three
+record types; add a service-layer regression test (mirroring v0.3.411's
+`test_secret_shaped_input_is_refused_without_write_or_reflection`) to
+`ResearchRunManager`'s existing test coverage for `record_claim_contradiction`
+and `add_evidence` up front, closing the exact gap class QA found in v0.3.412
+before release rather than after.
+
+Non-goals: no change to `ResearchSensitiveInputPolicy` itself; no change to
+`ResearchContradictionAuthorization`, `ResearchEvidenceAuthorization`, or
+`ResearchClaimContradictionWritePreview` (transient objects, covered
+transitively — see Rationale); no change to `excerpt`, `chunk_sha256`,
+`claim_ids`, `evidence_ids`, `document_id`, `chunk_index`, `review_id`,
+`note_id`, `decision`, `supersedes_review_id`, or any other non-note field on
+any of the three records; no change to `ResearchSessionContextRecord`,
+`ResearchAssetObservationRecord`, or `ResearchAssetRelationRecord` (already
+covered); no comment/review-composition Brain-response wording changes beyond
+what a refusal already requires; no secret storage, encryption, hashing,
+masking-and-keeping, credential reference/use, login, network/process
+capability, or any authority/budget/target/execution change. Whether any
+`note: str` field exists outside `src/research/` (e.g. in `src/security/` or
+elsewhere) is explicitly not investigated by this milestone — a separate
+future scoping pass, not assumed absent.
+
+Security invariants: identical to v0.3.411/v0.3.412 — classification stays
+deterministic, local, bounded, and side-effect-free, invoked before
+persistence on both the write and load paths; a refusal exposes only its
+fixed category, never the candidate value, in the raised error, any Brain
+response, or any log; a malicious persisted run document (a note containing a
+sentinel secret written directly to the store's file) must fail closed on
+load with the store's existing typed error; benign notes that merely discuss
+credentials descriptively remain valid.
+
+Test strategy: reuse the exact category/case/whitespace/benign-near-miss test
+shapes already proven for the four fields covered so far, applied to all
+three new note fields; a differential test proving every existing
+fixture's accept/refuse outcome for non-note fields on all three records is
+unchanged; three malicious-persisted-note-fails-closed-on-load tests on
+`JsonFileResearchRunStore` (one per record type embedded in a run); two
+service-layer regression tests on `ResearchRunManager`
+(`record_claim_contradiction`, `add_evidence`) proving a secret-shaped note
+is refused without a write and without reflection; impacted suites focused
+first, full canonical gates once at release.
+
+## Historical scope: v0.3.412 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Asset Inventory note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | eb3219f302b09f67354e81e07a0bb0df8eb41b72 |
 | Status | delivered |
