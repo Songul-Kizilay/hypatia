@@ -22,6 +22,11 @@ from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSecurityHypothesisEvidenceRelation import (
+    ResearchSecurityHypothesisEvidenceRelation,
+)
+from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
+from research.ResearchSecurityHypothesisStatus import ResearchSecurityHypothesisStatus
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 
 
@@ -1334,6 +1339,279 @@ class DesktopControllerTests(unittest.TestCase):
     ) -> None:
         with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
             self.controller.preview_research_asset_inventory("  ")
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_create_research_security_hypothesis_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.create_research_security_hypothesis(
+            "  program-a  ",
+            "authentication",
+            "hostname",
+            "  example.test  ",
+            "  statement text  ",
+            "  rationale text  ",
+            "  required validation text  ",
+            ("evidence-1", "evidence-2"),
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Record security hypothesis")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_hypothesis_create",
+                "program_id": "program-a",
+                "hypothesis_kind": ResearchSecurityHypothesisKind.AUTHENTICATION,
+                "subject_kind": ResearchAssetKind.HOSTNAME,
+                "subject_canonical_value": "example.test",
+                "statement": "statement text",
+                "rationale": "rationale text",
+                "required_validation": "required validation text",
+                "supporting_evidence_ids": ("evidence-1", "evidence-2"),
+            },
+        )
+
+    def test_create_research_security_hypothesis_accepts_a_non_default_kind(
+        self,
+    ) -> None:
+        response = self.controller.create_research_security_hypothesis(
+            "program-a",
+            "information_exposure",
+            "ip_address",
+            "93.184.216.34",
+            "statement",
+            "rationale",
+            "required validation",
+            ("evidence-1",),
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertIs(
+            request.metadata["hypothesis_kind"],
+            ResearchSecurityHypothesisKind.INFORMATION_EXPOSURE,
+        )
+        self.assertIs(
+            request.metadata["subject_kind"],
+            ResearchAssetKind.IP_ADDRESS,
+        )
+
+    def test_create_research_security_hypothesis_rejects_empty_program_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
+            self.controller.create_research_security_hypothesis(
+                "  ",
+                "authentication",
+                "hostname",
+                "example.test",
+                "statement",
+                "rationale",
+                "required validation",
+                ("evidence-1",),
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_create_research_security_hypothesis_rejects_invalid_kind_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "kind is invalid"):
+            self.controller.create_research_security_hypothesis(
+                "program-a",
+                "not-a-kind",
+                "hostname",
+                "example.test",
+                "statement",
+                "rationale",
+                "required validation",
+                ("evidence-1",),
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_create_research_security_hypothesis_rejects_invalid_subject_kind_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "kind is invalid"):
+            self.controller.create_research_security_hypothesis(
+                "program-a",
+                "authentication",
+                "not-a-kind",
+                "example.test",
+                "statement",
+                "rationale",
+                "required validation",
+                ("evidence-1",),
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_attach_research_security_hypothesis_evidence_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.attach_research_security_hypothesis_evidence(
+            "  hypothesis-1  ",
+            "  program-a  ",
+            ("evidence-1", "evidence-2"),
+            "contradicts",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Attach security hypothesis evidence")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_hypothesis_evidence_attach",
+                "hypothesis_id": "hypothesis-1",
+                "program_id": "program-a",
+                "evidence_ids": ("evidence-1", "evidence-2"),
+                "relation": ResearchSecurityHypothesisEvidenceRelation.CONTRADICTS,
+            },
+        )
+
+    def test_attach_research_security_hypothesis_evidence_accepts_non_default_relation(
+        self,
+    ) -> None:
+        response = self.controller.attach_research_security_hypothesis_evidence(
+            "hypothesis-1",
+            "program-a",
+            ("evidence-1",),
+            "supports",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertIs(
+            request.metadata["relation"],
+            ResearchSecurityHypothesisEvidenceRelation.SUPPORTS,
+        )
+
+    def test_attach_research_security_hypothesis_evidence_rejects_empty_ids_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.attach_research_security_hypothesis_evidence(
+                "", "program-a", ("evidence-1",), "supports"
+            )
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.attach_research_security_hypothesis_evidence(
+                "hypothesis-1", " ", ("evidence-1",), "supports"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_attach_research_security_hypothesis_evidence_rejects_invalid_relation(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "relation is invalid"):
+            self.controller.attach_research_security_hypothesis_evidence(
+                "hypothesis-1", "program-a", ("evidence-1",), "not-a-relation"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_transition_research_security_hypothesis_status_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.transition_research_security_hypothesis_status(
+            "  hypothesis-1  ",
+            "  program-a  ",
+            "needs_evidence",
+            "  a stated reason  ",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Transition security hypothesis status")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_hypothesis_status_transition",
+                "hypothesis_id": "hypothesis-1",
+                "program_id": "program-a",
+                "status": ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+                "reason": "a stated reason",
+            },
+        )
+
+    def test_transition_research_security_hypothesis_status_accepts_non_default_status(
+        self,
+    ) -> None:
+        response = self.controller.transition_research_security_hypothesis_status(
+            "hypothesis-1",
+            "program-a",
+            "refuted",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertIs(
+            request.metadata["status"],
+            ResearchSecurityHypothesisStatus.REFUTED,
+        )
+        self.assertEqual(request.metadata["reason"], "")
+
+    def test_transition_research_security_hypothesis_status_rejects_empty_ids_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.transition_research_security_hypothesis_status(
+                "", "program-a", "refuted"
+            )
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.transition_research_security_hypothesis_status(
+                "hypothesis-1", " ", "refuted"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_transition_research_security_hypothesis_status_rejects_invalid_status(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "status is invalid"):
+            self.controller.transition_research_security_hypothesis_status(
+                "hypothesis-1", "program-a", "not-a-status"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_preview_research_security_hypotheses_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.preview_research_security_hypotheses("  program-a  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Preview security hypotheses")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_hypothesis_preview",
+                "program_id": "program-a",
+            },
+        )
+
+    def test_preview_research_security_hypotheses_rejects_empty_program_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
+            self.controller.preview_research_security_hypotheses("  ")
 
         self.assertEqual(self.brain.requests, [])
 

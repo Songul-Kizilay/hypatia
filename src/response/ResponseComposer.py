@@ -127,6 +127,8 @@ from research.ResearchRunMarkdownExportVerification import (
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSecurityHypothesis import ResearchSecurityHypothesis
+from research.ResearchSecurityHypothesisEntry import ResearchSecurityHypothesisEntry
 from research.ResearchSessionContextRecord import ResearchSessionContextRecord
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentWritePreview import (
@@ -168,6 +170,13 @@ MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH = 160
 NO_RESEARCH_STARTED_NOTICE = (
     "No research execution was started. Nothing was fetched, no model was "
     "called, and no background work was queued."
+)
+
+#: Fixed, literal, and unconditional on hypothesis content: every rendered
+#: response for a non-`REFUTED` security hypothesis states this, so a reader
+#: never has to infer it from status vocabulary alone.
+SECURITY_HYPOTHESIS_NOT_A_FINDING_NOTICE = (
+    "This is a hypothesis, not a finding or a validated vulnerability."
 )
 
 #: One bounded note per verdict, for a person rather than for a parser. Nothing
@@ -1722,6 +1731,178 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_session_context_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    @staticmethod
+    def _security_hypothesis_summary_lines(
+        hypothesis: ResearchSecurityHypothesis,
+    ) -> list[str]:
+        lines = [
+            f"Program: {hypothesis.program_id}",
+            f"Kind: {hypothesis.hypothesis_kind.value}",
+            f"Subject: {hypothesis.subject_kind.value}:"
+            f"{hypothesis.subject_canonical_value}",
+            f"Status: {hypothesis.status.value}",
+            f"Supporting evidence: {len(hypothesis.supporting_evidence)}",
+            f"Contradicting evidence: {len(hypothesis.contradicting_evidence)}",
+        ]
+        if not hypothesis.status.terminal:
+            lines.append(SECURITY_HYPOTHESIS_NOT_A_FINDING_NOTICE)
+        return lines
+
+    def research_security_hypothesis_create(
+        self,
+        request: BrainRequest,
+        hypothesis: ResearchSecurityHypothesis,
+    ) -> BrainResponse:
+        """Confirm one durable, operator-authored security hypothesis."""
+        lines = ["Security hypothesis recorded:"]
+        lines.extend(self._security_hypothesis_summary_lines(hypothesis))
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_create",
+            memory_count=0,
+            research_security_hypothesis=hypothesis,
+            research_security_hypothesis_evidence_links=hypothesis.supporting_evidence,
+        )
+
+    def research_security_hypothesis_create_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid security hypothesis write."""
+        return BrainResponse(
+            message="\n".join(("Security hypothesis rejected:", f"Reason: {message}")),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_create",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_hypothesis_evidence_attach(
+        self,
+        request: BrainRequest,
+        hypothesis: ResearchSecurityHypothesis,
+    ) -> BrainResponse:
+        """Confirm evidence was attached to one existing security hypothesis."""
+        lines = ["Security hypothesis evidence attached:"]
+        lines.extend(self._security_hypothesis_summary_lines(hypothesis))
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_evidence_attach",
+            memory_count=0,
+            research_security_hypothesis=hypothesis,
+            research_security_hypothesis_evidence_links=(
+                *hypothesis.supporting_evidence,
+                *hypothesis.contradicting_evidence,
+            ),
+        )
+
+    def research_security_hypothesis_evidence_attach_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid evidence attachment."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Security hypothesis evidence attachment rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_evidence_attach",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_hypothesis_status_transition(
+        self,
+        request: BrainRequest,
+        hypothesis: ResearchSecurityHypothesis,
+    ) -> BrainResponse:
+        """Confirm one security hypothesis's status transition."""
+        lines = ["Security hypothesis status transition recorded:"]
+        lines.extend(self._security_hypothesis_summary_lines(hypothesis))
+        transition = (
+            hypothesis.status_history[-1] if hypothesis.status_history else None
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_status_transition",
+            memory_count=0,
+            research_security_hypothesis=hypothesis,
+            research_security_hypothesis_status_transition=transition,
+        )
+
+    def research_security_hypothesis_status_transition_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid status transition."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Security hypothesis status transition rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_status_transition",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_hypothesis_preview(
+        self,
+        request: BrainRequest,
+        entries: tuple[ResearchSecurityHypothesisEntry, ...],
+    ) -> BrainResponse:
+        """Report the derived, read-only security hypotheses for one program.
+
+        Every scope column is explicitly labelled recomputed-live; this
+        listing itself performs no fetch, scan, or authorization.
+        """
+        lines = [f"Security hypotheses: {len(entries)}"]
+        for entry in entries:
+            hypothesis = entry.hypothesis
+            if entry.scope.has_active_scope_revision and entry.scope.resolution:
+                scope_text = (
+                    f"{entry.scope.resolution.status.value} "
+                    "(recomputed live from active policy, not stored)"
+                )
+            else:
+                scope_text = "no active scope revision for this program"
+            lines.append(
+                f"- {hypothesis.hypothesis_kind.value} on "
+                f"{hypothesis.subject_kind.value}:{hypothesis.subject_canonical_value}"
+                f" ({hypothesis.status.value}, "
+                f"{len(hypothesis.supporting_evidence)} supporting, "
+                f"{len(hypothesis.contradicting_evidence)} contradicting, "
+                f"scope: {scope_text})"
+            )
+        if any(not entry.hypothesis.status.terminal for entry in entries):
+            lines.append(SECURITY_HYPOTHESIS_NOT_A_FINDING_NOTICE)
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_preview",
+            memory_count=0,
+            research_security_hypotheses=entries,
+        )
+
+    def research_security_hypothesis_preview_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid security hypothesis preview."""
+        return BrainResponse(
+            message="\n".join(
+                ("Security hypothesis preview rejected:", f"Reason: {message}")
+            ),
+            request_id=request.request_id,
+            intent="research_security_hypothesis_preview",
             memory_count=0,
             success=False,
         )

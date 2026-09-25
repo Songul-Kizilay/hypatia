@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.415] - 2026-09-25
+
+### Added
+
+- A new, `program_id`-scoped `ResearchSecurityHypothesisRecord` foundation
+  (Bug Bounty Researcher roadmap item 6): an operator-authored, evidence-
+  grounded conjecture about one program's named subject (hostname or IP
+  address). Distinct from the pre-existing, unrelated `ResearchHypothesis`
+  (general research-run falsifiability tracker) and `SecurityFinding`
+  (Hypatia's own self-audit) subsystems, both untouched.
+- Every hypothesis requires at least one cited, already-recorded HTTP
+  Evidence reference for the same program, with its subject matching at
+  least one citation's target. Supporting and contradicting evidence are
+  kept in separate append-only link records.
+- A closed status state machine (`OPEN`/`NEEDS_EVIDENCE`/
+  `READY_FOR_VALIDATION`/`REFUTED`) tracks the operator's own evidence
+  judgement; no status asserts a validated vulnerability or severity.
+- A new `ResearchSecurityHypothesisApplicationService`, a new
+  `JsonFileResearchSecurityHypothesisStore`, four new Brain intents, and a
+  new desktop "Security Hypotheses" panel expose create/evidence-attach/
+  status-transition/preview operations, mirroring the existing Asset
+  Inventory and Session Contexts surfaces.
+
+### Security
+
+- Hypothesis creation, evidence attachment, and status transitions perform
+  no network request, process, tool execution, or scope/credential/budget/
+  target change — reasoning over already-recorded evidence only, never
+  authority and never a finding. `ResearchSensitiveInputPolicy` (unchanged)
+  is applied to every free-text field. Program isolation is enforced on
+  every hypothesis/evidence/status operation.
+
 ## [0.3.414] - 2026-09-25
 
 ### Security

@@ -26,6 +26,9 @@ from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.JsonFileResearchSecurityHypothesisStore import (
+    JsonFileResearchSecurityHypothesisStore,
+)
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
 )
@@ -370,6 +373,38 @@ class BootstrapTests(unittest.TestCase):
             integrity_response.research_evidence_integrity_status.recorded_evidence_count,
             0,
         )
+
+    def test_bootstrap_security_hypothesis_store_builds_expected_type_and_path(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+
+        store = bootstrap._security_hypothesis_store()
+
+        self.assertIsInstance(store, JsonFileResearchSecurityHypothesisStore)
+        self.assertEqual(
+            store._path,
+            self.research_run_path.with_name("research_security_hypotheses.json"),
+        )
+
+    def test_bootstrap_wires_a_working_security_hypothesis_dispatch_path(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+
+        response = bootstrap.container.resolve(Brain).process(
+            BrainRequest(
+                message="Preview security hypotheses",
+                metadata={
+                    "intent": "research_security_hypothesis_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(response.research_security_hypotheses, ())
 
     def test_bootstrap_rejects_orphaned_research_content(self) -> None:
         source = ResearchSource(

@@ -100,6 +100,10 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from cognition.ResearchPlanPreviewApplicationService import (
     ResearchPlanPreviewApplicationService,
 )
+from cognition.ResearchSecurityHypothesisApplicationService import (
+    ResearchSecurityHypothesisApplicationService,
+    ResearchSecurityHypothesisStore,
+)
 from cognition.ResearchSessionContextApplicationService import (
     ResearchSessionContextApplicationService,
     ResearchSessionContextStore,
@@ -348,6 +352,7 @@ class CognitiveEngine:
         asset_inventory_store: ResearchAssetInventoryStore | None = None,
         http_evidence_store: ResearchHttpEvidenceStore | None = None,
         session_context_store: ResearchSessionContextStore | None = None,
+        security_hypothesis_store: ResearchSecurityHypothesisStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -763,6 +768,18 @@ class CognitiveEngine:
                     response_composer,
                 )
             )
+        self._research_security_hypothesis_service: (
+            ResearchSecurityHypothesisApplicationService | None
+        ) = None
+        if security_hypothesis_store is not None and http_evidence_store is not None:
+            self._research_security_hypothesis_service = (
+                ResearchSecurityHypothesisApplicationService(
+                    security_hypothesis_store,
+                    http_evidence_store,
+                    response_composer,
+                    program_scope_revision_store=program_scope_revision_store,
+                )
+            )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
@@ -1012,6 +1029,48 @@ class CognitiveEngine:
                     request, "Research session contexts are not available."
                 )
             return self._research_session_context_service.process_preview(request)
+
+        if ResearchSecurityHypothesisApplicationService.is_hypothesis_create_request(
+            request
+        ):
+            if self._research_security_hypothesis_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_hypothesis_create_failure
+                return fail(request, "Security hypotheses are not available.")
+            return self._research_security_hypothesis_service.process_hypothesis_create(
+                request
+            )
+
+        if ResearchSecurityHypothesisApplicationService.is_evidence_attach_request(
+            request
+        ):
+            if self._research_security_hypothesis_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_hypothesis_evidence_attach_failure
+                return fail(request, "Security hypotheses are not available.")
+            return self._research_security_hypothesis_service.process_evidence_attach(
+                request
+            )
+
+        if ResearchSecurityHypothesisApplicationService.is_status_transition_request(
+            request
+        ):
+            if self._research_security_hypothesis_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_hypothesis_status_transition_failure
+                return fail(request, "Security hypotheses are not available.")
+            service = self._research_security_hypothesis_service
+            return service.process_status_transition(request)
+
+        if ResearchSecurityHypothesisApplicationService.is_hypothesis_preview_request(
+            request
+        ):
+            if self._research_security_hypothesis_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_hypothesis_preview_failure
+                return fail(request, "Security hypotheses are not available.")
+            service = self._research_security_hypothesis_service
+            return service.process_hypothesis_preview(request)
 
         if KaliOperationPreviewApplicationService.is_preview_request(request):
             if self._kali_operation_preview_service is None:

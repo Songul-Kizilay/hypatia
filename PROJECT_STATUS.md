@@ -2,10 +2,39 @@
 
 ## Runtime Version
 
-`v0.3.414 (Genesis)`
+`v0.3.415 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.415 adds the Security Hypothesis model foundation — item 6 of
+the bounded Bug Bounty Researcher roadmap. A new, `program_id`-scoped
+`ResearchSecurityHypothesisRecord` lets an operator state a concise,
+evidence-grounded conjecture about one program's named subject (a hostname
+or IP address, reusing `ResearchAssetKind`), together with a rationale and a
+descriptive `required_validation` strategy — never itself permission to run
+anything. This is a distinct, new type: the pre-existing `ResearchHypothesis`
+subsystem (a general, `run_id`-scoped research-question falsifiability
+tracker) and the unrelated `src/security/SecurityFinding` self-audit
+subsystem (which checks Hypatia's own persisted state, not an external
+target) are both untouched. Every hypothesis must cite at least one
+already-recorded HTTP Evidence record for the same program, and its subject
+must match at least one citation's target — evidence is referenced by
+stable ID only, never copied. Supporting and contradicting evidence are kept
+in separate, append-only link records, never netted against each other. A
+small closed status state machine (`OPEN`/`NEEDS_EVIDENCE`/
+`READY_FOR_VALIDATION`/`REFUTED`, `REFUTED` terminal) tracks an operator's
+own judgement about the evidence gathered so far; no status value this
+milestone can produce ever asserts a validated vulnerability, confirmation,
+or severity. `ResearchSensitiveInputPolicy` (unchanged) is applied to every
+free-text field. Creating, evidence-linking, or transitioning a hypothesis
+performs no network request, process, tool execution, or scope/credential/
+budget/target change of any kind — a hypothesis is reasoning over
+already-recorded evidence, never a finding and never authority. A new
+desktop "Security Hypotheses" panel and four new Brain intents expose this
+read/write model, mirroring the existing Asset Inventory and Session
+Contexts surfaces. No active validation, Finding Lifecycle, CVSS/severity,
+or tool/Kali/Burp/browser/shell execution of any kind is introduced.
 
 Version v0.3.414 closes a gap flagged during v0.3.413's security review: an
 operator previewing a research claim contradiction could see a secret-shaped
