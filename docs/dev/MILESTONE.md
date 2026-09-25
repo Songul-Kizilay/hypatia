@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | HTTP evidence model foundation (Bug Bounty foundation, step 4) |
 | Base SHA | 8d9ad591af32b9320718532bfce3aa186bf957bb |
-| Status | planned |
-| Specialists | hypatia-runtime: sole implementer (result-parsing/service/persistence/desktop-wiring shape); hypatia-security and hypatia-qa: independent review, sequentially, after integration; hypatia-release: delivers after both reviews and full canonical gates are green |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-runtime: sole implementer (result-parsing/service/persistence/desktop-wiring shape); hypatia-security: independent review complete (PASS, no authority-widening defect; two completeness/coverage gaps flagged and fixed by the Lead); hypatia-qa: independent review complete (two further test-coverage gaps found and closed by the Lead with mutation-verified tests); hypatia-release: delivered v0.3.409 |
 | Blockers | none |
 
 Rationale: user-directed continuation of the bounded Bug Bounty Researcher
@@ -1720,6 +1720,68 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.409: HTTP evidence model foundation |
+| SHA | 66e9479a68233469e93be30cd5c1adc6482f59ac |
+| Linux desktop CI (exact-SHA) | success (run 36087477607) |
+| Windows desktop CI (exact-SHA) | success (run 36087479733) |
+| Status | delivered |
+| PR | #388, MERGED 2026-09-25T02:55:25Z, standard merge commit `679a24fdf09f054a651c76503e66ad04827eaa0b` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 66e9479 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`8821844`, `66e9479`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, hypatia-lead): PR #388 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 3 commits (the documentation-only ledger-reconciliation commit
+`8d9ad59`, the documentation-only milestone-lock commit `50e06c6`, and
+v0.3.409's release commit `66e9479`), `mergeStateStatus: CLEAN`, both
+PR-triggered checks `pass` (Linux run 36087861821, Windows run 36087861850).
+Merged with `gh pr merge 388 --merge --subject "..."` — no interactive
+confirmation prompt. Author/committer identity on the release commit
+confirmed unchanged (Songül Kızılay via GitHub noreply email). Working tree
+clean after merge except this ledger edit.
+
+Note: step 4 of the bounded Bug Bounty Researcher roadmap (HTTP evidence
+model). The Lead ran direct ground-truth discovery (confirmed
+`HTTPS_HEADER_LOOKUP`'s exact reviewed `curl --head` argv shape, and
+directly executed `curl --head` once to ground the parser design in real
+output), locked a bounded slice (one producer, no body capture, no new
+asset/relation kinds, no redirect following), and dispatched hypatia-runtime
+as sole implementer. Delivered: `ResearchHttpEvidenceProvenanceKind`
+(exactly one member, `KALI_OPERATION_RESULT`); a fail-closed evidence
+record with hard-pinned `request_headers_observed`/`response_body_observed`
+booleans so "not observed" can never read as "observed and empty"; a
+deterministic, content-derived `evidence_id` (`http_evidence_id`, mirroring
+`kali_operation_preview_digest`'s digest pattern) making replay-safety
+structural rather than a separate dedup pass; a pure parser that re-derives
+hostname/port from the reviewed command plan's argv rather than trusting a
+cached field; a new atomic store; an application service with a
+side-effect-free preview and an idempotent-on-exact-replay record path; and
+desktop/Brain wiring mirroring v0.3.408's ingestion discipline exactly, with
+sensitive header values redacted at every render site. Independent
+hypatia-security review: PASS on all 8 reviewed properties, no
+authority-widening defect, but flagged two completeness/coverage gaps — live
+scope resolution wasn't threaded through the ingestion preview/record flow
+(a named item in the locked scope), and no test proved sensitive-header
+redaction actually survives into the rendered `BrainResponse.message` text
+(only the desktop dialog's separate redaction path was tested). The Lead
+fixed both directly: added a required `scope` field to the ingestion
+preview/result types, computed fresh on every call, rendered in both
+messages; added an integration test proving redaction survives into the
+message. Independent hypatia-qa review then found the Lead's own new
+scope-line test was itself vacuous (would pass even if the rendered line
+were hardcoded, mutation-confirmed) and that the parser's `--resolve`/URL-
+hostname validation had zero test coverage (mutation-confirmed: deleting the
+check left the whole suite green). The Lead fixed both directly with a
+second-scenario freshness test (revoke the active revision mid-test,
+require the rendered line to change) and three new parser tests
+(malformed `--resolve` value, wrong port, URL/hostname mismatch),
+mutation-verifying each fix personally before re-running the full milestone
+test set. Full canonical gates on the integrated tree: 7047 tests, `OK
+(skipped=3)`, Black, Ruff, MyPy, `git diff --check` all clean.
+
+## Historical scope: v0.3.408 (delivered)
 
 | Field | Value |
 | --- | --- |
