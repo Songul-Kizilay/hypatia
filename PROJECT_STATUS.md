@@ -2,10 +2,26 @@
 
 ## Runtime Version
 
-`v0.3.411 (Genesis)`
+`v0.3.412 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.412 widens the v0.3.411 secret-ingress refusal floor to the two
+operator-authored free-text `note` fields in the Bug Bounty Asset Inventory
+(`ResearchAssetObservationRecord`, `ResearchAssetRelationRecord`) that predate
+it. The same, unmodified `ResearchSensitiveInputPolicy` now refuses a
+credential-bearing URL, an authentication/cookie header form, private-key
+material, an explicit secret assignment, or a high-confidence token format in
+either note before it can be persisted, with the same fixed-category-only
+refusal message and fail-closed load behavior v0.3.411 established. Benign
+descriptive notes remain unaffected; canonical asset values, IDs, and every
+other field are untouched. The desktop Asset Inventory panel's note fields
+now carry the same "never enter a secret" caption as the Session Contexts
+panel. This is a bounded continuation of item 5, "Credential + secret
+boundary", of the Bug Bounty Researcher roadmap; it introduces no new secret
+storage, credential reference or use, login, network/process capability, or
+authority.
 
 Version v0.3.411 adds a conservative secret-ingress refusal floor to the
 operator-authored research session-context surface. Credential-bearing URLs,

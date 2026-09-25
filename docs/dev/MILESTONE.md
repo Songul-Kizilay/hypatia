@@ -14,10 +14,122 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Asset Inventory note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
+| Base SHA | eb3219f302b09f67354e81e07a0bb0df8eb41b72 |
+| Status | release |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-lead closed one moderate test-coverage gap; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 5, "Credential + secret
+boundary", after delivered v0.3.411. v0.3.411 enforced
+`ResearchSensitiveInputPolicy` on every operator-authored free-text field of
+`ResearchSessionContextRecord` (the newest persistence surface at the time),
+but explicitly scoped no further. Repository-grounded re-check (2026-09-25,
+hypatia-lead): `ResearchSensitiveInputPolicy` is imported in exactly one file
+(`ResearchSessionContextRecord.py`). Two older, still-live operator-authored
+free-text `note` fields predate that boundary and remain completely
+unclassified: `ResearchAssetObservationRecord.note` and
+`ResearchAssetRelationRecord.note` (both from v0.3.407, both bounded to 2,000
+characters — identical to the policy's own
+`MAX_RESEARCH_SENSITIVE_INPUT_CHARACTERS` ceiling). An operator recording an
+asset observation or relation can paste a real credential into either note
+today with zero refusal, exactly the gap item 5 exists to close. Both fields
+are validated in `__post_init__`, on the same record classes the asset
+inventory store already round-trips through on save and load, so enforcing
+here automatically covers both the write path and the malicious-persisted-
+document-on-load path, mirroring v0.3.411's own discipline.
+
+Scope: import the existing, unmodified, already-reviewed
+`ResearchSensitiveInputPolicy` into `ResearchAssetObservationRecord.py` and
+`ResearchAssetRelationRecord.py`; refuse `note` in each record's
+`__post_init__` exactly as `ResearchSessionContextRecord` already refuses its
+own free-text fields (fixed category-only message, never the candidate
+value); add a one-line "never enter a secret" caption to
+`src/desktop/ResearchAssetInventoryPanel.py` near its observation/relation
+note entry fields, mirroring the existing Session Contexts panel caption; add
+normal/refusal/persistence(load)/service regression tests to
+`tests/research/test_research_asset_inventory.py` and
+`tests/research/test_json_file_research_asset_inventory_store.py`.
+
+Non-goals: no change to `ResearchSensitiveInputPolicy` itself (reused
+byte-for-byte, no new category, no pattern change); no change to
+`canonical_value`, `observation_id`, `program_id`, `relation_id`, or any
+non-note field on either record (a canonical hostname/IP cannot syntactically
+carry a secret past `canonicalize_asset_value`, so classifying it would be
+inert ceremony, not a real boundary); no change to
+`ResearchSessionContextRecord` (already covered); no widening to the other
+`note: str` fields found elsewhere in `src/research/`
+(`ResearchClaimContradictionRecord`, `ResearchClaimContradictionWritePreview`,
+`ResearchComparisonReviewRecord`, `ResearchContradictionAuthorization`,
+`ResearchEvidenceAuthorization`, `ResearchEvidenceRecord`) — these are a
+mixed set of authorization records and derived/auto-populated fields that
+need their own scoping pass, not a mechanical copy of this milestone's
+pattern, and are recorded here as explicit residual future work under item 5.
+No secret storage, encryption, hashing, masking-and-keeping, credential
+reference/use, login, network/process capability, or any authority/budget/
+target/execution change.
+
+Security invariants: classification stays deterministic, local, bounded, and
+side-effect-free, invoked before persistence on both the write and load
+paths. A refusal exposes only its fixed category, never the candidate value,
+in the raised error, any Brain response, or any log. A malicious persisted
+asset-inventory document (a note containing a sentinel secret written
+directly to the store's file, bypassing the service) must fail closed on
+load with the same typed error the store already raises for other malformed
+content — never a partial or fabricated asset. Benign asset/relation notes
+that merely discuss credentials descriptively (e.g. "no auth header was
+sent") must remain valid, matching the existing benign-near-miss discipline.
+
+Test strategy: reuse the exact category/case/whitespace/benign-near-miss test
+shapes already proven in `tests/research/test_research_session_context*`
+(construction access confirmed, not assumed) against both
+`ResearchAssetObservationRecord.note` and `ResearchAssetRelationRecord.note`;
+a differential test proving every existing asset-inventory record/service/
+store fixture's accept/refuse outcome for non-note fields is unchanged; a
+save-a-malicious-note-directly-to-disk-then-load fail-closed test on
+`JsonFileResearchAssetInventoryStore`, modeled on v0.3.411's own store-level
+test; a desktop-reachability check that the new caption text is present on
+the panel; impacted suites focused first, full canonical gates once at
+release.
+
+Security review (hypatia-security, 2026-09-25): PASS, no findings.
+Independently confirmed `ResearchSensitiveInputPolicy.py` is byte-for-byte
+unmodified; the refusal fires only on `note` in both records' `__post_init__`
+(every other field's validation traced and confirmed unchanged); the raised
+`ResearchError` carries only the fixed category label, never the candidate
+text, matching `ResearchSessionContextRecord`'s existing pattern exactly; the
+refusal is unconditionally reached on both the service write path and the
+store's load-time reconstruction path; no code path reflects a refused note
+value into a Brain response or log; the new store fault-injection tests write
+raw bytes to disk bypassing the service, a genuine test; no authority, scope,
+target, budget, or credential primitive was touched; the desktop change is
+label-text-only.
+
+QA review (hypatia-qa, 2026-09-25): found one moderate gap — the locked scope
+promised a service-layer regression test mirroring v0.3.411's own
+`test_secret_shaped_input_is_refused_without_write_or_reflection`, and none
+had been added to `tests/cognition/test_research_asset_inventory_application_service.py`.
+Mutation testing on both record files (temporarily disabling each
+`_refuse_sensitive_input` call) proved the existing record-level tests are
+non-vacuous; all five explicit `ResearchSensitiveInputClass` categories are
+genuinely exercised for both fields; the benign near-miss and store
+fault-injection tests are real. hypatia-lead closed the gap directly: added
+`SensitiveInputRefusalPersistsNothingTests` (two tests, mirroring the
+v0.3.411 service-test pattern exactly) to the application-service test file,
+and a desktop-reachability assertion for the new caption text to
+`tests/desktop/test_research_asset_inventory_panel.py` (the second,
+cosmetic gap QA also named). Re-run after the fix: 143 focused tests across
+the four impacted test modules, OK; `black`/`ruff`/`mypy`/`git diff --check`
+clean on all seven changed files.
+
+## Historical scope: v0.3.411 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Research session-context secret-ingress boundary foundation (Bug Bounty foundation, step 6) |
 | Base SHA | 2d2ac281768a4739911b00f5e6eed4bc79c12519 |
-| Status | release |
-| Specialists | Codex: bounded implementation, security/QA review, gates, and guarded delivery |
+| Status | delivered |
+| Specialists | Codex: bounded implementation, security/QA review, gates, exact-SHA and PR CI, standard merge, and post-merge reconciliation |
 | Blockers | none |
 
 Rationale: bounded continuation after delivered v0.3.410 and roadmap item 5,
@@ -1414,6 +1526,40 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.411: research session-context secret-ingress boundary foundation |
+| SHA | c5ab6ce3aa7304636fe8c23cda1b080d15c11891 |
+| Linux desktop CI (exact-SHA) | success (run 36111047175) |
+| Windows desktop CI (exact-SHA) | success (run 36111051142) |
+| Status | delivered |
+| PR | #390, MERGED 2026-09-25T08:16:19Z, standard merge commit `a2f0918a90fe2ce8766c0625b627ad5224ee3bd6` |
+| origin/main reachability | verified: `git merge-base --is-ancestor c5ab6ce origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`980e508`, `c5ab6ce`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, Codex): PR #390 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (v0.3.410's documentation-only ledger reconciliation `2d2ac28`, the
+v0.3.411 milestone lock `4972dbb`, and release commit `c5ab6ce`) across exactly
+13 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered checks
+passed against the release SHA (Linux run 36111594883, Windows run
+36111594992). The standard merge commit is on `origin/main`; all three carried
+commits are reachable from it; the release author remains Songül Kızılay via
+GitHub noreply email; the working tree is clean except this ledger
+reconciliation.
+
+Note: this bounded release rejects a conservative, explicit set of
+high-confidence secret-bearing forms before research session-context
+persistence. Refusals expose only fixed categories and never echo the
+candidate value. It introduces no secret storage, credential use, login,
+network/process capability, or scope, target, budget, credential, or execution
+authority. Security review found and fixed one credential-bearing URL
+completeness gap; QA verified all categories, benign near misses, no-write
+refusal, malicious-store fail-closed behavior, restart behavior, and desktop
+reachability. Full canonical gates: 7079 tests, OK (skipped=3); Black, Ruff,
+MyPy, and `git diff --check` clean.
+
+## Historical scope: v0.3.410 (delivered)
 
 | Field | Value |
 | --- | --- |

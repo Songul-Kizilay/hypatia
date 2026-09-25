@@ -336,6 +336,17 @@ class ReachabilityTests(unittest.TestCase):
         )
         self.assertIs(getattr(widget.command, "__self__", None), panel)
 
+    def test_observation_and_relation_note_labels_warn_against_secrets(self) -> None:
+        _panel, widgets = build_real_panel()
+
+        matches = [
+            widget
+            for widget in widgets
+            if getattr(widget, "text", None) == "Note (never enter a secret)"
+        ]
+
+        self.assertEqual(len(matches), 2)
+
     def test_the_real_builder_produces_a_bound_load_and_relation_control(self) -> None:
         panel, widgets = build_real_panel()
 

@@ -30,10 +30,19 @@ from research.ResearchAssetObservationRecord import (
 )
 from research.ResearchAssetProvenanceKind import ResearchAssetProvenanceKind
 from research.ResearchAssetRelationKind import ResearchAssetRelationKind
+from research.ResearchSensitiveInputPolicy import ResearchSensitiveInputPolicy
 
 MAX_ASSET_RELATION_ID_CHARACTERS = 200
 MAX_ASSET_RELATION_PROGRAM_ID_CHARACTERS = 200
 MAX_ASSET_RELATION_NOTE_CHARACTERS = 2_000
+
+_SENSITIVE_INPUT_POLICY = ResearchSensitiveInputPolicy()
+
+
+def _refuse_sensitive_input(value: str, label: str) -> None:
+    sensitive_class = _SENSITIVE_INPUT_POLICY.classify(value)
+    if sensitive_class.refused:
+        raise ResearchError(f"{label} was refused as {sensitive_class.operator_label}.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,8 +94,10 @@ class ResearchAssetRelationRecord:
             )
         if not isinstance(self.note, str):
             raise ResearchError("Asset relation note is invalid.")
-        if len(self.note.strip()) > MAX_ASSET_RELATION_NOTE_CHARACTERS:
+        note = self.note.strip()
+        if len(note) > MAX_ASSET_RELATION_NOTE_CHARACTERS:
             raise ResearchError("Asset relation note is too long.")
+        _refuse_sensitive_input(note, "Asset relation note")
         if (
             not isinstance(self.recorded_at, datetime)
             or self.recorded_at.utcoffset() is None
@@ -96,7 +107,7 @@ class ResearchAssetRelationRecord:
         object.__setattr__(self, "program_id", program_id)
         object.__setattr__(self, "source_value", source_value)
         object.__setattr__(self, "related_value", related_value)
-        object.__setattr__(self, "note", self.note.strip())
+        object.__setattr__(self, "note", note)
 
     @staticmethod
     def _require_canonical_value(
