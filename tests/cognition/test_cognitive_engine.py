@@ -7996,6 +7996,81 @@ class CognitiveEngineTests(unittest.TestCase):
             1,
         )
 
+    def test_claim_contradiction_write_preview_secret_shaped_note_is_refused(
+        self,
+    ) -> None:
+        sentinel = "distinct-cognitive-engine-secret"
+        store = ToggleResearchRunStore()
+        claim_ids = iter(("claim-123", "claim-124"))
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+            claim_id_factory=claim_ids.__next__,
+        )
+        run = manager.create("Evaluate a claim")
+        source = ResearchSource(
+            "https://example.com/research",
+            "Example research",
+            "Evidence paragraph.",
+            "text/plain",
+            datetime(2026, 8, 21, 20, 0, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        evidence = manager.add_evidence(
+            run.run_id,
+            self.knowledge_engine.search("evidence")[0],
+            "Supports authored claim review.",
+        ).evidence[-1]
+        first = manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim one.",
+            ResearchEpistemicState.UNKNOWN,
+        ).claims[-1]
+        second = manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim two.",
+            ResearchEpistemicState.UNKNOWN,
+        ).claims[-1]
+        llm_provider = RecordingLLMProvider("must not run")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            research_run_manager=manager,
+        )
+        saves_before = store.save_calls
+
+        response = engine.process(
+            BrainRequest(
+                "Preview contradiction",
+                metadata={
+                    "intent": "research_claim_contradiction_write_preview",
+                    "research_run_id": run.run_id,
+                    "research_claim_contradiction_claim_ids": [
+                        first.claim_id,
+                        second.claim_id,
+                    ],
+                    "research_claim_contradiction_note": (
+                        f"Authorization: Bearer {sentinel}"
+                    ),
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertNotIn(sentinel, response.message)
+        self.assertEqual(store.save_calls, saves_before)
+        self.assertEqual(llm_provider.calls, [])
+
     def test_explicit_contradiction_proposal_is_read_only_and_uses_current_claims(
         self,
     ) -> None:

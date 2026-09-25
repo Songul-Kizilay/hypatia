@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Claim-contradiction preview secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | 37c756808a058d882583521bbfceeaf8ce3ed2d3 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer (single-function fix, per the constitution's "no subagent for trivial, single-file work"), release; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, no findings |
 | Blockers | none |
 
 Rationale: bounded continuation of roadmap item 5, "Credential + secret
@@ -89,6 +89,30 @@ regression tests still pass unchanged (this milestone adds a second,
 earlier check on the same value, so no existing accept/refuse outcome for
 `record_claim_contradiction` should change); impacted suites focused first,
 full canonical gates once at release.
+
+Security review (hypatia-security, 2026-09-25): PASS, no findings. Confirmed
+the production diff is exactly one import, one module-level policy instance,
+and the new check inside `_normalize_claim_contradiction_note`; confirmed
+both `preview_claim_contradiction_write` and `record_claim_contradiction`
+call that one method; confirmed the raised error never carries the candidate
+text; confirmed `record_claim_contradiction` is now doubly protected without
+conflict; confirmed `CognitiveEngine.py`'s pre-existing generic catch-all for
+this intent is unchanged and untouched by this diff; confirmed every
+non-goal file (`ResearchSensitiveInputPolicy.py`,
+`ResearchClaimContradictionRecord.py`, `ResearchComparisonReviewRecord.py`,
+`ResearchEvidenceRecord.py`, `ResearchClaimContradictionWritePreview.py`) is
+byte-for-byte unchanged.
+
+QA review (hypatia-qa, 2026-09-25): PASS, no findings. Mutation testing on
+the new check confirmed both new tests fail without it, and — empirically
+validating the milestone's own "doubly protected" claim — the existing
+v0.3.413 `record_claim_contradiction` test still passed under the same
+mutation because the persisted record's `__post_init__` check independently
+catches it downstream. Confirmed the benign-note accept path is unaffected,
+confirmed the cognition-layer test's non-reflection assertion targets the
+correct field with no coincidental substring risk, and confirmed no existing
+test body was modified (pure insertions). Full focused run: 278 tests, OK;
+`black`/`ruff`/`mypy`/`git diff --check` clean.
 
 ## Historical scope: v0.3.413 (delivered)
 

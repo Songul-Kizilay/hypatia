@@ -61,6 +61,7 @@ from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
 from research.ResearchRunStore import ResearchRunStore
+from research.ResearchSensitiveInputPolicy import ResearchSensitiveInputPolicy
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
@@ -111,6 +112,8 @@ from research.ResearchSourceTemporalHistory import (
 )
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.SourceIdentity import same_resource
+
+_SENSITIVE_INPUT_POLICY = ResearchSensitiveInputPolicy()
 
 
 class ResearchRunManager:
@@ -2569,6 +2572,12 @@ class ResearchRunManager:
         normalized = note.strip()
         if len(normalized) > MAX_CLAIM_CONTRADICTION_NOTE_CHARACTERS:
             raise ResearchError("Research claim contradiction note is too long.")
+        sensitive_class = _SENSITIVE_INPUT_POLICY.classify(normalized)
+        if sensitive_class.refused:
+            raise ResearchError(
+                "Research claim contradiction note was refused as "
+                f"{sensitive_class.operator_label}."
+            )
         return normalized
 
     @staticmethod

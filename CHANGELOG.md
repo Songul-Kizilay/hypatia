@@ -2,6 +2,18 @@
 
 All notable project changes are recorded here.
 
+## [0.3.414] - 2026-09-25
+
+### Security
+
+- `ResearchRunManager._normalize_claim_contradiction_note` now runs the
+  existing, unmodified `ResearchSensitiveInputPolicy` before either
+  previewing or recording a claim contradiction. Previously a secret-shaped
+  note was echoed verbatim into the preview's Brain response even though the
+  subsequent record call would have refused it; both paths now refuse
+  identically, before any note text can be reflected. No other field,
+  record, or preview type changed.
+
 ## [0.3.413] - 2026-09-25
 
 ### Added
