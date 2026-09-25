@@ -2,10 +2,22 @@
 
 ## Runtime Version
 
-`v0.3.410 (Genesis)`
+`v0.3.411 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.411 adds a conservative secret-ingress refusal floor to the
+operator-authored research session-context surface. Credential-bearing URLs,
+authentication/cookie header forms, private-key material, explicit secret
+assignments, and selected high-confidence token formats are refused before
+persistence. Refusals expose only a bounded category and never reflect the
+candidate value through errors or Brain responses; hostile persisted content
+also fails closed on load. This is explicitly a floor rather than complete
+secret detection, and it introduces no secret storage, credential reference or
+use, login, network/process capability, scope, target, budget, or execution
+authority. It is the first bounded foundation slice of item 5 in the Bug Bounty
+Researcher roadmap.
 
 Version v0.3.410 adds an inert, operator-authored research session-context
 record over already-stored HTTP evidence. A context says only whether the

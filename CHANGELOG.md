@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.411] - 2026-09-25
+
+### Added
+
+- A pure `ResearchSensitiveInputPolicy` provides a small, explicit secret-
+  ingress refusal floor for operator-authored research session contexts. It
+  classifies credential-bearing URLs, authentication/cookie header forms,
+  private-key material, explicit secret assignments, and selected high-
+  confidence token formats into bounded categories.
+- `ResearchSessionContextRecord` now applies that policy to its identifier,
+  program, identity-label, and note text before any context can be persisted.
+
+### Security
+
+- Refusals contain only fixed field/category wording. The candidate secret is
+  never interpolated into an exception, Brain response, log, or stored record;
+  a malicious persisted document fails closed during load.
+- This policy is deliberately a conservative floor, not complete secret
+  detection. It adds no secret storage, masking-and-keeping, credential
+  reference/use, login, network/process capability, or authority.
+
 ## [0.3.410] - 2026-09-25
 
 ### Added

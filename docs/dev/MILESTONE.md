@@ -14,46 +14,60 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
-| Milestone | Research session context: operator-declared authentication state for observed evidence (Bug Bounty foundation, step 5) |
-| Base SHA | 86727d0f9a914e262cb7f5e73825f1068b4932d5 |
+| Milestone | Research session-context secret-ingress boundary foundation (Bug Bounty foundation, step 6) |
+| Base SHA | 2d2ac281768a4739911b00f5e6eed4bc79c12519 |
 | Status | release |
 | Specialists | Codex: bounded implementation, security/QA review, gates, and guarded delivery |
 | Blockers | none |
 
-Rationale: bounded continuation after delivered v0.3.409 and roadmap item 4,
-"Authentication / identity / session contexts". This slice records only an
-operator's historical attestation that selected HTTP evidence was gathered
-unauthenticated or under a human-readable identity label. It stores no
-credential, token, password, cookie value, or live session identifier; never
-logs in, attaches a header, performs a request, grants authority, widens scope,
-or changes budget/target policy.
+Rationale: bounded continuation after delivered v0.3.410 and roadmap item 5,
+"Credential + secret boundary". The first honest boundary is at the only new
+operator-authored authentication-context persistence surface: reject a small,
+explicit set of high-confidence secret-bearing input forms before they can be
+stored, rendered, logged, or returned in an error. The classifier reports only
+a bounded category; it never returns or interpolates the candidate value.
 
-Scope: a frozen authentication-state/session-context model; a strict atomic
-append-only JSON store; a service that validates referenced HTTP evidence
-exists in the same program; read/write Brain intents; and a small desktop
-panel. The label is inert display text only. Context load/list/restart has no
-network, process, login, replay, scope, or authorization side effect.
+Scope: one pure bounded sensitive-input classifier with explicit categories
+for credential-bearing URLs, authorization/cookie header forms, private-key
+material, secret assignments, and high-confidence token formats; enforce it
+inside `ResearchSessionContextRecord` for every operator-authored free-text
+field; keep refusal messages category-only; update the desktop warning and add
+normal/refusal/persistence/service regression tests. Document this as a
+conservative floor rather than complete secret detection.
 
-Non-goals: credential/secret boundary work (the next roadmap item), automatic
-authentication detection, session establishment or reuse, copying sensitive
-HTTP header values, Kali-operation integration, new authorization gates, and
-any change to existing HTTP-evidence or asset-inventory schemas.
+Non-goals: no secret value storage, encryption, hashing, masking-and-keeping,
+OS keychain/credential-manager integration, credential reference or scope,
+credential use/audit/rotation, login/session establishment, environment or
+file scanning, entropy detection, configurable patterns, override, network or
+process capability, and no authority/budget/target/execution change.
 
-Security review (Codex, 2026-09-25): the new model/store/service/UI create no
-network, process, login, credential-use, scope, budget, target, or execution
-path. HTTP evidence values are used only for same-program ID membership and
-are never copied into a context. Review found that record identifiers and the
-preview program ID could contain control characters capable of forging extra
-rendered lines; both paths now reject control characters, with regression
-tests. Identity labels already had the same protection.
+Security invariants: classification must be deterministic, local, bounded,
+side-effect-free, and operate before persistence. A refusal exposes only its
+fixed category. Reloading a malicious store fails closed without reflecting
+the secret. Benign discussion such as "no password was used" remains valid;
+the policy must not claim completeness or turn descriptive context into
+credential authority.
 
-QA review (Codex, 2026-09-25): verified authentication-state/label binding,
-same-program evidence membership, cross-program and unknown-reference
-refusal without a write, append-only atomic persistence and restart, strict
-schema decoding, immutable records, bounded Brain intents, desktop dispatch
-and rendering, Bootstrap/window reachability, and no HTTP-evidence mutation.
-Focused integrated suite: 32 tests, OK. Full canonical gates: 7067 tests, OK
-(skipped=3); Black, Ruff, MyPy, and `git diff --check` clean.
+Test strategy: each explicit sensitive category; case and whitespace variants;
+benign near-misses; identity/program/note enforcement; fixed non-reflective
+error text; no write on service refusal; malicious persisted document fails
+closed; existing session-context normal/restart/UI behavior; impacted suites;
+then full canonical gates once at release.
+
+Security review (Codex, 2026-09-25): PASS after one completeness fix. The
+initial credential-bearing URL rule required `user:password@host` and would
+have allowed a URL whose userinfo itself was a token (`token@host`). The rule
+now refuses any non-empty URL userinfo, with a regression test. All classifiers
+are bounded and side-effect-free; categories carry no candidate text; model,
+service, persistence-load, and rendered failure paths were verified not to
+reflect the sentinel secret. No credential or authority path was introduced.
+
+QA review (Codex, 2026-09-25): verified every explicit category, case and
+whitespace forms, benign near-misses, fixed category wording, exact field
+enforcement, no-write service refusal, malicious-store fail-closed behavior,
+existing round-trip/append-only behavior, desktop reachability, and version
+consistency. Focused impacted suite: 45 tests, OK. Full canonical gates: 7079
+tests, OK (skipped=3); Black, Ruff, MyPy, and `git diff --check` clean.
 
 ## Historical scope: v0.3.407 (delivered)
 
@@ -1400,6 +1414,39 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.410: research session context foundation |
+| SHA | cf49a931daff46e460c54e6fd2d8e6d8d4066b39 |
+| Linux desktop CI (exact-SHA) | success (run 36108321606) |
+| Windows desktop CI (exact-SHA) | success (run 36108324229) |
+| Status | delivered |
+| PR | #389, MERGED 2026-09-25T07:44:36Z, standard merge commit `980e508b18aec8c724f8a4eab28bdaeb6aefe0a4` |
+| origin/main reachability | verified: `git merge-base --is-ancestor cf49a93 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`679a24f`, `cf49a93`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, Codex): PR #389 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 2
+commits (v0.3.409's documentation-only ledger reconciliation `86727d0` and
+v0.3.410's release commit `cf49a93`), was `MERGEABLE/CLEAN`, and both
+PR-triggered checks passed (Linux run 36108774238, Windows run 36108774287).
+Merged with a standard merge commit. The merge commit is on `origin/main`;
+both carried commits are reachable from it; release-commit author and
+committer remain Songül Kızılay via GitHub noreply email; the working tree is
+clean except this ledger reconciliation.
+
+Note: this bounded roadmap slice adds descriptive historical authentication
+state over already-recorded same-program HTTP evidence. Records are frozen,
+strictly bounded, append-only, restart-safe, and exposed through Brain and a
+dedicated desktop panel. They contain no credential or reusable live session,
+perform no login/request, never inspect or copy HTTP header values, and create
+no scope, target, budget, credential, or execution authority. Security review
+found and fixed a rendered-line-forgery gap in identifier/program input; QA
+verified model, persistence, service, Brain, Bootstrap, controller, and desktop
+paths. Full canonical gates: 7067 tests, OK (skipped=3); Black, Ruff, MyPy, and
+`git diff --check` clean.
+
+## Historical scope: v0.3.409 (delivered)
 
 | Field | Value |
 | --- | --- |

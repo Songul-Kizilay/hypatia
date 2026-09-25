@@ -14,12 +14,15 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchAuthenticationState import ResearchAuthenticationState
 from research.ResearchHttpEvidenceRecord import is_http_evidence_id
+from research.ResearchSensitiveInputPolicy import ResearchSensitiveInputPolicy
 
 MAX_SESSION_CONTEXT_ID_CHARACTERS = 200
 MAX_SESSION_CONTEXT_PROGRAM_ID_CHARACTERS = 200
 MAX_SESSION_CONTEXT_IDENTITY_LABEL_CHARACTERS = 200
 MAX_SESSION_CONTEXT_NOTE_CHARACTERS = 2_000
 MAX_SESSION_CONTEXT_EVIDENCE_REFERENCES = 100
+
+_SENSITIVE_INPUT_POLICY = ResearchSensitiveInputPolicy()
 
 
 def _bounded_identifier(value: object, label: str, maximum: int) -> str:
@@ -29,6 +32,12 @@ def _bounded_identifier(value: object, label: str, maximum: int) -> str:
     if any(ord(character) < 32 or ord(character) == 127 for character in normalized):
         raise ResearchError(f"{label} must be single-line text.")
     return normalized
+
+
+def _refuse_sensitive_input(value: str, label: str) -> None:
+    sensitive_class = _SENSITIVE_INPUT_POLICY.classify(value)
+    if sensitive_class.refused:
+        raise ResearchError(f"{label} was refused as {sensitive_class.operator_label}.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +63,8 @@ class ResearchSessionContextRecord:
             "Research session context program ID",
             MAX_SESSION_CONTEXT_PROGRAM_ID_CHARACTERS,
         )
+        _refuse_sensitive_input(context_id, "Research session context ID")
+        _refuse_sensitive_input(program_id, "Research session context program ID")
         if not isinstance(self.authentication_state, ResearchAuthenticationState):
             raise ResearchError("Research session authentication state is invalid.")
         if not isinstance(self.identity_label, str):
@@ -67,6 +78,7 @@ class ResearchSessionContextRecord:
             raise ResearchError(
                 "Research session identity label must be single-line display text."
             )
+        _refuse_sensitive_input(identity_label, "Research session identity label")
         if self.authentication_state is ResearchAuthenticationState.AUTHENTICATED:
             if not identity_label:
                 raise ResearchError(
@@ -95,6 +107,7 @@ class ResearchSessionContextRecord:
         note = self.note.strip()
         if len(note) > MAX_SESSION_CONTEXT_NOTE_CHARACTERS:
             raise ResearchError("Research session context note is too long.")
+        _refuse_sensitive_input(note, "Research session context note")
         if (
             not isinstance(self.recorded_at, datetime)
             or self.recorded_at.utcoffset() is None

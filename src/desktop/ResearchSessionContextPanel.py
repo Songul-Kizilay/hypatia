@@ -80,7 +80,9 @@ class ResearchSessionContextPanel:
         ttk.Entry(form, textvariable=self.evidence_ids).grid(
             row=2, column=1, sticky="ew", padx=8, pady=2
         )
-        ttk.Label(form, text="Note").grid(row=3, column=0, sticky="w")
+        ttk.Label(form, text="Note (never enter a secret)").grid(
+            row=3, column=0, sticky="w"
+        )
         ttk.Entry(form, textvariable=self.note).grid(
             row=3, column=1, sticky="ew", padx=8, pady=2
         )
