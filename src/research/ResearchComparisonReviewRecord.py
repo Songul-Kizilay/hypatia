@@ -19,8 +19,17 @@ from datetime import datetime
 from enum import StrEnum
 
 from core.Exceptions import ResearchError
+from research.ResearchSensitiveInputPolicy import ResearchSensitiveInputPolicy
 
 MAX_COMPARISON_REVIEW_NOTE_CHARACTERS = 2_000
+
+_SENSITIVE_INPUT_POLICY = ResearchSensitiveInputPolicy()
+
+
+def _refuse_sensitive_input(value: str, label: str) -> None:
+    sensitive_class = _SENSITIVE_INPUT_POLICY.classify(value)
+    if sensitive_class.refused:
+        raise ResearchError(f"{label} was refused as {sensitive_class.operator_label}.")
 
 
 class ResearchComparisonReviewDecision(StrEnum):
@@ -52,6 +61,7 @@ class ResearchComparisonReviewRecord:
                 raise ResearchError(f"{label} cannot be empty.")
         if len(self.note.strip()) > MAX_COMPARISON_REVIEW_NOTE_CHARACTERS:
             raise ResearchError("Research comparison review note is too long.")
+        _refuse_sensitive_input(self.note.strip(), "Research comparison review note")
         if (
             not isinstance(self.evidence_ids, tuple)
             or not self.evidence_ids

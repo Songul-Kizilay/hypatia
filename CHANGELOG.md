@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.413] - 2026-09-25
+
+### Added
+
+- `ResearchClaimContradictionRecord.note`, `ResearchComparisonReviewRecord.note`,
+  and `ResearchEvidenceRecord.note` now run through the existing, unmodified
+  `ResearchSensitiveInputPolicy` before persistence, closing the remaining
+  operator-authored `note` fields named as residual future work in v0.3.412.
+  `ResearchEvidenceRecord.excerpt` (raw fetched source content) is
+  deliberately left unclassified.
+
+### Security
+
+- Refusals name only the fixed category, never the candidate note text. A
+  malicious persisted research-run document with a secret-shaped note in any
+  of these three fields fails closed on load with the store's existing typed
+  error. Benign descriptive notes are unaffected; no other field, schema, or
+  authority changed.
+
 ## [0.3.412] - 2026-09-25
 
 ### Added

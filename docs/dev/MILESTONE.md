@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Research-run note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | acf37a351ed3338c2f807b88aa5500336baf5fd4 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Status | release |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-lead closed one moderate test-hygiene gap; hypatia-lead: release |
 | Blockers | none |
 
 Rationale: bounded continuation of roadmap item 5, "Credential + secret
@@ -102,6 +102,35 @@ service-layer regression tests on `ResearchRunManager`
 (`record_claim_contradiction`, `add_evidence`) proving a secret-shaped note
 is refused without a write and without reflection; impacted suites focused
 first, full canonical gates once at release.
+
+Security review (hypatia-security, 2026-09-25): PASS, no findings. Traced the
+write path (`ResearchRunManager.record_claim_contradiction`, `add_evidence`,
+`record_comparison_review`) and the load path
+(`JsonFileResearchRunStore._parse_claim_contradiction`/`_parse_comparison_review`/
+`_parse_evidence`) and confirmed the refusal is unconditionally reached on
+both, `excerpt` remains completely unclassified, no other field was touched,
+the raised error never carries the candidate text, and every delegated
+authorization/preview path (`ClaimContradictionStepOperation`,
+`EvidenceRecordingStepOperation`) funnels through the same checked
+constructors with no alternate persistence route. Flagged one pre-existing,
+out-of-scope observation for future work: `ResearchClaimContradictionWritePreview`
+already echoes an unclassified note verbatim into a Brain response
+(`ResponseComposer.research_claim_contradiction_write_preview_success`) —
+unrelated to and unchanged by this diff, but a genuine gap for a future
+`*WritePreview` scoping pass under item 5.
+
+QA review (hypatia-qa, 2026-09-25): found one moderate hygiene gap recurring
+from v0.3.412 — two of the three "non-note fields unaffected" differential
+tests (`ResearchComparisonReviewRecord`, `ResearchEvidenceRecord`) reused
+each file's shared default fixture unmodified rather than proving a
+non-default value round-trips correctly with the new check active (the
+`ResearchClaimContradictionRecord` version of this test already did this
+correctly). Mutation testing on all three `_refuse_sensitive_input` call
+sites confirmed every category/benign-near-miss/store/service test is
+non-vacuous. hypatia-lead closed the gap directly: both tests now construct
+with distinct non-default field values and assert those exact values round
+trip. Re-run after the fix: 129 focused tests across the five impacted test
+modules, OK; `black`/`ruff`/`mypy`/`git diff --check` clean.
 
 ## Historical scope: v0.3.412 (delivered)
 
