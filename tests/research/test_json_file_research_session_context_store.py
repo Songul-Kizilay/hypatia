@@ -78,6 +78,36 @@ class ResearchSessionContextStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ResearchError, "schema version"):
                 JsonFileResearchSessionContextStore(path).load()
 
+    def test_secret_shaped_persisted_text_fails_closed_without_reflection(self) -> None:
+        sentinel = "distinct-persisted-secret"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "contexts.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "records": [
+                            {
+                                "session_context_id": "context-1",
+                                "program_id": "program-a",
+                                "authentication_state": "authenticated",
+                                "identity_label": "test-user-1",
+                                "evidence_ids": [],
+                                "note": f"password={sentinel}",
+                                "recorded_at": "2026-09-25T08:00:00+00:00",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ResearchError) as raised:
+                JsonFileResearchSessionContextStore(path).load()
+
+            self.assertIn("refused as", str(raised.exception))
+            self.assertNotIn(sentinel, str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

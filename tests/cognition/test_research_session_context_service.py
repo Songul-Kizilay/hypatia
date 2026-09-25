@@ -184,6 +184,32 @@ class ResearchSessionContextServiceTests(unittest.TestCase):
                 self.assertFalse(response.success)
                 self.assertNotIn("forged\n", response.message)
 
+    def test_secret_shaped_input_is_refused_without_write_or_reflection(self) -> None:
+        sentinel = "distinct-service-secret"
+        contexts = ContextStore()
+        app = service(contexts, EvidenceStore(()))
+
+        response = app.process_record(
+            BrainRequest(
+                message="record",
+                metadata={
+                    "intent": RESEARCH_SESSION_CONTEXT_RECORD_INTENT,
+                    "program_id": "program-a",
+                    "authentication_state": (
+                        ResearchAuthenticationState.UNAUTHENTICATED
+                    ),
+                    "identity_label": "",
+                    "evidence_ids": (),
+                    "note": f"Authorization: Bearer {sentinel}",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(contexts.save_count, 0)
+        self.assertIn("authentication or cookie header material", response.message)
+        self.assertNotIn(sentinel, response.message)
+
 
 if __name__ == "__main__":
     unittest.main()

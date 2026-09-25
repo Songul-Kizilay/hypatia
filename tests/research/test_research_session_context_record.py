@@ -72,6 +72,27 @@ class ResearchSessionContextRecordTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "single-line"):
             record(session_context_id="context-1\nProgram: forged")
 
+    def test_secret_shaped_free_text_is_refused_without_reflection(self) -> None:
+        sentinel = "distinct-secret-sentinel"
+        cases = {
+            "program_id": f"https://user:{sentinel}@example.test",
+            "identity_label": f"api_key={sentinel}",
+            "note": f"Authorization: Bearer {sentinel}",
+        }
+        for field, value in cases.items():
+            with self.subTest(field=field):
+                with self.assertRaises(ResearchError) as raised:
+                    record(**{field: value})
+                self.assertIn("refused as", str(raised.exception))
+                self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_benign_secret_discussion_remains_inert_text(self) -> None:
+        value = record(note="No password was used and no token was recorded.")
+        self.assertEqual(
+            value.note,
+            "No password was used and no token was recorded.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

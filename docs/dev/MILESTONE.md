@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Research session-context secret-ingress boundary foundation (Bug Bounty foundation, step 6) |
 | Base SHA | 2d2ac281768a4739911b00f5e6eed4bc79c12519 |
-| Status | implementation |
+| Status | release |
 | Specialists | Codex: bounded implementation, security/QA review, gates, and guarded delivery |
 | Blockers | none |
 
@@ -53,6 +53,21 @@ benign near-misses; identity/program/note enforcement; fixed non-reflective
 error text; no write on service refusal; malicious persisted document fails
 closed; existing session-context normal/restart/UI behavior; impacted suites;
 then full canonical gates once at release.
+
+Security review (Codex, 2026-09-25): PASS after one completeness fix. The
+initial credential-bearing URL rule required `user:password@host` and would
+have allowed a URL whose userinfo itself was a token (`token@host`). The rule
+now refuses any non-empty URL userinfo, with a regression test. All classifiers
+are bounded and side-effect-free; categories carry no candidate text; model,
+service, persistence-load, and rendered failure paths were verified not to
+reflect the sentinel secret. No credential or authority path was introduced.
+
+QA review (Codex, 2026-09-25): verified every explicit category, case and
+whitespace forms, benign near-misses, fixed category wording, exact field
+enforcement, no-write service refusal, malicious-store fail-closed behavior,
+existing round-trip/append-only behavior, desktop reachability, and version
+consistency. Focused impacted suite: 45 tests, OK. Full canonical gates: 7079
+tests, OK (skipped=3); Black, Ruff, MyPy, and `git diff --check` clean.
 
 ## Historical scope: v0.3.407 (delivered)
 

@@ -905,7 +905,13 @@ can label already-recorded same-program HTTP evidence as historically
 unauthenticated or authenticated under a human-readable identity label. The
 record is inert history, contains no credential or reusable live session, and
 cannot perform a login/request or create authority; credential and secret
-boundaries remain item 5. In every case, ingestion can only ever reach
+boundaries remain item 5. v0.3.411 delivered item 5's first conservative
+secret-ingress boundary: high-confidence secret-bearing forms are classified
+into fixed categories and refused before an operator-authored session context
+can be persisted, without reflecting the candidate value. It is explicitly a
+floor rather than complete secret detection and adds no secret storage,
+credential reference/use, login, or authority. In every case, ingestion can
+only ever reach
 scope resolution through the existing, unchanged, live `resolve_hostname`/
 `resolve_addresses`, and no path lets discovered evidence manufacture
 authority.
