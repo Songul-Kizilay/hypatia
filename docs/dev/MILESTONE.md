@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Research-run note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | acf37a351ed3338c2f807b88aa5500336baf5fd4 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-lead closed one moderate test-hygiene gap; hypatia-lead: release |
 | Blockers | none |
 
@@ -1648,6 +1648,44 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.413: research-run note secret boundary |
+| SHA | 29c78805e8384fb1d74d6c1d8ebbccea1fbe6ec2 |
+| Linux desktop CI (exact-SHA) | success (run 36158436587) |
+| Windows desktop CI (exact-SHA) | success (run 36158440256) |
+| Status | delivered |
+| PR | #392, MERGED 2026-09-25T16:14:33Z, standard merge commit `cdc0125a070b00abf9e1b49e1204ab32f3af862a` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 29c7880 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`3e4cb4d`, `29c7880`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, hypatia-lead): PR #392 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (v0.3.412's documentation-only ledger reconciliation `acf37a3`, the
+v0.3.413 milestone lock `27f0c4f`, and release commit `29c7880`) across
+exactly 13 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered
+checks passed against the release SHA (`test-build-smoke` on both runners).
+The standard merge commit is on `origin/main`; all three carried commits are
+reachable from it; the release author remains Songül Kızılay via GitHub
+noreply email; the working tree is clean except this ledger reconciliation.
+
+Note: this bounded release widens the existing, unmodified
+`ResearchSensitiveInputPolicy` (v0.3.411) to three more operator-authored
+free-text `note` fields on the research-run model
+(`ResearchClaimContradictionRecord`, `ResearchComparisonReviewRecord`,
+`ResearchEvidenceRecord`), closing the residual list named when v0.3.412
+shipped. `ResearchEvidenceRecord.excerpt` (raw fetched source content) stays
+deliberately unclassified. Refusals expose only fixed categories and never
+echo the candidate value; a malicious persisted note fails closed on load.
+It introduces no secret storage, credential use, login, network/process
+capability, or scope, target, budget, credential, or execution authority.
+Security review found no findings (one pre-existing, out-of-scope
+observation recorded for future work); QA found one moderate test-hygiene
+gap recurring from v0.3.412, closed by hypatia-lead and verified non-vacuous
+by QA's mutation testing. Full canonical gates: 7103 tests, OK (skipped=3);
+Black, Ruff, MyPy, and `git diff --check` clean.
+
+## Historical scope: v0.3.412 (delivered)
 
 | Field | Value |
 | --- | --- |
