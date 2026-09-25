@@ -37,6 +37,7 @@ from desktop.MissionSourceIndependenceReview import (
 )
 from desktop.QuestionResearchDraft import QuestionResearchDraft
 from desktop.ResearchAssetInventoryPanel import ResearchAssetInventoryPanel
+from desktop.ResearchSessionContextPanel import ResearchSessionContextPanel
 from desktop.ResearchSourcePreviewPanel import ResearchSourcePreviewPanel
 from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
 from desktop.ResearchWorkspaceReadModel import (
@@ -1629,6 +1630,14 @@ class TkinterDesktopWindow:
             tabs.append(asset_inventory_tab)
             self._asset_inventory_panel = ResearchAssetInventoryPanel(
                 asset_inventory_tab,
+                self._controller,
+                self._start_request,
+            )
+            session_context_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(session_context_tab, text="Session Contexts")
+            tabs.append(session_context_tab)
+            self._session_context_panel = ResearchSessionContextPanel(
+                session_context_tab,
                 self._controller,
                 self._start_request,
             )

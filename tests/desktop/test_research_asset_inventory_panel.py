@@ -30,6 +30,7 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainResponse import BrainResponse
 from desktop.ResearchAssetInventoryPanel import ResearchAssetInventoryPanel
+from desktop.ResearchSessionContextPanel import ResearchSessionContextPanel
 from research.ResearchAsset import ResearchAsset
 from research.ResearchAssetInventoryEntry import (
     ResearchAssetInventoryEntry,
@@ -416,17 +417,24 @@ class WindowReachabilityTests(unittest.TestCase):
         self.assertIsInstance(
             window._asset_inventory_panel, ResearchAssetInventoryPanel
         )
+        self.assertIsInstance(
+            window._session_context_panel, ResearchSessionContextPanel
+        )
         # "Load inventory" exists only inside this panel, so its presence in
         # the real window's widget tree is the reachability evidence.
         self.assertIn("Load inventory", [widget.text for widget in widgets])
         self.assertIn("Record relation", [widget.text for widget in widgets])
+        self.assertIn("Load contexts", [widget.text for widget in widgets])
+        self.assertIn("Record context", [widget.text for widget in widgets])
         service.revisions.assert_not_called()
 
     def test_a_window_without_the_scope_service_builds_no_asset_panel(self) -> None:
         window, widgets = build_real_window()
 
         self.assertIsNone(getattr(window, "_asset_inventory_panel", None))
+        self.assertIsNone(getattr(window, "_session_context_panel", None))
         self.assertNotIn("Load inventory", [widget.text for widget in widgets])
+        self.assertNotIn("Load contexts", [widget.text for widget in widgets])
 
 
 if __name__ == "__main__":

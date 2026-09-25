@@ -100,6 +100,10 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from cognition.ResearchPlanPreviewApplicationService import (
     ResearchPlanPreviewApplicationService,
 )
+from cognition.ResearchSessionContextApplicationService import (
+    ResearchSessionContextApplicationService,
+    ResearchSessionContextStore,
+)
 from cognition.ResearchSourceAcceptanceService import (
     ResearchSourceAcceptanceService,
 )
@@ -343,6 +347,7 @@ class CognitiveEngine:
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         asset_inventory_store: ResearchAssetInventoryStore | None = None,
         http_evidence_store: ResearchHttpEvidenceStore | None = None,
+        session_context_store: ResearchSessionContextStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -747,6 +752,17 @@ class CognitiveEngine:
                     program_scope_revision_store=program_scope_revision_store,
                 )
             )
+        self._research_session_context_service: (
+            ResearchSessionContextApplicationService | None
+        ) = None
+        if session_context_store is not None and http_evidence_store is not None:
+            self._research_session_context_service = (
+                ResearchSessionContextApplicationService(
+                    session_context_store,
+                    http_evidence_store,
+                    response_composer,
+                )
+            )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
@@ -982,6 +998,20 @@ class CognitiveEngine:
             return self._research_http_evidence_service.process_evidence_for_target(
                 request
             )
+
+        if ResearchSessionContextApplicationService.is_record_request(request):
+            if self._research_session_context_service is None:
+                return self._response_composer.research_session_context_record_failure(
+                    request, "Research session contexts are not available."
+                )
+            return self._research_session_context_service.process_record(request)
+
+        if ResearchSessionContextApplicationService.is_preview_request(request):
+            if self._research_session_context_service is None:
+                return self._response_composer.research_session_context_preview_failure(
+                    request, "Research session contexts are not available."
+                )
+            return self._research_session_context_service.process_preview(request)
 
         if KaliOperationPreviewApplicationService.is_preview_request(request):
             if self._kali_operation_preview_service is None:

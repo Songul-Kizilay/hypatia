@@ -127,6 +127,7 @@ from research.ResearchRunMarkdownExportVerification import (
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSessionContextRecord import ResearchSessionContextRecord
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentWritePreview import (
     ResearchSourceAssessmentWritePreview,
@@ -1647,6 +1648,80 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_http_evidence_for_target",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_session_context_record(
+        self,
+        request: BrainRequest,
+        record: ResearchSessionContextRecord,
+    ) -> BrainResponse:
+        """Confirm one inert operator-authored historical context."""
+        identity = record.identity_label or "none (unauthenticated)"
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Research session context recorded:",
+                    f"Program: {record.program_id}",
+                    f"Authentication state: {record.authentication_state.value}",
+                    f"Identity label: {identity}",
+                    f"Linked HTTP evidence: {len(record.evidence_ids)}",
+                    "(historical operator attestation only; no credential, live"
+                    " session, scope, or execution authority)",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_session_context_record",
+            memory_count=0,
+            research_session_context_record=record,
+        )
+
+    def research_session_context_record_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        return BrainResponse(
+            message="\n".join(
+                ("Research session context rejected:", f"Reason: {message}")
+            ),
+            request_id=request.request_id,
+            intent="research_session_context_record",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_session_context_preview(
+        self,
+        request: BrainRequest,
+        program_id: str,
+        records: tuple[ResearchSessionContextRecord, ...],
+    ) -> BrainResponse:
+        lines = [f"Research session contexts for program {program_id}: {len(records)}"]
+        for record in records:
+            identity = record.identity_label or "none"
+            lines.append(
+                f"- {record.session_context_id}: "
+                f"{record.authentication_state.value}, identity {identity}, "
+                f"{len(record.evidence_ids)} evidence reference(s)"
+            )
+        lines.append("Listing only; no login, request, or session use was performed.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_session_context_preview",
+            memory_count=0,
+            research_session_contexts=records,
+        )
+
+    def research_session_context_preview_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        return BrainResponse(
+            message="\n".join(
+                ("Research session context preview rejected:", f"Reason: {message}")
+            ),
+            request_id=request.request_id,
+            intent="research_session_context_preview",
             memory_count=0,
             success=False,
         )
