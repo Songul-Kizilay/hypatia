@@ -20,6 +20,7 @@ from research.OneShotDeferredExecutionScheduleView import (
 from research.ProviderComparisonRequest import ProviderComparisonRequest
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetRelationKind import ResearchAssetRelationKind
+from research.ResearchAuthenticationState import ResearchAuthenticationState
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
@@ -516,6 +517,51 @@ class DesktopController:
                 metadata={
                     "intent": "research_http_evidence_ingestion_preview",
                     "kali_operation_run": run,
+                },
+            )
+        )
+
+    def record_research_session_context(
+        self,
+        program_id: str,
+        authentication_state: str,
+        identity_label: str,
+        evidence_ids: tuple[str, ...],
+        note: str = "",
+    ) -> BrainResponse:
+        """Record an inert historical label over existing HTTP evidence."""
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        try:
+            normalized_state = ResearchAuthenticationState(authentication_state)
+        except ValueError as error:
+            raise ValueError("Research authentication state is invalid.") from error
+        return self._brain.process(
+            BrainRequest(
+                "Record research session context",
+                metadata={
+                    "intent": "research_session_context_record",
+                    "program_id": normalized_program_id,
+                    "authentication_state": normalized_state,
+                    "identity_label": identity_label.strip(),
+                    "evidence_ids": evidence_ids,
+                    "note": note.strip(),
+                },
+            )
+        )
+
+    def preview_research_session_contexts(self, program_id: str) -> BrainResponse:
+        """List inert session contexts for one program without side effects."""
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                "Preview research session contexts",
+                metadata={
+                    "intent": "research_session_context_preview",
+                    "program_id": normalized_program_id,
                 },
             )
         )

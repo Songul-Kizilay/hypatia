@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.410] - 2026-09-25
+
+### Added
+
+- A frozen, append-only `ResearchSessionContextRecord` and explicit
+  `ResearchAuthenticationState` let an operator label already-recorded HTTP
+  evidence as historically collected while unauthenticated or under a bounded
+  human-readable identity label.
+- A strict schema-version-1 `JsonFileResearchSessionContextStore` and
+  `ResearchSessionContextApplicationService` preserve contexts across restart,
+  reject unknown or cross-program HTTP evidence references, and provide
+  bounded record/list Brain intents.
+- A dedicated Session Contexts desktop panel records and lists these inert
+  attestations, with a visible instruction never to enter a secret.
+
+### Security
+
+- Session contexts are descriptive history only. They contain no credential,
+  password, token, cookie, authorization-header value, or reusable live
+  session primitive; never perform a request or login; and never grant or
+  widen scope, target, budget, credential, or execution authority.
+- Existing HTTP evidence is linked only by validated same-program
+  `evidence_id`. Its header values are never read or copied into a context.
+
 ## [0.3.409] - 2026-09-25
 
 ### Added

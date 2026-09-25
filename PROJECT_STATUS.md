@@ -2,10 +2,23 @@
 
 ## Runtime Version
 
-`v0.3.409 (Genesis)`
+`v0.3.410 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.410 adds an inert, operator-authored research session-context
+record over already-stored HTTP evidence. A context says only whether the
+operator historically collected selected evidence unauthenticated or under a
+bounded display label; same-program evidence membership is validated before
+append. The new strict atomic store survives restart, Brain intents expose
+bounded record/list operations, and the desktop provides a dedicated Session
+Contexts panel. No credential, token, password, cookie, authorization-header
+value, or reusable session primitive is introduced. Loading, listing, and
+recording a context perform no login or request and create no scope, target,
+budget, credential, or execution authority. This is item 4 of the bounded Bug
+Bounty Researcher roadmap; credential and secret boundaries remain a separate
+future item.
 
 Version v0.3.409 consumes the result of one already-completed,
 already-authorized Kali `HTTPS_HEADER_LOOKUP` operation (`curl --head`,

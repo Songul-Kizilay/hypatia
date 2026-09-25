@@ -111,6 +111,7 @@ from research.ResearchRunMarkdownExportVerification import (
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSessionContextRecord import ResearchSessionContextRecord
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentWritePreview import (
     ResearchSourceAssessmentWritePreview,
@@ -273,3 +274,5 @@ class BrainResponse:
         ResearchHttpEvidenceIngestionResult | None
     ) = None
     research_http_evidence_for_target: ResearchHttpEvidenceForTargetView | None = None
+    research_session_context_record: ResearchSessionContextRecord | None = None
+    research_session_contexts: tuple[ResearchSessionContextRecord, ...] = ()

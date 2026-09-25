@@ -14,366 +14,46 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
-| Milestone | HTTP evidence model foundation (Bug Bounty foundation, step 4) |
-| Base SHA | 8d9ad591af32b9320718532bfce3aa186bf957bb |
-| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
-| Specialists | hypatia-runtime: sole implementer (result-parsing/service/persistence/desktop-wiring shape); hypatia-security: independent review complete (PASS, no authority-widening defect; two completeness/coverage gaps flagged and fixed by the Lead); hypatia-qa: independent review complete (two further test-coverage gaps found and closed by the Lead with mutation-verified tests); hypatia-release: delivered v0.3.409 |
+| Milestone | Research session context: operator-declared authentication state for observed evidence (Bug Bounty foundation, step 5) |
+| Base SHA | 86727d0f9a914e262cb7f5e73825f1068b4932d5 |
+| Status | release |
+| Specialists | Codex: bounded implementation, security/QA review, gates, and guarded delivery |
 | Blockers | none |
 
-Rationale: user-directed continuation of the bounded Bug Bounty Researcher
-roadmap immediately after v0.3.408 (recon result ingestion), independently
-re-verified reachable from `origin/main` with green exact-SHA CI before this
-milestone was locked. Step 3 of the roadmap's own recorded order ("HTTP
-Evidence model", `docs/Roadmap/Master_Roadmap.md:863`).
+Rationale: bounded continuation after delivered v0.3.409 and roadmap item 4,
+"Authentication / identity / session contexts". This slice records only an
+operator's historical attestation that selected HTTP evidence was gathered
+unauthenticated or under a human-readable identity label. It stores no
+credential, token, password, cookie value, or live session identifier; never
+logs in, attaches a header, performs a request, grants authority, widens scope,
+or changes budget/target policy.
 
-Discovery (hypatia-lead, direct repository inspection, 2026-09-24): the only
-existing HTTP-related Kali operation is `HTTPS_HEADER_LOOKUP`
-(`ResearchKaliOperationPreview.kali_operation_command_plan`), whose
-code-owned, reviewed argv is always exactly `curl --head --silent
---show-error --max-time 10 --proto =https --resolve
-<hostname>:443:<resolved_address> https://<hostname>/` — a fixed HEAD
-request to path `/` on port 443, never operator-influenceable beyond the
-hostname/address already bound by the reviewed preview. A real invocation
-of this exact command was run directly (`curl --head ... https://example.com/`)
-to ground the parser design in the real output shape: one status line
-(`HTTP/1.1 200 OK`), followed by one `Name: Value` header line per header,
-preserving original casing and duplicates, with no body (a HEAD request
-structurally never returns one). No existing type, store, service, or
-redaction utility for HTTP evidence exists anywhere in `src/`
-(`ResearchSourceEvidenceType` from v0.3.405 is an unrelated concept — a
-citation-quality dimension on research *source* assessments, not HTTP
-response evidence).
+Scope: a frozen authentication-state/session-context model; a strict atomic
+append-only JSON store; a service that validates referenced HTTP evidence
+exists in the same program; read/write Brain intents; and a small desktop
+panel. The label is inert display text only. Context load/list/restart has no
+network, process, login, replay, scope, or authorization side effect.
 
-Scope: consume this existing, already-authorized, already-executed
-operation's result — no new active HTTP capability of any kind.
+Non-goals: credential/secret boundary work (the next roadmap item), automatic
+authentication detection, session establishment or reuse, copying sensitive
+HTTP header values, Kali-operation integration, new authorization gates, and
+any change to existing HTTP-evidence or asset-inventory schemas.
 
-1. `src/research/ResearchHttpHeaderRecord.py` (or colocated): a frozen
-   `(name: str, value: str)` pair preserving one observed header exactly as
-   received — original casing, no case-folding, no dedup-by-name (repeated
-   headers of the same name are legitimate and must both survive).
+Security review (Codex, 2026-09-25): the new model/store/service/UI create no
+network, process, login, credential-use, scope, budget, target, or execution
+path. HTTP evidence values are used only for same-program ID membership and
+are never copied into a context. Review found that record identifiers and the
+preview program ID could contain control characters capable of forging extra
+rendered lines; both paths now reject control characters, with regression
+tests. Identity labels already had the same protection.
 
-2. `src/research/ResearchHttpEvidenceProvenanceKind.py`: a new `StrEnum`
-   with exactly one member, `KALI_OPERATION_RESULT` — this milestone builds
-   no operator-authored HTTP evidence path, so a second member would exist
-   only for symmetry (the exact discipline `ResearchAssetProvenanceKind`
-   itself was built under in v0.3.407). Kept as its own narrow type rather
-   than reusing `ResearchAssetProvenanceKind`, since HTTP evidence is a
-   distinct concept from an asset observation and conflating the two
-   enums would let an unrelated future asset-provenance member silently
-   become "valid" HTTP evidence provenance.
-
-3. `src/research/ResearchHttpEvidenceRecord.py`: a frozen, append-only
-   record. Fields populated only where this producer honestly knows them —
-   `target_kind`/`target_canonical_value` (always `HOSTNAME`, canonicalized
-   through the existing `canonical_dns_hostname`, never a second
-   normalization), `scheme`/`port`/`path`/`request_method` (always
-   `"https"`/`443`/`"/"`/`"HEAD"` for this producer — literal, code-owned
-   facts, not guesses), `request_headers_observed: bool` (always `False` —
-   `curl --head` never reveals what it actually sent), `response_status_code:
-   int | None` (`None` exactly when the operation did not complete
-   successfully — never a guessed `200`), `response_headers: tuple[
-   ResearchHttpHeaderRecord, ...]`, `response_body_observed: bool` (always
-   `False` — a HEAD request structurally has no body; explicit rather than
-   an empty-body implication), `provenance`, `source_operation_digest`
-   (`is_kali_operation_digest`-validated, required — no operator-authored
-   variant exists to bind `None` against), `recorded_at`. `evidence_id` is
-   **not** a random UUID: it is a deterministic digest over
-   `(program_id, operation_digest, exit_code, timed_out, stdout_lines)` —
-   the exact content that makes two ingestions "the same observed event."
-   This makes replay-safety structural: re-ingesting a byte-identical
-   completed run always yields the same `evidence_id`; a later, genuinely
-   different response (even from the same reviewed operation) yields a
-   different one and is preserved as a separate event, never merged or
-   overwritten.
-
-4. `src/research/ResearchHttpsHeaderLookupResultParser.py`: a pure function
-   over an already-completed `ResearchKaliOperationRun`. Re-derives
-   hostname/port/path from the reviewed command plan's argv (never trusts
-   a cached field) and validates the URL argument matches exactly — the
-   same "never trust, re-derive and check" discipline the v0.3.408 DNS
-   parser used. On a nonzero exit code or timeout: zero headers, `None`
-   status, one bounded rejection reason — never a guessed status. On
-   success: the first line must be a valid `HTTP/<version> <code> <reason>`
-   status line (curl's own contract for a completed HEAD request) or the
-   whole run is rejected outright (a structural contract violation, not a
-   partial result to guess at); each remaining non-blank line must contain
-   `:` to become a header, otherwise it is preserved as an inert rejected
-   line with a bounded literal reason (never interpreted). No network, no
-   process, no shell.
-
-5. New atomic `JsonFileResearchHttpEvidenceStore` (schema version 1),
-   modeled on `JsonFileResearchAssetInventoryStore`'s flat-list shape:
-   strict field-set validation, bounded record/header counts and string
-   lengths, duplicate-`evidence_id` refusal at the document-validation
-   layer (defense in depth; the service layer is what makes replay
-   idempotent, see below).
-
-6. New `ResearchHttpEvidenceApplicationService` (`src/cognition/`):
-   `preview_http_evidence_ingestion`/`record_http_evidence_ingestion`
-   (side-effect-free preview mirroring `kali_operation_evidence_candidate_
-   for_run`'s discipline; record computes `evidence_id` first and, if that
-   exact event is already stored, returns the existing record without a
-   second write — the idempotent-replay path), and a read-only
-   `evidence_for_target(program_id, canonical_hostname)` plus a live,
-   never-persisted scope-resolution view exactly mirroring
-   `ResearchAssetInventoryApplicationService.current_scope_resolution`'s
-   dispatch into the unchanged `ResearchTargetScope.resolve_hostname`. Two
-   new Brain intents wired through `CognitiveEngine`/`DesktopController`
-   following the existing intent-dispatch pattern exactly, plus one
-   read-only inspection intent for "what HTTP evidence exists for this
-   target" with zero side effects.
-
-7. Desktop: extend the existing Kali operation panel with the smallest
-   useful surface — after a successful `HTTPS_HEADER_LOOKUP` run, an
-   ingest step (mirroring v0.3.408's 4th DNS-ingestion step and its
-   explicit confirm-dialog discipline) showing status code, headers
-   (sensitive header **values** masked at display — name and presence
-   still shown — for a small literal set: `authorization`, `cookie`,
-   `set-cookie`, `proxy-authorization`; the true value is still what is
-   persisted, only the rendered summary redacts it), body-not-observed
-   state, producer/provenance, and current live scope resolution.
-
-Non-goals: no new active HTTP capability (no new curl/network invocation,
-no redirect following, no crawling, no probing beyond the one already-
-reviewed HEAD request); no body capture (structurally absent from a HEAD
-response — explicitly represented as `response_body_observed=False`, never
-built toward in this slice); no new `AssetKind`/`AssetRelationKind` (URL/
-SERVICE/ENDPOINT remain deferred exactly as v0.3.407 left them); no
-automatic Asset Inventory observation creation as an ingestion side effect
-(HTTP evidence references a canonical hostname value inline and resolves
-scope by calling the same unchanged resolver directly — it does not write
-into the Asset Inventory store, keeping this milestone's write surface to
-one store); no cookie/session/credential-replay model of any kind; no
-vulnerability, hypothesis, or finding of any kind; no widening of any
-existing authorization/execution gate.
-
-Security implications: HTTP evidence must never become authority. hypatia-
-security must independently verify: no code path lets an evidence record's
-target, status, or any header (including `Location`) reach
-`ResearchTargetScope`/scope resolution as anything but the existing
-unchanged live `resolve_hostname` call; a redirect `Location` header is
-descriptive text only — no automatic follow, no target enrollment, no new
-`RESOLVES_TO`-style relation; provenance/digest binding cannot be forged
-(wrong operation kind, wrong digest, wrong program all rejected); program
-isolation is structural (evidence always keyed by `run.program_id`); every
-header/status/body value is untrusted display data with zero instruction
-authority, including adversarial content (`X-Instruction: ...`, a JSON body
-string that never exists as body content here since bodies are never
-captured); no new socket/process capability in the parser/service/read
-path; replay cannot duplicate an identical event nor fabricate a new one;
-sensitive header values are not casually rendered in desktop summaries.
-
-Epistemic implications: unknown must remain unknown — a failed/timed-out
-operation yields `None` status and zero headers, never a guessed `200` or a
-fabricated empty-body claim where "not observed" is the honest statement.
-Request-side facts this producer cannot see (actual sent headers) are
-represented by an explicit `request_headers_observed=False` flag, never a
-synthesized browser-like header set.
-
-Persistence implications: one new store, schema version 1 (new store, no
-legacy version to carry); strictly append-only; deterministic
-content-derived `evidence_id` makes replay-safety structural rather than a
-separate dedup mechanism.
-
-Restart/replay implications: evidence, provenance, and target association
-survive reload unchanged; no request is ever replayed by loading or
-re-ingesting; a byte-identical replayed run yields the same `evidence_id`
-and is not duplicated; a genuinely different response is preserved as a
-separate event; scope is always recomputed live, never restored as a
-persisted grant.
-
-Authority/budget/target/credential implications: none created, widened, or
-restored. This milestone adds a purely descriptive evidence layer over an
-already-existing, already-reviewed, already-executed operation result; the
-only real authority gates (the Kali authorization chain, program-scope
-revision validity) remain completely untouched.
-
-Test strategy: model tests (valid record construction, malformed/unknown
-field rejection, immutability); parser tests (real curl-shaped success,
-non-zero exit/timeout, malformed status line, malformed header line,
-adversarial header/redirect content stays inert, bounded input, unsupported
-argv shape fails closed); provenance tests (forged digest/operation-kind/
-program rejected in both directions, round-trip preserved); asset-identity
-differential test against `canonical_dns_hostname`; program isolation;
-scope-integration (fresh resolution, never cached, ingestion itself never
-changes it); restart round-trip; duplication tests (identical replay
-produces one event, a genuinely different response from the same operation
-produces two); a no-network/no-process proof; desktop reachability with a
-real constructed widget; 3-5 targeted mutation checks (digest-binding
-bypass, redirect-implies-authorization, unknown-body-collapsed-to-empty,
-cross-program leak, instruction-like header treated as an intent).
-
-Rationale: user-directed continuation of the bounded Bug Bounty Researcher
-roadmap immediately after v0.3.407 (Asset Inventory + canonical asset
-identity), independently re-verified reachable from `origin/main` with green
-exact-SHA Linux/Windows CI before this milestone was locked. Selected per the
-user's own preferred order: prefer integrating an EXISTING real Hypatia
-result producer over inventing support for an external tool Hypatia cannot
-yet execute.
-
-Discovery (hypatia-lead, direct repository inspection, 2026-09-24) confirmed
-the exact gap the roadmap names: `ResearchAssetProvenanceKind` has exactly
-one member, `OPERATOR_AUTHORED` — its own docstring says extending it is
-"explicitly recon-result-ingestion's job, a later milestone, not this one."
-`ResearchKaliOperationRun`/`ResearchKaliOperationProcessResult`
-(`src/research/ResearchKaliOperationExecution.py`) already produce a
-completed, reviewed, authorization-gated process result whose `stdout_lines`
-are raw, untrusted, unparsed text — nothing in `src/` today turns that text
-into a structured asset fact.
-`kali_operation_evidence_candidate_for_run` derives only a review-only,
-zero-side-effect candidate view (`evidence_recorded`/`claim_created`/
-`source_accepted`/`memory_written` all hard-pinned `False`), establishing the
-precedent this milestone reuses: an ingestion path must offer the same kind
-of side-effect-free preview before any durable write.
-
-The one existing operation kind whose result is deterministically structured
-is `DNS_RECORD_LOOKUP`: its reviewed command plan
-(`kali_operation_command_plan` in `ResearchKaliOperationPreview.py`) is
-always exactly `dig +time=5 +tries=1 +short <hostname> <A|AAAA|CNAME>` — a
-fixed, code-owned argv the operator cannot alter — so `argv[4]`/`argv[5]`
-deterministically name the queried hostname and record type, and `+short`
-output is either one address per line (A/AAAA) or one hostname per line
-(CNAME chain). `HTTPS_HEADER_LOOKUP` (`curl --head`) has no corresponding
-structured asset kind to populate yet (no `SERVICE`/`ENDPOINT` kind exists,
-and v0.3.407 deliberately deferred them) and is out of scope here — one
-honest ingestion path, not several shallow ones.
-
-Scope: exactly one ingestion slice — `DNS_RECORD_LOOKUP` (`A`/`AAAA` only;
-`CNAME`-type runs are rejected with a bounded, explicit "not supported by
-this milestone's hostname-to-address relation" reason, since no
-hostname-to-hostname relation kind exists to honestly hold a CNAME chain
-result) — into the existing v0.3.407 Asset Inventory. No new store, no new
-canonicalization, no new relation kind, no external tool parser.
-
-1. `ResearchAssetProvenanceKind` gains exactly one new member,
-   `KALI_OPERATION_RESULT`, naming the one real automated producer that now
-   exists (a completed, authorization-gated `ResearchKaliOperationRun`).
-
-2. `ResearchAssetObservationRecord` and `ResearchAssetRelationRecord` each
-   gain one new additive field, `source_operation_digest: str | None = None`
-   (a valid Kali operation digest per `is_kali_operation_digest`). Fail-closed
-   1:1 binding enforced in `__post_init__`: `None` exactly when
-   `provenance is OPERATOR_AUTHORED` (unchanged default for every existing
-   and future hand-authored record — a human cannot forge automated
-   provenance by supplying a digest), and a valid digest string exactly when
-   `provenance is KALI_OPERATION_RESULT` (an automated result cannot
-   masquerade as `OPERATOR_AUTHORED` by omitting it). `ResearchAssetRelationRecord`
-   also gains a `provenance: ResearchAssetProvenanceKind` field for the same
-   reason: a `RESOLVES_TO` relation created from a real DNS result must not
-   read as an unattributed/implicitly-operator claim.
-
-3. `JsonFileResearchAssetInventoryStore` schema version 1 -> 2 (the v0.3.405
-   `evidence_type` precedent: `_OBSERVATION_FIELDS`/`_RELATION_FIELDS`
-   become version-aware field sets; a v1-persisted record without
-   `provenance`/`source_operation_digest` on relations, or without
-   `source_operation_digest` on observations, decodes as
-   `OPERATOR_AUTHORED`/`None` with no backfill or inference of a false
-   automated origin; a v2 record missing either field fails closed;
-   round-trip lossless at v2).
-
-4. A new pure parser, `src/research/ResearchDnsLookupResultParser.py`:
-   validates the run is `DNS_RECORD_LOOKUP` with record type `A`/`AAAA`
-   (else raises `ResearchError`, whole run rejected — not silently
-   downgraded); re-derives the queried hostname from `argv[4]` and
-   re-canonicalizes it through the existing `canonical_dns_hostname` (never
-   trusting the Kali preview's own simpler `.lower().removesuffix(".")`
-   normalization as sufficient — v0.3.406's own discipline is that only
-   `_dns_name`/`canonical_dns_hostname` may decide hostname identity);
-   classifies each `stdout_lines` entry as either a valid address of the
-   record type's IP version (accepted) or not (rejected, with a bounded,
-   generic, literal reason string — the raw line is preserved as inert data
-   for operator display, never interpreted); an empty result (NXDOMAIN, zero
-   lines, `exit_code == 0`) yields zero accepted rows, not an error; a
-   nonzero `exit_code` or `timed_out=True` yields zero accepted rows with an
-   explicit "operation did not complete successfully" reason. Deterministic,
-   no network, no process, no model call — a pure function over an
-   already-completed `ResearchKaliOperationRun`.
-
-5. A new application-service method (or a small dedicated service reusing
-   `ResearchAssetInventoryApplicationService`'s existing `record_observation`/
-   `record_relation`, both of which already accept a `provenance` parameter
-   today — extended with the new `source_operation_digest` parameter) that:
-   previews the parse result with zero durable writes (mirroring
-   `kali_operation_evidence_candidate_for_run`'s side-effect-free
-   discipline); on explicit confirmation, records exactly one `HOSTNAME`
-   observation for the queried hostname (once per run, not once per
-   resolved address) and one `IP_ADDRESS` observation plus one `RESOLVES_TO`
-   relation per accepted resolved address, all stamped
-   `provenance=KALI_OPERATION_RESULT` and `source_operation_digest=run
-   .operation_digest`; always uses `run.program_id` (never a
-   separately-supplied program ID), so program isolation is structural, not
-   a runtime check that could be bypassed.
-
-6. Desktop: extend `KaliOperationPanel.py`'s existing
-   "1. Önizle → 2. Onayla → 3. Çalıştır" flow with a 4th step, available only
-   after a successful `DNS_RECORD_LOOKUP` run, that previews then (after an
-   explicit confirm dialog, matching the existing `messagebox.askyesno`
-   pattern used by steps 2/3) records the resulting observations/relations,
-   displaying created/already-known assets, created relations, and rejected
-   rows in the same bounded output pane.
-
-Non-goals: no `HTTPS_HEADER_LOOKUP` ingestion (deferred — no structured
-asset kind exists for header data yet); no `CNAME`-chain ingestion (no
-hostname-to-hostname relation kind exists); no new relation kind; no new
-asset kind; no external tool parser (Nmap/httpx/etc.); no vulnerability,
-hypothesis, or finding of any kind; no change to
-`KaliOperationRunApplicationService`, `KaliOperationAuthorizationApplicationService`,
-`ScopedPublicHttpsUrlValidator`, or any authorization/execution gate; no
-widening of the DNS lookup operation's own authority; no automatic ingestion
-(every write requires the same explicit operator confirmation discipline as
-every other durable write in this codebase); no new active recon capability
-of any kind.
-
-Security implications: the central property is that a recon result can
-never manufacture authority. hypatia-security must independently verify: no
-code path lets a `KALI_OPERATION_RESULT` observation, its derived asset, or
-its `RESOLVES_TO` relation reach `ResearchTargetScope`/scope resolution as
-anything but the existing unchanged live `resolve_hostname`/
-`resolve_addresses` call; a forged `source_operation_digest` cannot be
-supplied for `OPERATOR_AUTHORED` provenance and vice versa; program
-isolation holds because the ingestion path only ever uses `run.program_id`;
-the parser performs no network/process/shell operation and a rejected line's
-raw text is only ever displayed as inert data, never interpreted as an
-instruction, intent, or control-flow input (adversarial test required); a
-replayed identical run cannot create authority or a duplicate canonical
-asset (only allowed to grow observations, per v0.3.407's existing
-identity-derivation semantics); restart/reload cannot resurrect a stale
-scope reading.
-
-Epistemic implications: provenance must be literal and non-forgeable in
-both directions. A DNS result is a fact about what was queried and returned
-at one point in time — it does not imply reachability, ownership, or
-current truth. `RESOLVES_TO` continues to carry no scope semantics of its
-own.
-
-Persistence implications: `JsonFileResearchAssetInventoryStore` schema
-version 1 -> 2, additive only, legacy v1 records decode honestly with no
-inferred automated origin.
-
-Restart/replay implications: identical to v0.3.407's existing
-derived-projection guarantees, now proven under a second provenance kind:
-`assets_for_program` still recomputes deterministically; replay cannot
-create a duplicate canonical asset or new authority.
-
-Authority/budget/target/credential implications: none created, widened, or
-restored. This milestone only teaches the existing, unchanged Asset
-Inventory to honestly attribute one more class of already-authorized,
-already-executed, already-reviewed process result.
-
-Test strategy: valid-result parsing (A and AAAA); hostname/IP
-canonicalization reuse (differential against `canonical_dns_hostname`/
-`canonicalize_asset_value`, proving no second normalization implementation
-was created); dedup (replaying the same run does not duplicate the
-canonical asset); provenance round-trip and forgery rejection in both
-directions; program isolation (a run bound to program A cannot write into
-program B); scope integration (ingested asset resolves fresh against the
-active policy, ingestion itself never changes the resolution); restart
-survival; malformed/unsupported rows (non-address lines, wrong IP version,
-nonzero exit code, timeout, CNAME-type run) all reject/skip safely; at least
-one adversarial untrusted-tool-output case proving a shell/instruction-like
-line remains inert data; a no-network/no-process proof that the ingestion
-stage itself starts no process and opens no socket; legacy v1 store
-round-trip; full canonical gates green.
+QA review (Codex, 2026-09-25): verified authentication-state/label binding,
+same-program evidence membership, cross-program and unknown-reference
+refusal without a write, append-only atomic persistence and restart, strict
+schema decoding, immutable records, bounded Brain intents, desktop dispatch
+and rendering, Bootstrap/window reachability, and no HTTP-evidence mutation.
+Focused integrated suite: 32 tests, OK. Full canonical gates: 7067 tests, OK
+(skipped=3); Black, Ruff, MyPy, and `git diff --check` clean.
 
 ## Historical scope: v0.3.407 (delivered)
 

@@ -899,7 +899,13 @@ model: a new, narrowly-scoped `ResearchHttpEvidenceRecord` consuming one
 already-completed, already-authorized `HTTPS_HEADER_LOOKUP` operation
 result, with a deterministic content-derived `evidence_id` making
 replay-safety structural and a live, never-cached scope-resolution view
-threaded through every read. In every case, ingestion can only ever reach
+threaded through every read. v0.3.410 delivered item 4's descriptive
+foundation: an append-only, operator-authored `ResearchSessionContextRecord`
+can label already-recorded same-program HTTP evidence as historically
+unauthenticated or authenticated under a human-readable identity label. The
+record is inert history, contains no credential or reusable live session, and
+cannot perform a login/request or create authority; credential and secret
+boundaries remain item 5. In every case, ingestion can only ever reach
 scope resolution through the existing, unchanged, live `resolve_hostname`/
 `resolve_addresses`, and no path lets discovered evidence manufacture
 authority.

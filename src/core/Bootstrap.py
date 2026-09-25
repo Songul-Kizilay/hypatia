@@ -118,6 +118,9 @@ from research.JsonFileResearchProgramScopeRevisionStore import (
     JsonFileResearchProgramScopeRevisionStore,
 )
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.JsonFileResearchSessionContextStore import (
+    JsonFileResearchSessionContextStore,
+)
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
 )
@@ -586,6 +589,7 @@ class Bootstrap:
         vulnerability_graph_store = self._vulnerability_graph_store()
         asset_inventory_store = self._asset_inventory_store()
         http_evidence_store = self._http_evidence_store()
+        session_context_store = self._session_context_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -689,6 +693,7 @@ class Bootstrap:
             vulnerability_graph_store=vulnerability_graph_store,
             asset_inventory_store=asset_inventory_store,
             http_evidence_store=http_evidence_store,
+            session_context_store=session_context_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -1000,6 +1005,15 @@ class Bootstrap:
         )
         return JsonFileResearchHttpEvidenceStore(
             run_path.with_name("research_http_evidence.json")
+        )
+
+    def _session_context_store(self) -> JsonFileResearchSessionContextStore:
+        """Create the inert operator-authored research session context store."""
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchSessionContextStore(
+            run_path.with_name("research_session_contexts.json")
         )
 
     def _kali_operation_authorization_store(
