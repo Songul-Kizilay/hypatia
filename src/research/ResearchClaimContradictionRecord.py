@@ -6,9 +6,18 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchSensitiveInputPolicy import ResearchSensitiveInputPolicy
 
 MAX_CLAIM_CONTRADICTION_EVIDENCE = 40
 MAX_CLAIM_CONTRADICTION_NOTE_CHARACTERS = 2_000
+
+_SENSITIVE_INPUT_POLICY = ResearchSensitiveInputPolicy()
+
+
+def _refuse_sensitive_input(value: str, label: str) -> None:
+    sensitive_class = _SENSITIVE_INPUT_POLICY.classify(value)
+    if sensitive_class.refused:
+        raise ResearchError(f"{label} was refused as {sensitive_class.operator_label}.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +57,7 @@ class ResearchClaimContradictionRecord:
         normalized_note = self.note.strip()
         if len(normalized_note) > MAX_CLAIM_CONTRADICTION_NOTE_CHARACTERS:
             raise ResearchError("Research claim contradiction note is too long.")
+        _refuse_sensitive_input(normalized_note, "Research claim contradiction note")
         if (
             not isinstance(self.recorded_at, datetime)
             or self.recorded_at.utcoffset() is None

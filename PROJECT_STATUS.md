@@ -2,10 +2,25 @@
 
 ## Runtime Version
 
-`v0.3.412 (Genesis)`
+`v0.3.413 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.413 widens the same v0.3.411 secret-ingress refusal floor to
+three more persisted, operator-authored `note` fields:
+`ResearchClaimContradictionRecord`, `ResearchComparisonReviewRecord`, and
+`ResearchEvidenceRecord` (all in the research-run model). The same,
+unmodified `ResearchSensitiveInputPolicy` now refuses a credential-bearing
+URL, an authentication/cookie header form, private-key material, an
+explicit secret assignment, or a high-confidence token format in any of
+these notes before it can be persisted, with the same fixed-category-only
+refusal message and fail-closed load behavior established by v0.3.411. The
+`ResearchEvidenceRecord.excerpt` field (raw fetched source content, not
+operator input) is deliberately left unclassified. This closes the last of
+the operator-authored `note` fields named as residual future work when
+v0.3.412 shipped; it introduces no new secret storage, credential
+reference/use, login, network/process capability, or authority.
 
 Version v0.3.412 widens the v0.3.411 secret-ingress refusal floor to the two
 operator-authored free-text `note` fields in the Bug Bounty Asset Inventory

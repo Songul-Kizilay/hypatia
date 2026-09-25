@@ -11,6 +11,7 @@ from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
 from research.ResearchClaimContradictionRecord import (
+    MAX_CLAIM_CONTRADICTION_EVIDENCE,
     ResearchClaimContradictionRecord,
 )
 from research.ResearchClaimContradictionWritePreview import (
@@ -115,6 +116,82 @@ class ResearchClaimContradictionRecordTests(unittest.TestCase):
                 note="These claims conflict.",
                 allowed=True,
                 reason="Allowed.",
+            )
+
+    def test_note_refuses_every_explicit_sensitive_category(self) -> None:
+        sentinel = "distinct-secret-sentinel"
+        cases = {
+            "credential_bearing_url": f"https://user:{sentinel}@example.test",
+            "authentication_header": f"Authorization: Bearer {sentinel}",
+            "private_key_material": "-----BEGIN PRIVATE KEY-----",
+            "secret_assignment": f"password={sentinel}",
+            "token_format": "sk-abcdefghijklmnopqrstuvwxyz123456",
+        }
+        for category, value in cases.items():
+            with self.subTest(category=category):
+                with self.assertRaises(ResearchError) as raised:
+                    ResearchClaimContradictionRecord(
+                        "contradiction-1",
+                        ("claim-1", "claim-2"),
+                        ("evidence-1", "evidence-2"),
+                        value,
+                        self.now,
+                    )
+                self.assertIn("refused as", str(raised.exception))
+                self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_benign_near_miss_note_still_constructs(self) -> None:
+        benign = "No password was used and no token was recorded."
+        record = ResearchClaimContradictionRecord(
+            "contradiction-1",
+            ("claim-1", "claim-2"),
+            ("evidence-1", "evidence-2"),
+            benign,
+            self.now,
+        )
+        self.assertEqual(record.note, benign)
+
+    def test_non_note_fields_are_unaffected_by_the_new_check(self) -> None:
+        """Differential regression: non-note accept/refuse outcomes on
+        existing fixtures are byte-for-byte unchanged by adding note
+        classification.
+        """
+        record = ResearchClaimContradictionRecord(
+            " contradiction-2 ",
+            (" claim-1 ", " claim-2 "),
+            (" evidence-1 ", " evidence-2 "),
+            "The reported outcomes conflict under the same condition.",
+            self.now,
+        )
+        self.assertEqual(record.contradiction_id, "contradiction-2")
+        self.assertEqual(record.claim_ids, ("claim-1", "claim-2"))
+        self.assertEqual(record.evidence_ids, ("evidence-1", "evidence-2"))
+        with self.assertRaises(ResearchError):
+            ResearchClaimContradictionRecord(
+                "",
+                ("claim-1", "claim-2"),
+                ("evidence-1", "evidence-2"),
+                "Note.",
+                self.now,
+            )
+        with self.assertRaises(ResearchError):
+            ResearchClaimContradictionRecord(
+                "contradiction-1",
+                ("claim-1", "claim-1"),
+                ("evidence-1", "evidence-2"),
+                "Note.",
+                self.now,
+            )
+        too_many_evidence = tuple(
+            f"evidence-{index}" for index in range(MAX_CLAIM_CONTRADICTION_EVIDENCE + 1)
+        )
+        with self.assertRaises(ResearchError):
+            ResearchClaimContradictionRecord(
+                "contradiction-1",
+                ("claim-1", "claim-2"),
+                too_many_evidence,
+                "Note.",
+                self.now,
             )
 
     def test_history_preview_rejects_unknown_claim_references(self) -> None:

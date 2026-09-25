@@ -8,9 +8,18 @@ from hashlib import sha256
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
+from research.ResearchSensitiveInputPolicy import ResearchSensitiveInputPolicy
 
 MAX_EVIDENCE_EXCERPT_CHARACTERS = 1_000
 MAX_EVIDENCE_NOTE_CHARACTERS = 1_000
+
+_SENSITIVE_INPUT_POLICY = ResearchSensitiveInputPolicy()
+
+
+def _refuse_sensitive_input(value: str, label: str) -> None:
+    sensitive_class = _SENSITIVE_INPUT_POLICY.classify(value)
+    if sensitive_class.refused:
+        raise ResearchError(f"{label} was refused as {sensitive_class.operator_label}.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +64,7 @@ class ResearchEvidenceRecord:
             raise ResearchError("Research evidence chunk fingerprint is invalid.")
         if len(self.note.strip()) > MAX_EVIDENCE_NOTE_CHARACTERS:
             raise ResearchError("Research evidence note is too long.")
+        _refuse_sensitive_input(self.note.strip(), "Research evidence note")
         if (
             not isinstance(self.recorded_at, datetime)
             or self.recorded_at.utcoffset() is None

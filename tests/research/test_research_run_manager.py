@@ -1795,6 +1795,90 @@ class ResearchRunManagerTests(unittest.TestCase):
                 "Too late.",
             )
 
+    def test_add_evidence_secret_shaped_note_is_refused_without_write_or_reflection(
+        self,
+    ) -> None:
+        sentinel = "distinct-manager-secret"
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        before = self.manager.get(run.run_id)
+        saves_before = len(self.store.saved)
+
+        with self.assertRaises(ResearchError) as raised:
+            self.manager.add_evidence(
+                run.run_id,
+                Chunk("document-1", 0, "Evidence.", chunk_id="chunk-1"),
+                f"Authorization: Bearer {sentinel}",
+            )
+
+        self.assertIn("refused as", str(raised.exception))
+        self.assertNotIn(sentinel, str(raised.exception))
+        self.assertEqual(self.manager.get(run.run_id), before)
+        self.assertEqual(self.manager.get(run.run_id).evidence, before.evidence)
+        self.assertEqual(len(self.store.saved), saves_before)
+
+    def test_record_claim_contradiction_secret_shaped_note_is_refused_without_write(
+        self,
+    ) -> None:
+        sentinel = "distinct-manager-secret"
+        run = self.manager.create("Compare claims")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="chunk-1"),
+            "Relevant.",
+        ).evidence[-1]
+        first = self.manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim one.",
+            ResearchEpistemicState.UNKNOWN,
+        ).claims[-1]
+        second = self.manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim two.",
+            ResearchEpistemicState.UNKNOWN,
+        ).claims[-1]
+        before = self.manager.get(run.run_id)
+        saves_before = len(self.store.saved)
+
+        with self.assertRaises(ResearchError) as raised:
+            self.manager.record_claim_contradiction(
+                run.run_id,
+                [first.claim_id, second.claim_id],
+                f"password={sentinel}",
+            )
+
+        self.assertIn("refused as", str(raised.exception))
+        self.assertNotIn(sentinel, str(raised.exception))
+        self.assertEqual(self.manager.get(run.run_id), before)
+        self.assertEqual(
+            self.manager.get(run.run_id).claim_contradictions,
+            before.claim_contradictions,
+        )
+        self.assertEqual(len(self.store.saved), saves_before)
+
     def test_claim_write_rejects_invalid_inputs_before_mutation(self) -> None:
         run = self.manager.create("Question")
         self.manager.add_source(

@@ -21,6 +21,10 @@ from research.ResearchClaimContradictionRecord import (
     ResearchClaimContradictionRecord,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchComparisonReviewRecord import (
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
@@ -1248,6 +1252,207 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.path.write_text(json.dumps(document), encoding="utf-8")
         with self.assertRaisesRegex(ResearchError, "evidence must match"):
             self.store.load()
+
+    def test_malicious_evidence_note_fails_closed_on_load(self) -> None:
+        sentinel = "distinct-persisted-secret"
+        run = ResearchRun(
+            run_id="run-1",
+            question="Question",
+            status=ResearchRunStatus.COLLECTING,
+            sources=(
+                ResearchSourceRecord(
+                    document_id="document-1",
+                    url="https://example.com/1",
+                    title="Source 1",
+                    content_type="text/plain",
+                    fetched_at=self.now,
+                    added_at=self.now,
+                ),
+            ),
+            failures=(),
+            created_at=self.now,
+            updated_at=self.now,
+            evidence=(
+                ResearchEvidenceRecord(
+                    evidence_id="evidence-1",
+                    source_document_id="document-1",
+                    chunk_id="chunk-1",
+                    chunk_index=0,
+                    excerpt="Evidence.",
+                    excerpt_truncated=False,
+                    chunk_sha256="a" * 64,
+                    note="Relevant.",
+                    recorded_at=self.now,
+                ),
+            ),
+        )
+        self.store.save([run])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["evidence"][0]["note"] = f"password={sentinel}"
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError) as raised:
+            self.store.load()
+
+        self.assertIn("refused as", str(raised.exception))
+        self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_malicious_claim_contradiction_note_fails_closed_on_load(self) -> None:
+        sentinel = "distinct-persisted-secret"
+        sources = tuple(
+            ResearchSourceRecord(
+                f"document-{number}",
+                f"https://example.com/{number}",
+                f"Source {number}",
+                "text/plain",
+                self.now,
+                self.now,
+            )
+            for number in (1, 2)
+        )
+        evidence = tuple(
+            ResearchEvidenceRecord(
+                f"evidence-{number}",
+                f"document-{number}",
+                f"chunk-{number}",
+                0,
+                f"Evidence {number}.",
+                False,
+                str(number) * 64,
+                "Relevant.",
+                self.now,
+            )
+            for number in (1, 2)
+        )
+        claims = tuple(
+            ResearchClaimRecord(
+                f"claim-{number}",
+                f"Claim {number}.",
+                ResearchEpistemicState.LIKELY,
+                ResearchClaimConfidence.MEDIUM,
+                (f"document-{number}",),
+                (f"evidence-{number}",),
+                self.now,
+            )
+            for number in (1, 2)
+        )
+        contradiction = ResearchClaimContradictionRecord(
+            "contradiction-1",
+            ("claim-1", "claim-2"),
+            ("evidence-1", "evidence-2"),
+            "The claims conflict.",
+            self.now,
+        )
+        run = ResearchRun(
+            "run-1",
+            "Compare claims",
+            ResearchRunStatus.COLLECTING,
+            sources,
+            (),
+            self.now,
+            self.now,
+            evidence=evidence,
+            claims=claims,
+            claim_contradictions=(contradiction,),
+        )
+        self.store.save([run])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["claim_contradictions"][0][
+            "note"
+        ] = f"-----BEGIN PRIVATE KEY-----{sentinel}"
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError) as raised:
+            self.store.load()
+
+        self.assertIn("refused as", str(raised.exception))
+        self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_malicious_comparison_review_note_fails_closed_on_load(self) -> None:
+        sentinel = "distinct-persisted-secret"
+        sources = (
+            ResearchSourceRecord(
+                document_id="document-1",
+                url="https://example.com/1",
+                title="Source 1",
+                content_type="text/plain",
+                fetched_at=self.now,
+                added_at=self.now,
+            ),
+            ResearchSourceRecord(
+                document_id="document-2",
+                url="https://example.com/2",
+                title="Source 2",
+                content_type="text/plain",
+                fetched_at=self.now,
+                added_at=self.now,
+            ),
+        )
+        evidence = tuple(
+            ResearchEvidenceRecord(
+                evidence_id=f"evidence-{number}",
+                source_document_id=f"document-{number}",
+                chunk_id=f"chunk-{number}",
+                chunk_index=0,
+                excerpt=f"Evidence {number}.",
+                excerpt_truncated=False,
+                chunk_sha256=str(number) * 64,
+                note="Relevant.",
+                recorded_at=self.now,
+            )
+            for number in (1, 2)
+        )
+        assessments = tuple(
+            ResearchSourceAssessmentRecord(
+                assessment_id=f"assessment-{number}",
+                source_document_id=f"document-{number}",
+                evidence_ids=(f"evidence-{number}",),
+                text=f"Assessment {number}",
+                recorded_at=self.now,
+            )
+            for number in (1, 2)
+        )
+        note = ResearchSourceComparisonNoteRecord(
+            note_id="note-1",
+            source_document_ids=("document-1", "document-2"),
+            evidence_ids=("evidence-1", "evidence-2"),
+            assessment_ids=("assessment-1", "assessment-2"),
+            text="Tentative relation: agreement.",
+            recorded_at=self.now,
+        )
+        review = ResearchComparisonReviewRecord(
+            review_id="review-1",
+            note_id="note-1",
+            evidence_ids=("evidence-1", "evidence-2"),
+            decision=ResearchComparisonReviewDecision.SUPPORTED,
+            note="Checked both excerpts.",
+            recorded_at=self.now,
+        )
+        run = ResearchRun(
+            run_id="run-1",
+            question="Compare sources",
+            status=ResearchRunStatus.COLLECTING,
+            sources=sources,
+            failures=(),
+            created_at=self.now,
+            updated_at=self.now,
+            evidence=evidence,
+            assessments=assessments,
+            comparison_notes=(note,),
+            comparison_reviews=(review,),
+        )
+        self.store.save([run])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["comparison_reviews"][0][
+            "note"
+        ] = f"Authorization: Bearer {sentinel}"
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError) as raised:
+            self.store.load()
+
+        self.assertIn("refused as", str(raised.exception))
+        self.assertNotIn(sentinel, str(raised.exception))
 
     def test_invalid_json_is_reported_without_exposing_raw_content(self) -> None:
         self.path.write_text("{secret", encoding="utf-8")

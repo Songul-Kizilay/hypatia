@@ -242,6 +242,73 @@ class ComparisonReviewRecordTests(unittest.TestCase):
             self.assertEqual(store.load()[0].comparison_reviews, ())
 
 
+class ComparisonReviewNoteSensitiveInputRefusalTests(unittest.TestCase):
+    """`ResearchComparisonReviewRecord.note` refuses the same explicit
+    secret-bearing forms `ResearchSessionContextRecord`/
+    `ResearchAssetObservationRecord` already refuse, using the same fixed
+    category-only message discipline: the raised error names only the
+    refused category, never the candidate value.
+    """
+
+    SENTINEL = "distinct-secret-sentinel"
+
+    def _cases(self) -> dict[str, str]:
+        sentinel = self.SENTINEL
+        return {
+            "credential_bearing_url": f"https://user:{sentinel}@example.test",
+            "authentication_header": f"Authorization: Bearer {sentinel}",
+            "private_key_material": "-----BEGIN PRIVATE KEY-----",
+            "secret_assignment": f"password={sentinel}",
+            "token_format": "sk-abcdefghijklmnopqrstuvwxyz123456",
+        }
+
+    def test_note_refuses_every_explicit_category(self) -> None:
+        for category, value in self._cases().items():
+            with self.subTest(category=category):
+                with self.assertRaises(ResearchError) as raised:
+                    replace(review(), note=value)
+                self.assertIn("refused as", str(raised.exception))
+                self.assertNotIn(self.SENTINEL, str(raised.exception))
+
+    def test_benign_near_miss_note_still_constructs(self) -> None:
+        benign = "No password was used and no token was recorded."
+        value = ResearchComparisonReviewRecord(
+            review_id="review-1",
+            note_id="note-1",
+            evidence_ids=("evidence-1", "evidence-2"),
+            decision=Decision.SUPPORTED,
+            note=benign,
+            recorded_at=NOW,
+        )
+        self.assertEqual(value.note, benign)
+
+    def test_non_note_fields_are_unaffected_by_the_new_check(self) -> None:
+        """Differential regression: non-note accept/refuse outcomes on
+        non-default fixtures are byte-for-byte unchanged by adding note
+        classification.
+        """
+        value = review(
+            "review-9",
+            Decision.NOT_SUPPORTED,
+            note_id="note-9",
+            evidence_ids=("evidence-9", "evidence-10", "evidence-11"),
+        )
+        self.assertEqual(value.review_id, "review-9")
+        self.assertEqual(value.note_id, "note-9")
+        self.assertEqual(
+            value.evidence_ids, ("evidence-9", "evidence-10", "evidence-11")
+        )
+        self.assertIs(value.decision, Decision.NOT_SUPPORTED)
+        with self.assertRaises(ResearchError):
+            replace(review(), note_id="")
+        with self.assertRaises(ResearchError):
+            replace(review(), evidence_ids=())
+        with self.assertRaises(ResearchError):
+            replace(review(), decision="supported")  # type: ignore[arg-type]
+        with self.assertRaisesRegex(ResearchError, "cannot supersede itself"):
+            review("review-2", supersedes="review-2")
+
+
 class ComparisonReviewManagerTests(unittest.TestCase):
     def manager(self) -> ResearchRunManager:
         manager = ResearchRunManager(clock=lambda: LATER)
