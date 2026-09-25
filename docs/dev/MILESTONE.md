@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Claim-contradiction preview secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | 37c756808a058d882583521bbfceeaf8ce3ed2d3 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer (single-function fix, per the constitution's "no subagent for trivial, single-file work"), release; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, no findings |
 | Blockers | none |
 
@@ -1752,6 +1752,41 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.414: claim-contradiction preview secret boundary |
+| SHA | 528a49ee58f733dbdd95e19e9da4b5044dff3420 |
+| Linux desktop CI (exact-SHA) | success (run 36162047327) |
+| Windows desktop CI (exact-SHA) | success (run 36162051082) |
+| Status | delivered |
+| PR | #393, MERGED 2026-09-25T16:49:58Z, standard merge commit `742ab846a4e6680069053130fdfc3d1a7344eb21` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 528a49e origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`cdc0125`, `528a49e`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, hypatia-lead): PR #393 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (v0.3.413's documentation-only ledger reconciliation `37c7568`, the
+v0.3.414 milestone lock `b7cb2fd`, and release commit `528a49e`) across
+exactly 8 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered
+checks passed against the release SHA (`test-build-smoke` on both runners).
+The standard merge commit is on `origin/main`; all three carried commits are
+reachable from it; the release author remains Songül Kızılay via GitHub
+noreply email; the working tree is clean except this ledger reconciliation.
+
+Note: this bounded release closes a gap hypatia-security flagged during
+v0.3.413's review — a secret-shaped claim-contradiction note was echoed
+verbatim into a preview Brain response before any sensitivity check ran.
+The existing, unmodified `ResearchSensitiveInputPolicy` now runs inside
+`ResearchRunManager._normalize_claim_contradiction_note`, the one
+normalization step shared by both the preview and record paths, so both
+refuse identically before a preview can be constructed with a secret-shaped
+note. `record_claim_contradiction` is now doubly protected. Implemented
+directly by hypatia-lead as single-function, single-file work. Security and
+QA review both PASS with no findings; QA's mutation testing empirically
+confirmed the double-protection claim. Full canonical gates: 7105 tests, OK
+(skipped=3); Black, Ruff, MyPy, and `git diff --check` clean.
+
+## Historical scope: v0.3.413 (delivered)
 
 | Field | Value |
 | --- | --- |
