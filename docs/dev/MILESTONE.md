@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Research session-context secret-ingress boundary foundation (Bug Bounty foundation, step 6) |
 | Base SHA | 2d2ac281768a4739911b00f5e6eed4bc79c12519 |
-| Status | release |
-| Specialists | Codex: bounded implementation, security/QA review, gates, and guarded delivery |
+| Status | delivered |
+| Specialists | Codex: bounded implementation, security/QA review, gates, exact-SHA and PR CI, standard merge, and post-merge reconciliation |
 | Blockers | none |
 
 Rationale: bounded continuation after delivered v0.3.410 and roadmap item 5,
@@ -1414,6 +1414,40 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.411: research session-context secret-ingress boundary foundation |
+| SHA | c5ab6ce3aa7304636fe8c23cda1b080d15c11891 |
+| Linux desktop CI (exact-SHA) | success (run 36111047175) |
+| Windows desktop CI (exact-SHA) | success (run 36111051142) |
+| Status | delivered |
+| PR | #390, MERGED 2026-09-25T08:16:19Z, standard merge commit `a2f0918a90fe2ce8766c0625b627ad5224ee3bd6` |
+| origin/main reachability | verified: `git merge-base --is-ancestor c5ab6ce origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`980e508`, `c5ab6ce`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, Codex): PR #390 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (v0.3.410's documentation-only ledger reconciliation `2d2ac28`, the
+v0.3.411 milestone lock `4972dbb`, and release commit `c5ab6ce`) across exactly
+13 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered checks
+passed against the release SHA (Linux run 36111594883, Windows run
+36111594992). The standard merge commit is on `origin/main`; all three carried
+commits are reachable from it; the release author remains Songül Kızılay via
+GitHub noreply email; the working tree is clean except this ledger
+reconciliation.
+
+Note: this bounded release rejects a conservative, explicit set of
+high-confidence secret-bearing forms before research session-context
+persistence. Refusals expose only fixed categories and never echo the
+candidate value. It introduces no secret storage, credential use, login,
+network/process capability, or scope, target, budget, credential, or execution
+authority. Security review found and fixed one credential-bearing URL
+completeness gap; QA verified all categories, benign near misses, no-write
+refusal, malicious-store fail-closed behavior, restart behavior, and desktop
+reachability. Full canonical gates: 7079 tests, OK (skipped=3); Black, Ruff,
+MyPy, and `git diff --check` clean.
+
+## Historical scope: v0.3.410 (delivered)
 
 | Field | Value |
 | --- | --- |
