@@ -56,6 +56,13 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchHttpEvidenceForTargetView import (
+    ResearchHttpEvidenceForTargetView,
+)
+from research.ResearchHttpEvidenceIngestion import (
+    ResearchHttpEvidenceIngestionPreview,
+    ResearchHttpEvidenceIngestionResult,
+)
 from research.ResearchKaliOperationAuthorization import (
     ResearchKaliOperationAuthorization,
 )
@@ -259,3 +266,10 @@ class BrainResponse:
     research_asset_relations: tuple[ResearchAssetRelationRecord, ...] = ()
     research_asset_dns_ingestion_preview: ResearchAssetDnsIngestionPreview | None = None
     research_asset_dns_ingestion_result: ResearchAssetDnsIngestionResult | None = None
+    research_http_evidence_ingestion_preview: (
+        ResearchHttpEvidenceIngestionPreview | None
+    ) = None
+    research_http_evidence_ingestion_result: (
+        ResearchHttpEvidenceIngestionResult | None
+    ) = None
+    research_http_evidence_for_target: ResearchHttpEvidenceForTargetView | None = None

@@ -2,6 +2,81 @@
 
 All notable project changes are recorded here.
 
+## [0.3.409] - 2026-09-25
+
+### Added
+
+- Ingestion of the result of one already-completed, already-authorized Kali
+  `HTTPS_HEADER_LOOKUP` operation (`curl --head`, fixed to path `/`, port
+  443, method `HEAD`) into a new, narrowly-scoped, immutable
+  `ResearchHttpEvidenceRecord` — a distinct concept from an Asset Inventory
+  observation, not a sixth `ResearchAssetKind`. `ResearchHttpEvidenceProvenanceKind`
+  is a new `StrEnum` with exactly one member, `KALI_OPERATION_RESULT`, kept
+  as its own narrow type rather than reusing `ResearchAssetProvenanceKind` so
+  an unrelated future asset-provenance member can never silently become
+  "valid" HTTP evidence provenance.
+- Evidence fields populated only where this one producer honestly knows
+  them: `scheme`/`port`/`path`/`request_method` are literal code-owned facts
+  (`"https"`/`443`/`"/"`/`"HEAD"`); `request_headers_observed` and
+  `response_body_observed` are hard-pinned `False` (curl --head never
+  reveals what it sent, and a HEAD request structurally has no body) as
+  explicit booleans, so "not observed" can never be silently read as
+  "observed and empty"; `response_status_code` is `None` exactly when the
+  operation did not complete successfully, never a guessed `200`.
+  `evidence_id` is not a random UUID — it is a deterministic digest
+  (`http_evidence_id`) over `(program_id, operation_digest, exit_code,
+  timed_out, stdout_lines)`, mirroring `kali_operation_preview_digest`'s
+  canonical-JSON-then-sha256 pattern: re-ingesting a byte-identical
+  completed run always yields the same ID (no duplicate event), while a
+  genuinely different response from the same reviewed operation yields a
+  different ID and is preserved as a separate event.
+- A new pure parser, `ResearchHttpsHeaderLookupResultParser`, that
+  re-derives hostname/port from the reviewed command plan's `--resolve`
+  argv element (never trusts a cached field) and validates the URL argument
+  matches exactly. A missing or malformed status line on an otherwise-
+  successful run is rejected outright (a structural contract break, not a
+  partial result to guess at); header lines split on the first `:` only
+  (values can legitimately contain `:`); a line with no `:` becomes an
+  inert rejected line, never interpreted; blank lines are silently skipped.
+- A new atomic `JsonFileResearchHttpEvidenceStore` (schema version 1),
+  modeled on the v0.3.408 asset-inventory store's flat-list shape.
+- A new `ResearchHttpEvidenceApplicationService`: a side-effect-free preview
+  mirroring `kali_operation_evidence_candidate_for_run`'s discipline;
+  recording computes the deterministic `evidence_id` first and returns the
+  existing record unchanged on an exact replay (idempotent, not a separate
+  dedup pass); always uses `run.program_id` (never externally supplied),
+  making program isolation structural; a read-only `evidence_for_target`
+  intent; and a live, never-cached scope-resolution view (dispatching to
+  the unchanged `ResearchTargetScope.resolve_hostname`) threaded through
+  both the preview and record responses, so the rendered message always
+  reflects the current policy, not a stored/stale reading.
+- Desktop: a 4th-step-style ingest flow on the existing Kali operation
+  panel for successful `HTTPS_HEADER_LOOKUP` runs, gated by the same
+  explicit confirm-dialog discipline as the DNS ingestion flow, with
+  sensitive header values (`authorization`/`cookie`/`set-cookie`/
+  `proxy-authorization`) masked in both the confirm dialog and the
+  rendered Brain response message — the true value is always what is
+  persisted, only the display is redacted.
+
+### Boundaries
+
+- No body capture (structurally impossible for a HEAD response — explicit
+  `response_body_observed=False`), no cookie/session/credential-replay
+  model, no new `AssetKind`/relation kind, no vulnerability/hypothesis/
+  finding of any kind, no widening of any existing authorization/execution
+  gate, no automatic Asset Inventory observation creation as a side effect
+  (HTTP evidence references a canonical hostname value inline and resolves
+  scope by calling the unchanged resolver directly).
+- Security review independently verified: no path lets evidence (including
+  a `Location` header) reach scope resolution except the existing unchanged
+  live resolver; provenance/digest binding cannot be forged; program
+  isolation is structural; untrusted header/body content can only ever
+  become inert stored/displayed data, never an instruction or intent; no
+  new socket/process capability; replay cannot duplicate or fabricate an
+  event; sensitive values are redacted at every render site, verified by
+  tests proving redaction survives into the actual `BrainResponse.message`,
+  not just the desktop dialog.
+
 ## [0.3.408] - 2026-09-25
 
 ### Added

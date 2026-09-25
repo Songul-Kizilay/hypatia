@@ -14,11 +14,194 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
-| Milestone | Bug Bounty recon result ingestion + normalization foundation (Bug Bounty foundation, step 3) |
-| Base SHA | 45cc713a9a6532db159eb3ff208ca405c452324a |
-| Status | release |
-| Specialists | hypatia-epistemics: sole implementer (continuity with v0.3.407's identity/provenance domain, and the new files span `src/research/` + the `src/cognition/` service layer as one cohesive feature); hypatia-security: independent review complete (PASS, no findings); hypatia-qa: independent review complete (two test-coverage gaps found and closed with mutation-verified tests); hypatia-release: delivering v0.3.408 |
+| Milestone | HTTP evidence model foundation (Bug Bounty foundation, step 4) |
+| Base SHA | 8d9ad591af32b9320718532bfce3aa186bf957bb |
+| Status | planned |
+| Specialists | hypatia-runtime: sole implementer (result-parsing/service/persistence/desktop-wiring shape); hypatia-security and hypatia-qa: independent review, sequentially, after integration; hypatia-release: delivers after both reviews and full canonical gates are green |
 | Blockers | none |
+
+Rationale: user-directed continuation of the bounded Bug Bounty Researcher
+roadmap immediately after v0.3.408 (recon result ingestion), independently
+re-verified reachable from `origin/main` with green exact-SHA CI before this
+milestone was locked. Step 3 of the roadmap's own recorded order ("HTTP
+Evidence model", `docs/Roadmap/Master_Roadmap.md:863`).
+
+Discovery (hypatia-lead, direct repository inspection, 2026-09-24): the only
+existing HTTP-related Kali operation is `HTTPS_HEADER_LOOKUP`
+(`ResearchKaliOperationPreview.kali_operation_command_plan`), whose
+code-owned, reviewed argv is always exactly `curl --head --silent
+--show-error --max-time 10 --proto =https --resolve
+<hostname>:443:<resolved_address> https://<hostname>/` — a fixed HEAD
+request to path `/` on port 443, never operator-influenceable beyond the
+hostname/address already bound by the reviewed preview. A real invocation
+of this exact command was run directly (`curl --head ... https://example.com/`)
+to ground the parser design in the real output shape: one status line
+(`HTTP/1.1 200 OK`), followed by one `Name: Value` header line per header,
+preserving original casing and duplicates, with no body (a HEAD request
+structurally never returns one). No existing type, store, service, or
+redaction utility for HTTP evidence exists anywhere in `src/`
+(`ResearchSourceEvidenceType` from v0.3.405 is an unrelated concept — a
+citation-quality dimension on research *source* assessments, not HTTP
+response evidence).
+
+Scope: consume this existing, already-authorized, already-executed
+operation's result — no new active HTTP capability of any kind.
+
+1. `src/research/ResearchHttpHeaderRecord.py` (or colocated): a frozen
+   `(name: str, value: str)` pair preserving one observed header exactly as
+   received — original casing, no case-folding, no dedup-by-name (repeated
+   headers of the same name are legitimate and must both survive).
+
+2. `src/research/ResearchHttpEvidenceProvenanceKind.py`: a new `StrEnum`
+   with exactly one member, `KALI_OPERATION_RESULT` — this milestone builds
+   no operator-authored HTTP evidence path, so a second member would exist
+   only for symmetry (the exact discipline `ResearchAssetProvenanceKind`
+   itself was built under in v0.3.407). Kept as its own narrow type rather
+   than reusing `ResearchAssetProvenanceKind`, since HTTP evidence is a
+   distinct concept from an asset observation and conflating the two
+   enums would let an unrelated future asset-provenance member silently
+   become "valid" HTTP evidence provenance.
+
+3. `src/research/ResearchHttpEvidenceRecord.py`: a frozen, append-only
+   record. Fields populated only where this producer honestly knows them —
+   `target_kind`/`target_canonical_value` (always `HOSTNAME`, canonicalized
+   through the existing `canonical_dns_hostname`, never a second
+   normalization), `scheme`/`port`/`path`/`request_method` (always
+   `"https"`/`443`/`"/"`/`"HEAD"` for this producer — literal, code-owned
+   facts, not guesses), `request_headers_observed: bool` (always `False` —
+   `curl --head` never reveals what it actually sent), `response_status_code:
+   int | None` (`None` exactly when the operation did not complete
+   successfully — never a guessed `200`), `response_headers: tuple[
+   ResearchHttpHeaderRecord, ...]`, `response_body_observed: bool` (always
+   `False` — a HEAD request structurally has no body; explicit rather than
+   an empty-body implication), `provenance`, `source_operation_digest`
+   (`is_kali_operation_digest`-validated, required — no operator-authored
+   variant exists to bind `None` against), `recorded_at`. `evidence_id` is
+   **not** a random UUID: it is a deterministic digest over
+   `(program_id, operation_digest, exit_code, timed_out, stdout_lines)` —
+   the exact content that makes two ingestions "the same observed event."
+   This makes replay-safety structural: re-ingesting a byte-identical
+   completed run always yields the same `evidence_id`; a later, genuinely
+   different response (even from the same reviewed operation) yields a
+   different one and is preserved as a separate event, never merged or
+   overwritten.
+
+4. `src/research/ResearchHttpsHeaderLookupResultParser.py`: a pure function
+   over an already-completed `ResearchKaliOperationRun`. Re-derives
+   hostname/port/path from the reviewed command plan's argv (never trusts
+   a cached field) and validates the URL argument matches exactly — the
+   same "never trust, re-derive and check" discipline the v0.3.408 DNS
+   parser used. On a nonzero exit code or timeout: zero headers, `None`
+   status, one bounded rejection reason — never a guessed status. On
+   success: the first line must be a valid `HTTP/<version> <code> <reason>`
+   status line (curl's own contract for a completed HEAD request) or the
+   whole run is rejected outright (a structural contract violation, not a
+   partial result to guess at); each remaining non-blank line must contain
+   `:` to become a header, otherwise it is preserved as an inert rejected
+   line with a bounded literal reason (never interpreted). No network, no
+   process, no shell.
+
+5. New atomic `JsonFileResearchHttpEvidenceStore` (schema version 1),
+   modeled on `JsonFileResearchAssetInventoryStore`'s flat-list shape:
+   strict field-set validation, bounded record/header counts and string
+   lengths, duplicate-`evidence_id` refusal at the document-validation
+   layer (defense in depth; the service layer is what makes replay
+   idempotent, see below).
+
+6. New `ResearchHttpEvidenceApplicationService` (`src/cognition/`):
+   `preview_http_evidence_ingestion`/`record_http_evidence_ingestion`
+   (side-effect-free preview mirroring `kali_operation_evidence_candidate_
+   for_run`'s discipline; record computes `evidence_id` first and, if that
+   exact event is already stored, returns the existing record without a
+   second write — the idempotent-replay path), and a read-only
+   `evidence_for_target(program_id, canonical_hostname)` plus a live,
+   never-persisted scope-resolution view exactly mirroring
+   `ResearchAssetInventoryApplicationService.current_scope_resolution`'s
+   dispatch into the unchanged `ResearchTargetScope.resolve_hostname`. Two
+   new Brain intents wired through `CognitiveEngine`/`DesktopController`
+   following the existing intent-dispatch pattern exactly, plus one
+   read-only inspection intent for "what HTTP evidence exists for this
+   target" with zero side effects.
+
+7. Desktop: extend the existing Kali operation panel with the smallest
+   useful surface — after a successful `HTTPS_HEADER_LOOKUP` run, an
+   ingest step (mirroring v0.3.408's 4th DNS-ingestion step and its
+   explicit confirm-dialog discipline) showing status code, headers
+   (sensitive header **values** masked at display — name and presence
+   still shown — for a small literal set: `authorization`, `cookie`,
+   `set-cookie`, `proxy-authorization`; the true value is still what is
+   persisted, only the rendered summary redacts it), body-not-observed
+   state, producer/provenance, and current live scope resolution.
+
+Non-goals: no new active HTTP capability (no new curl/network invocation,
+no redirect following, no crawling, no probing beyond the one already-
+reviewed HEAD request); no body capture (structurally absent from a HEAD
+response — explicitly represented as `response_body_observed=False`, never
+built toward in this slice); no new `AssetKind`/`AssetRelationKind` (URL/
+SERVICE/ENDPOINT remain deferred exactly as v0.3.407 left them); no
+automatic Asset Inventory observation creation as an ingestion side effect
+(HTTP evidence references a canonical hostname value inline and resolves
+scope by calling the same unchanged resolver directly — it does not write
+into the Asset Inventory store, keeping this milestone's write surface to
+one store); no cookie/session/credential-replay model of any kind; no
+vulnerability, hypothesis, or finding of any kind; no widening of any
+existing authorization/execution gate.
+
+Security implications: HTTP evidence must never become authority. hypatia-
+security must independently verify: no code path lets an evidence record's
+target, status, or any header (including `Location`) reach
+`ResearchTargetScope`/scope resolution as anything but the existing
+unchanged live `resolve_hostname` call; a redirect `Location` header is
+descriptive text only — no automatic follow, no target enrollment, no new
+`RESOLVES_TO`-style relation; provenance/digest binding cannot be forged
+(wrong operation kind, wrong digest, wrong program all rejected); program
+isolation is structural (evidence always keyed by `run.program_id`); every
+header/status/body value is untrusted display data with zero instruction
+authority, including adversarial content (`X-Instruction: ...`, a JSON body
+string that never exists as body content here since bodies are never
+captured); no new socket/process capability in the parser/service/read
+path; replay cannot duplicate an identical event nor fabricate a new one;
+sensitive header values are not casually rendered in desktop summaries.
+
+Epistemic implications: unknown must remain unknown — a failed/timed-out
+operation yields `None` status and zero headers, never a guessed `200` or a
+fabricated empty-body claim where "not observed" is the honest statement.
+Request-side facts this producer cannot see (actual sent headers) are
+represented by an explicit `request_headers_observed=False` flag, never a
+synthesized browser-like header set.
+
+Persistence implications: one new store, schema version 1 (new store, no
+legacy version to carry); strictly append-only; deterministic
+content-derived `evidence_id` makes replay-safety structural rather than a
+separate dedup mechanism.
+
+Restart/replay implications: evidence, provenance, and target association
+survive reload unchanged; no request is ever replayed by loading or
+re-ingesting; a byte-identical replayed run yields the same `evidence_id`
+and is not duplicated; a genuinely different response is preserved as a
+separate event; scope is always recomputed live, never restored as a
+persisted grant.
+
+Authority/budget/target/credential implications: none created, widened, or
+restored. This milestone adds a purely descriptive evidence layer over an
+already-existing, already-reviewed, already-executed operation result; the
+only real authority gates (the Kali authorization chain, program-scope
+revision validity) remain completely untouched.
+
+Test strategy: model tests (valid record construction, malformed/unknown
+field rejection, immutability); parser tests (real curl-shaped success,
+non-zero exit/timeout, malformed status line, malformed header line,
+adversarial header/redirect content stays inert, bounded input, unsupported
+argv shape fails closed); provenance tests (forged digest/operation-kind/
+program rejected in both directions, round-trip preserved); asset-identity
+differential test against `canonical_dns_hostname`; program isolation;
+scope-integration (fresh resolution, never cached, ingestion itself never
+changes it); restart round-trip; duplication tests (identical replay
+produces one event, a genuinely different response from the same operation
+produces two); a no-network/no-process proof; desktop reachability with a
+real constructed widget; 3-5 targeted mutation checks (digest-binding
+bypass, redirect-implies-authorization, unknown-body-collapsed-to-empty,
+cross-program leak, instruction-like header treated as an intent).
 
 Rationale: user-directed continuation of the bounded Bug Bounty Researcher
 roadmap immediately after v0.3.407 (Asset Inventory + canonical asset
@@ -1537,6 +1720,57 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.408: bug bounty recon result ingestion + normalization foundation |
+| SHA | 1a4848cfbcc1618ad3b6f12343e7bc0e4607929b |
+| Linux desktop CI (exact-SHA) | success (run 36065535503) |
+| Windows desktop CI (exact-SHA) | success (run 36065539096) |
+| Status | delivered |
+| PR | #387, MERGED 2026-09-24T22:17:33Z, standard merge commit `8821844120b01fd61545b1423d90206df0b48e42` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 1a4848c origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`4b82d71`, `1a4848c`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-24, hypatia-lead): PR #387 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 3 commits (the documentation-only ledger-reconciliation commit
+`45cc713`, the documentation-only milestone-lock commit `8611955`, and
+v0.3.408's release commit `1a4848c`), 25 files, `mergeStateStatus: CLEAN`,
+both PR-triggered checks `pass` (Linux run 36066052863, Windows run
+36066052904). Merged with `gh pr merge 387 --merge --subject "..."` — no
+interactive confirmation prompt. Author/committer identity on the release
+commit confirmed unchanged (Songül Kızılay via GitHub noreply email).
+Working tree clean after merge except this ledger edit.
+
+Note: step 3 of the bounded Bug Bounty Researcher roadmap (recon result
+ingestion). The Lead discovered that Hypatia's existing `DNS_RECORD_LOOKUP`
+Kali operation (`dig +short`) was the only existing result producer
+structured enough to ingest honestly, locked a bounded slice (A/AAAA only,
+no CNAME, no `HTTPS_HEADER_LOOKUP`), and dispatched hypatia-epistemics as
+sole implementer. That implementation agent was interrupted mid-verification
+(an accidental ESC) after substantially completing the full slice — new
+`KALI_OPERATION_RESULT` provenance kind, a fail-closed 1:1
+provenance/digest-forgery binding shared by observations and relations, a
+store schema v1->v2 bump with honest legacy decode, a pure DNS-result parser,
+service/Brain/desktop wiring, and 172 passing tests. The Lead inspected the
+full diff directly (not re-derived), ran two of its own mutation checks
+(forged-provenance-digest binding, disabled IP-version check; both caught),
+then continued the lifecycle. Independent hypatia-security review found no
+authority widening across all 8 reviewed properties (scope reachability,
+provenance forgery, program isolation, untrusted-tool-output handling, no
+new execution/network capability, replay/restart, schema/persistence,
+no new credential/budget/target primitive) — zero defects. Independent
+hypatia-qa review mutation-tested 3 of 12 checklist points and found two
+genuine test-coverage gaps: no multi-address test proved the hostname
+observation is recorded exactly once per run rather than once per resolved
+address (a named milestone acceptance criterion), and the parser's `argv`
+shape guard was untested dead code from a test-coverage perspective. Both
+were closed by the Lead directly with new mutation-verified tests (174
+tests passing afterward). Full canonical gates on the integrated tree: 6929
+tests, `OK (skipped=3)`, Black (2 files reformatted first), Ruff, MyPy,
+`git diff --check` all clean.
+
+## Historical scope: v0.3.407 (delivered)
 
 | Field | Value |
 | --- | --- |

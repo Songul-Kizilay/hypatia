@@ -2,10 +2,47 @@
 
 ## Runtime Version
 
-`v0.3.408 (Genesis)`
+`v0.3.409 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.409 consumes the result of one already-completed,
+already-authorized Kali `HTTPS_HEADER_LOOKUP` operation (`curl --head`,
+fixed to path `/`, port 443, method `HEAD`) into a new, narrowly-scoped,
+immutable `ResearchHttpEvidenceRecord` — a distinct concept from an Asset
+Inventory observation, not a new `ResearchAssetKind`. The new
+`ResearchHttpEvidenceProvenanceKind` `StrEnum` has exactly one member,
+`KALI_OPERATION_RESULT`, kept separate from `ResearchAssetProvenanceKind` on
+purpose. Evidence fields are populated only where this one producer honestly
+knows them: `scheme`/`port`/`path`/`request_method` are literal code-owned
+facts (`"https"`/`443`/`"/"`/`"HEAD"`); `request_headers_observed` and
+`response_body_observed` are hard-pinned `False`; `response_status_code` is
+`None` exactly when the operation did not complete successfully. `evidence_id`
+is a deterministic digest (`http_evidence_id`) over `(program_id,
+operation_digest, exit_code, timed_out, stdout_lines)`, mirroring
+`kali_operation_preview_digest`'s canonical-JSON-then-sha256 pattern, making
+replay-safety structural rather than a separate dedup pass. A new pure
+parser, `ResearchHttpsHeaderLookupResultParser`, re-derives hostname/port
+from the reviewed command plan's `--resolve` argv element and validates the
+URL argument matches exactly; a missing/malformed status line on an
+otherwise-successful run is rejected outright, header lines split on the
+first `:` only, and a line with no `:` becomes an inert rejected line. A new
+atomic `JsonFileResearchHttpEvidenceStore` (schema version 1) and a new
+`ResearchHttpEvidenceApplicationService` (side-effect-free preview,
+idempotent-on-replay recording always keyed by `run.program_id`, a read-only
+`evidence_for_target` intent, and a live, never-cached scope-resolution view
+dispatching to the unchanged `ResearchTargetScope.resolve_hostname`) round
+out the model. Desktop gains a 4th-step-style ingest flow on the existing
+Kali operation panel for successful `HTTPS_HEADER_LOOKUP` runs, gated by the
+same explicit confirm-dialog discipline as the DNS ingestion flow, with
+sensitive header values (`authorization`/`cookie`/`set-cookie`/
+`proxy-authorization`) masked in both the confirm dialog and the rendered
+Brain response message. No body capture, no cookie/session/credential-replay
+model, no new `AssetKind`/relation kind, no vulnerability/hypothesis/finding
+of any kind, no widening of any existing authorization/execution gate, and
+no automatic Asset Inventory observation creation as a side effect. This is
+step 4 of Hypatia's bounded Bug Bounty Researcher roadmap.
 
 Version v0.3.408 ingests the result of one already-completed,
 already-authorized Kali `DNS_RECORD_LOOKUP` operation (`dig +short`,

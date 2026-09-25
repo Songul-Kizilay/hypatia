@@ -105,6 +105,9 @@ from research.JsonFileResearchAssetInventoryStore import (
 from research.JsonFileResearchExecutionStore import (
     JsonFileResearchExecutionStore,
 )
+from research.JsonFileResearchHttpEvidenceStore import (
+    JsonFileResearchHttpEvidenceStore,
+)
 from research.JsonFileResearchKaliOperationAuthorizationStore import (
     JsonFileResearchKaliOperationAuthorizationStore,
 )
@@ -582,6 +585,7 @@ class Bootstrap:
         program_scope_revision_store = self._program_scope_revision_store()
         vulnerability_graph_store = self._vulnerability_graph_store()
         asset_inventory_store = self._asset_inventory_store()
+        http_evidence_store = self._http_evidence_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -684,6 +688,7 @@ class Bootstrap:
             program_scope_revision_store=program_scope_revision_store,
             vulnerability_graph_store=vulnerability_graph_store,
             asset_inventory_store=asset_inventory_store,
+            http_evidence_store=http_evidence_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -986,6 +991,15 @@ class Bootstrap:
         )
         return JsonFileResearchAssetInventoryStore(
             run_path.with_name("research_asset_inventory.json")
+        )
+
+    def _http_evidence_store(self) -> JsonFileResearchHttpEvidenceStore:
+        """Create the Kali-derived HTTP evidence store."""
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchHttpEvidenceStore(
+            run_path.with_name("research_http_evidence.json")
         )
 
     def _kali_operation_authorization_store(
