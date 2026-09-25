@@ -97,7 +97,9 @@ class ResearchAssetInventoryPanel:
         ttk.Entry(observation_frame, textvariable=self.observation_value).grid(
             row=1, column=1, sticky="ew", padx=8, pady=2
         )
-        ttk.Label(observation_frame, text="Note").grid(row=2, column=0, sticky="w")
+        ttk.Label(observation_frame, text="Note (never enter a secret)").grid(
+            row=2, column=0, sticky="w"
+        )
         ttk.Entry(observation_frame, textvariable=self.observation_note).grid(
             row=2, column=1, sticky="ew", padx=8, pady=2
         )
@@ -137,7 +139,9 @@ class ResearchAssetInventoryPanel:
         ttk.Entry(relation_frame, textvariable=self.relation_related_value).grid(
             row=1, column=3, sticky="ew", padx=8, pady=2
         )
-        ttk.Label(relation_frame, text="Note").grid(row=2, column=0, sticky="w")
+        ttk.Label(relation_frame, text="Note (never enter a secret)").grid(
+            row=2, column=0, sticky="w"
+        )
         ttk.Entry(relation_frame, textvariable=self.relation_note).grid(
             row=2, column=1, columnspan=3, sticky="ew", padx=8, pady=2
         )

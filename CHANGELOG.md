@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.412] - 2026-09-25
+
+### Added
+
+- `ResearchAssetObservationRecord.note` and `ResearchAssetRelationRecord.note`
+  now run through the existing, unmodified `ResearchSensitiveInputPolicy`
+  before persistence, closing the gap where these two operator-authored
+  free-text fields (from v0.3.407) predated v0.3.411's secret-ingress
+  boundary.
+- The desktop Asset Inventory panel's observation and relation note fields
+  carry a "never enter a secret" caption, matching the Session Contexts
+  panel.
+
+### Security
+
+- Refusals name only the fixed category, never the candidate note text. A
+  malicious persisted asset-inventory document with a secret-shaped note
+  fails closed on load with the store's existing typed error. Benign
+  descriptive notes are unaffected; no other field, schema, or authority
+  changed.
+
 ## [0.3.411] - 2026-09-25
 
 ### Added

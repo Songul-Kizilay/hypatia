@@ -773,6 +773,51 @@ class JsonFileResearchAssetInventoryStoreTests(unittest.TestCase):
         with self.assertRaises(ResearchError):
             self.store.load()
 
+    # -- secret-shaped persisted note fails closed without reflection -------
+
+    def test_secret_shaped_persisted_observation_note_fails_closed(self) -> None:
+        sentinel = "distinct-persisted-secret"
+        self._write_raw(
+            self._document_with(
+                note="-----BEGIN PRIVATE KEY-----\n" f"{sentinel}\n-----END-----"
+            )
+        )
+
+        with self.assertRaises(ResearchError) as raised:
+            self.store.load()
+
+        self.assertIn("refused as", str(raised.exception))
+        self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_secret_shaped_persisted_relation_note_fails_closed(self) -> None:
+        sentinel = "distinct-persisted-secret"
+        payload = {
+            "schema_version": 2,
+            "observations": [],
+            "relations": [
+                {
+                    "relation_id": "relation-1",
+                    "program_id": "program-a",
+                    "source_kind": "hostname",
+                    "source_value": "example.test",
+                    "related_kind": "ip_address",
+                    "related_value": "93.184.216.34",
+                    "kind": "resolves_to",
+                    "provenance": "operator_authored",
+                    "note": f"Authorization: Bearer {sentinel}",
+                    "recorded_at": RECORDED.isoformat(),
+                    "source_operation_digest": None,
+                }
+            ],
+        }
+        self._write_raw(payload)
+
+        with self.assertRaises(ResearchError) as raised:
+            self.store.load()
+
+        self.assertIn("refused as", str(raised.exception))
+        self.assertNotIn(sentinel, str(raised.exception))
+
     def test_the_declared_ceilings_are_the_reviewed_values(self) -> None:
         """Pin the real limits; every other test patches them down to 1."""
         self.assertEqual(MAX_ASSET_OBSERVATIONS, 5_000)

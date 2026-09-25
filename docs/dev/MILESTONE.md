@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Asset Inventory note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | eb3219f302b09f67354e81e07a0bb0df8eb41b72 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-release: delivery |
+| Status | release |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-lead closed one moderate test-coverage gap; hypatia-lead: release |
 | Blockers | none |
 
 Rationale: bounded continuation of roadmap item 5, "Credential + secret
@@ -91,6 +91,36 @@ save-a-malicious-note-directly-to-disk-then-load fail-closed test on
 test; a desktop-reachability check that the new caption text is present on
 the panel; impacted suites focused first, full canonical gates once at
 release.
+
+Security review (hypatia-security, 2026-09-25): PASS, no findings.
+Independently confirmed `ResearchSensitiveInputPolicy.py` is byte-for-byte
+unmodified; the refusal fires only on `note` in both records' `__post_init__`
+(every other field's validation traced and confirmed unchanged); the raised
+`ResearchError` carries only the fixed category label, never the candidate
+text, matching `ResearchSessionContextRecord`'s existing pattern exactly; the
+refusal is unconditionally reached on both the service write path and the
+store's load-time reconstruction path; no code path reflects a refused note
+value into a Brain response or log; the new store fault-injection tests write
+raw bytes to disk bypassing the service, a genuine test; no authority, scope,
+target, budget, or credential primitive was touched; the desktop change is
+label-text-only.
+
+QA review (hypatia-qa, 2026-09-25): found one moderate gap — the locked scope
+promised a service-layer regression test mirroring v0.3.411's own
+`test_secret_shaped_input_is_refused_without_write_or_reflection`, and none
+had been added to `tests/cognition/test_research_asset_inventory_application_service.py`.
+Mutation testing on both record files (temporarily disabling each
+`_refuse_sensitive_input` call) proved the existing record-level tests are
+non-vacuous; all five explicit `ResearchSensitiveInputClass` categories are
+genuinely exercised for both fields; the benign near-miss and store
+fault-injection tests are real. hypatia-lead closed the gap directly: added
+`SensitiveInputRefusalPersistsNothingTests` (two tests, mirroring the
+v0.3.411 service-test pattern exactly) to the application-service test file,
+and a desktop-reachability assertion for the new caption text to
+`tests/desktop/test_research_asset_inventory_panel.py` (the second,
+cosmetic gap QA also named). Re-run after the fix: 143 focused tests across
+the four impacted test modules, OK; `black`/`ruff`/`mypy`/`git diff --check`
+clean on all seven changed files.
 
 ## Historical scope: v0.3.411 (delivered)
 

@@ -32,12 +32,21 @@ from core.Exceptions import ResearchError
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetProvenanceKind import ResearchAssetProvenanceKind
 from research.ResearchKaliOperationPreview import is_kali_operation_digest
+from research.ResearchSensitiveInputPolicy import ResearchSensitiveInputPolicy
 from research.ResearchTargetScope import canonical_dns_hostname
 
 MAX_ASSET_OBSERVATION_ID_CHARACTERS = 200
 MAX_ASSET_PROGRAM_ID_CHARACTERS = 200
 MAX_ASSET_CANONICAL_VALUE_CHARACTERS = 253
 MAX_ASSET_OBSERVATION_NOTE_CHARACTERS = 2_000
+
+_SENSITIVE_INPUT_POLICY = ResearchSensitiveInputPolicy()
+
+
+def _refuse_sensitive_input(value: str, label: str) -> None:
+    sensitive_class = _SENSITIVE_INPUT_POLICY.classify(value)
+    if sensitive_class.refused:
+        raise ResearchError(f"{label} was refused as {sensitive_class.operator_label}.")
 
 
 def canonicalize_asset_value(kind: ResearchAssetKind, value: str) -> str:
@@ -137,8 +146,10 @@ class ResearchAssetObservationRecord:
         self._require_already_canonical(self.kind, self.canonical_value)
         if not isinstance(self.note, str):
             raise ResearchError("Asset observation note is invalid.")
-        if len(self.note.strip()) > MAX_ASSET_OBSERVATION_NOTE_CHARACTERS:
+        note = self.note.strip()
+        if len(note) > MAX_ASSET_OBSERVATION_NOTE_CHARACTERS:
             raise ResearchError("Asset observation note is too long.")
+        _refuse_sensitive_input(note, "Asset observation note")
         if (
             not isinstance(self.recorded_at, datetime)
             or self.recorded_at.utcoffset() is None
@@ -148,7 +159,7 @@ class ResearchAssetObservationRecord:
             )
         object.__setattr__(self, "observation_id", observation_id)
         object.__setattr__(self, "program_id", program_id)
-        object.__setattr__(self, "note", self.note.strip())
+        object.__setattr__(self, "note", note)
 
     @staticmethod
     def _require_already_canonical(kind: ResearchAssetKind, value: str) -> None:

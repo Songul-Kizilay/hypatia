@@ -633,6 +633,95 @@ class VocabularyBoundaryTests(unittest.TestCase):
         )
 
 
+class AssetNoteSensitiveInputRefusalTests(unittest.TestCase):
+    """Both `note` fields refuse the same explicit secret-bearing forms
+    `ResearchSessionContextRecord` already refuses (v0.3.411), using the same
+    fixed category-only message discipline: the raised error names only the
+    refused category, never the candidate value.
+    """
+
+    SENTINEL = "distinct-secret-sentinel"
+
+    def _cases(self) -> dict[str, str]:
+        sentinel = self.SENTINEL
+        return {
+            "credential_bearing_url": f"https://user:{sentinel}@example.test",
+            "authentication_header": f"Authorization: Bearer {sentinel}",
+            "private_key_material": "-----BEGIN PRIVATE KEY-----",
+            "secret_assignment": f"password={sentinel}",
+            "token_format": "sk-abcdefghijklmnopqrstuvwxyz123456",
+        }
+
+    def test_observation_note_refuses_every_explicit_category(self) -> None:
+        for category, value in self._cases().items():
+            with self.subTest(category=category):
+                with self.assertRaises(ResearchError) as raised:
+                    observation(note=value)
+                self.assertIn("refused as", str(raised.exception))
+                self.assertNotIn(self.SENTINEL, str(raised.exception))
+
+    def test_relation_note_refuses_every_explicit_category(self) -> None:
+        for category, value in self._cases().items():
+            with self.subTest(category=category):
+                with self.assertRaises(ResearchError) as raised:
+                    relation(note=value)
+                self.assertIn("refused as", str(raised.exception))
+                self.assertNotIn(self.SENTINEL, str(raised.exception))
+
+    def test_benign_near_miss_notes_still_construct(self) -> None:
+        benign = "No password was used and no token was recorded."
+        self.assertEqual(observation(note=benign).note, benign)
+        self.assertEqual(relation(note=benign).note, benign)
+
+    def test_non_note_fields_are_unaffected_by_the_new_check(self) -> None:
+        """Differential regression: canonical_value/id accept-or-refuse
+        outcomes on existing fixtures are byte-for-byte unchanged by adding
+        note classification — only `note` gained a new refusal path.
+        """
+        host = observation()
+        self.assertEqual(host.canonical_value, "example.test")
+        address = observation(kind=ResearchAssetKind.IP_ADDRESS, value="93.184.216.34")
+        self.assertEqual(address.canonical_value, "93.184.216.34")
+        with self.assertRaisesRegex(ResearchError, "not canonical"):
+            ResearchAssetObservationRecord(
+                observation_id="observation-1",
+                program_id="program-a",
+                kind=ResearchAssetKind.HOSTNAME,
+                canonical_value="EXAMPLE.TEST.",
+                provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
+                note="",
+                recorded_at=RECORDED,
+            )
+        with self.assertRaises(ResearchError):
+            observation(observation_id="x" * 201)
+        with self.assertRaises(ResearchError):
+            observation(program_id="x" * 201)
+
+        link = relation()
+        self.assertEqual(link.source_value, "example.test")
+        self.assertEqual(link.related_value, "93.184.216.34")
+        with self.assertRaisesRegex(ResearchError, "relate an asset to itself"):
+            relation(
+                source_kind=ResearchAssetKind.HOSTNAME,
+                source_value="example.test",
+                related_kind=ResearchAssetKind.HOSTNAME,
+                related_value="example.test",
+            )
+        with self.assertRaisesRegex(ResearchError, "not canonical"):
+            ResearchAssetRelationRecord(
+                relation_id="relation-1",
+                program_id="program-a",
+                source_kind=ResearchAssetKind.HOSTNAME,
+                source_value="EXAMPLE.TEST.",
+                related_kind=ResearchAssetKind.IP_ADDRESS,
+                related_value="93.184.216.34",
+                kind=ResearchAssetRelationKind.RESOLVES_TO,
+                provenance=ResearchAssetProvenanceKind.OPERATOR_AUTHORED,
+                note="",
+                recorded_at=RECORDED,
+            )
+
+
 class DerivedAssetTypeGuardTests(unittest.TestCase):
     def test_a_plain_string_kind_is_refused_despite_strenum_equality(self) -> None:
         """`ResearchAssetKind` is a `StrEnum`, so "hostname" compares equal.

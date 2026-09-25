@@ -903,6 +903,75 @@ class RefusalLeavesNothingPersistedTests(unittest.TestCase):
         self.assertEqual(len(service.relations_for_program("program-a")), 1)
 
 
+class SensitiveInputRefusalPersistsNothingTests(unittest.TestCase):
+    """A secret-shaped note is refused through the service without a write.
+
+    Mirrors `test_research_session_context_service.py`'s
+    `test_secret_shaped_input_is_refused_without_write_or_reflection`: the
+    refused category reaches the caller, the candidate secret text never
+    does, and the refusal is caught before any store write.
+    """
+
+    def test_observation_note_secret_is_refused_without_write_or_reflection(
+        self,
+    ) -> None:
+        sentinel = "distinct-service-secret"
+        service = make_service()
+
+        response = service.process_observation_record(
+            BrainRequest(
+                message="record",
+                metadata={
+                    "intent": RESEARCH_ASSET_OBSERVATION_RECORD_INTENT,
+                    "program_id": "program-a",
+                    "kind": ResearchAssetKind.HOSTNAME,
+                    "value": "example.test",
+                    "note": f"Authorization: Bearer {sentinel}",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_asset_observation_record)
+        self.assertIn("authentication or cookie header material", response.message)
+        self.assertNotIn(sentinel, response.message)
+        self.assertEqual(service.assets_for_program("program-a"), ())
+
+    def test_relation_note_secret_is_refused_without_write_or_reflection(
+        self,
+    ) -> None:
+        sentinel = "distinct-relation-secret"
+        service = make_service()
+        service.record_observation(
+            "program-a", ResearchAssetKind.HOSTNAME, "example.test"
+        )
+        service.record_observation(
+            "program-a", ResearchAssetKind.IP_ADDRESS, "93.184.216.34"
+        )
+
+        response = service.process_relation_record(
+            BrainRequest(
+                message="record",
+                metadata={
+                    "intent": RESEARCH_ASSET_RELATION_RECORD_INTENT,
+                    "program_id": "program-a",
+                    "source_kind": ResearchAssetKind.HOSTNAME,
+                    "source_value": "example.test",
+                    "related_kind": ResearchAssetKind.IP_ADDRESS,
+                    "related_value": "93.184.216.34",
+                    "kind": ResearchAssetRelationKind.RESOLVES_TO,
+                    "note": f"Authorization: Bearer {sentinel}",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_asset_relation_record)
+        self.assertIn("authentication or cookie header material", response.message)
+        self.assertNotIn(sentinel, response.message)
+        self.assertEqual(service.relations_for_program("program-a"), ())
+
+
 class ProvenanceIsAlwaysOperatorAuthoredTests(unittest.TestCase):
     def test_request_metadata_cannot_choose_the_recorded_provenance(self) -> None:
         """Provenance is attested by the path, never by the request.
