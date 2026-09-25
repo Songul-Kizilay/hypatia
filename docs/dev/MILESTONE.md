@@ -14,6 +14,86 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Claim-contradiction preview secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
+| Base SHA | 37c756808a058d882583521bbfceeaf8ce3ed2d3 |
+| Status | implementation |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 5, "Credential + secret
+boundary", after delivered v0.3.413. hypatia-security's v0.3.413 review
+flagged one genuine, pre-existing, out-of-scope gap: repository-grounded
+re-check (2026-09-25, hypatia-lead) confirms
+`ResearchRunManager.preview_claim_contradiction_write` normalizes its `note`
+argument via the shared static method `_normalize_claim_contradiction_note`
+(length/emptiness only — no sensitivity check), then constructs a
+`ResearchClaimContradictionWritePreview` carrying that raw note, which
+`ResponseComposer.research_claim_contradiction_write_preview_success` embeds
+verbatim as `f"User note: {preview.note}"` (`ResponseComposer.py:4991`) in
+the rendered Brain response — before any confirmation, before the
+`__post_init__`-level check v0.3.413 added to the persisted
+`ResearchClaimContradictionRecord` ever runs. An operator previewing a
+secret-shaped contradiction note today sees it echoed straight back in the
+preview response, which is exactly what the v0.3.411 security invariant
+("the candidate secret is never interpolated into an exception, Brain
+response, log, or stored record") forbids elsewhere. Confirmed by direct
+read: no equivalent preview object exists for evidence
+(`add_evidence`/`ResearchEvidenceRecord` writes directly, no preview) or for
+comparison reviews (`record_comparison_review` also writes directly, no
+preview) — `ResearchClaimContradictionWritePreview` is the only note-carrying
+preview object in the research-run model, so this is a single, complete fix,
+not a partial one.
+
+Scope: add the same `_refuse_sensitive_input` check (reusing the existing,
+unmodified `ResearchSensitiveInputPolicy`) directly inside
+`ResearchRunManager._normalize_claim_contradiction_note` — the one static
+method already shared by both `preview_claim_contradiction_write` and
+`record_claim_contradiction`, so a secret-shaped note is refused identically
+and immediately for both, before a preview object can ever be constructed
+with it. Add a test proving `preview_claim_contradiction_write` raises
+`ResearchError` (never reflecting the candidate value) for a secret-shaped
+note, to `ResearchRunManager`'s existing test file; add a cognition-layer
+test proving the `research_claim_contradiction_write_preview` Brain intent
+returns a failure response that never reflects the sentinel, to
+`CognitiveEngine`'s existing test coverage for that intent.
+
+Non-goals: no change to `ResearchSensitiveInputPolicy`,
+`ResearchClaimContradictionRecord`, `ResearchComparisonReviewRecord`,
+`ResearchEvidenceRecord`, or any other already-covered record; no change to
+`ResearchClaimContradictionWritePreview.py` itself (the dataclass is
+unchanged — it is simply never constructed with a refused note now); no
+change to `CognitiveEngine.py`'s existing generic
+`"Research claim contradiction could not be validated or saved."` catch-all
+failure message (it already discards every contradiction-refusal reason
+uniformly, including this one — verified, not assumed); no new preview type,
+no widening to any other domain's preview object beyond the one confirmed to
+exist; no secret storage, encryption, masking-and-keeping, credential
+reference/use, login, network/process capability, or any authority/budget/
+target/execution change.
+
+Security invariants: identical to v0.3.411/v0.3.412/v0.3.413 — classification
+stays deterministic, local, bounded, and side-effect-free; a refusal exposes
+only its fixed category (or, at the `CognitiveEngine` layer, the existing
+generic catch-all — never the candidate value) in the raised error or any
+Brain response; `record_claim_contradiction` remains doubly protected (this
+normalization check plus the existing `__post_init__` check on the persisted
+record); benign notes remain unaffected at both the preview and record paths.
+
+Test strategy: a manager-level test proving `preview_claim_contradiction_write`
+refuses a secret-shaped note without constructing a preview and without
+reflecting the candidate text; a differential test proving a benign note
+still previews and records exactly as before; a cognition-layer test proving
+the Brain-level preview intent returns a failure response without the
+sentinel; confirm the existing v0.3.413 `record_claim_contradiction`
+regression tests still pass unchanged (this milestone adds a second,
+earlier check on the same value, so no existing accept/refuse outcome for
+`record_claim_contradiction` should change); impacted suites focused first,
+full canonical gates once at release.
+
+## Historical scope: v0.3.413 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Research-run note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | acf37a351ed3338c2f807b88aa5500336baf5fd4 |
 | Status | delivered |
