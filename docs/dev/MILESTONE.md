@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Research session context: operator-declared authentication state for observed evidence (Bug Bounty foundation, step 5) |
 | Base SHA | 86727d0f9a914e262cb7f5e73825f1068b4932d5 |
-| Status | release |
-| Specialists | Codex: bounded implementation, security/QA review, gates, and guarded delivery |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | Codex: bounded implementation, security/QA review, full gates, exact-SHA CI, PR verification, standard merge, and origin/main reconciliation complete |
 | Blockers | none |
 
 Rationale: bounded continuation after delivered v0.3.409 and roadmap item 4,
@@ -1400,6 +1400,39 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.410: research session context foundation |
+| SHA | cf49a931daff46e460c54e6fd2d8e6d8d4066b39 |
+| Linux desktop CI (exact-SHA) | success (run 36108321606) |
+| Windows desktop CI (exact-SHA) | success (run 36108324229) |
+| Status | delivered |
+| PR | #389, MERGED 2026-09-25T07:44:36Z, standard merge commit `980e508b18aec8c724f8a4eab28bdaeb6aefe0a4` |
+| origin/main reachability | verified: `git merge-base --is-ancestor cf49a93 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`679a24f`, `cf49a93`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, Codex): PR #389 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 2
+commits (v0.3.409's documentation-only ledger reconciliation `86727d0` and
+v0.3.410's release commit `cf49a93`), was `MERGEABLE/CLEAN`, and both
+PR-triggered checks passed (Linux run 36108774238, Windows run 36108774287).
+Merged with a standard merge commit. The merge commit is on `origin/main`;
+both carried commits are reachable from it; release-commit author and
+committer remain Songül Kızılay via GitHub noreply email; the working tree is
+clean except this ledger reconciliation.
+
+Note: this bounded roadmap slice adds descriptive historical authentication
+state over already-recorded same-program HTTP evidence. Records are frozen,
+strictly bounded, append-only, restart-safe, and exposed through Brain and a
+dedicated desktop panel. They contain no credential or reusable live session,
+perform no login/request, never inspect or copy HTTP header values, and create
+no scope, target, budget, credential, or execution authority. Security review
+found and fixed a rendered-line-forgery gap in identifier/program input; QA
+verified model, persistence, service, Brain, Bootstrap, controller, and desktop
+paths. Full canonical gates: 7067 tests, OK (skipped=3); Black, Ruff, MyPy, and
+`git diff --check` clean.
+
+## Historical scope: v0.3.409 (delivered)
 
 | Field | Value |
 | --- | --- |
