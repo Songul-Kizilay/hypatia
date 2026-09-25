@@ -2,10 +2,22 @@
 
 ## Runtime Version
 
-`v0.3.413 (Genesis)`
+`v0.3.414 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.414 closes a gap flagged during v0.3.413's security review: an
+operator previewing a research claim contradiction could see a secret-shaped
+note echoed verbatim into the preview's Brain response, before the actual
+recording call would have refused it. The same, unmodified
+`ResearchSensitiveInputPolicy` now runs inside
+`ResearchRunManager._normalize_claim_contradiction_note` — the one
+normalization step shared by both the preview and the record path — so a
+secret-shaped contradiction note is refused identically and immediately
+either way, before a preview can ever be constructed with it. No other
+field, record, or preview type changed; it introduces no new secret storage,
+credential reference/use, login, network/process capability, or authority.
 
 Version v0.3.413 widens the same v0.3.411 secret-ingress refusal floor to
 three more persisted, operator-authored `note` fields:

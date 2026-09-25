@@ -14,9 +14,113 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Claim-contradiction preview secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
+| Base SHA | 37c756808a058d882583521bbfceeaf8ce3ed2d3 |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer (single-function fix, per the constitution's "no subagent for trivial, single-file work"), release; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, no findings |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 5, "Credential + secret
+boundary", after delivered v0.3.413. hypatia-security's v0.3.413 review
+flagged one genuine, pre-existing, out-of-scope gap: repository-grounded
+re-check (2026-09-25, hypatia-lead) confirms
+`ResearchRunManager.preview_claim_contradiction_write` normalizes its `note`
+argument via the shared static method `_normalize_claim_contradiction_note`
+(length/emptiness only — no sensitivity check), then constructs a
+`ResearchClaimContradictionWritePreview` carrying that raw note, which
+`ResponseComposer.research_claim_contradiction_write_preview_success` embeds
+verbatim as `f"User note: {preview.note}"` (`ResponseComposer.py:4991`) in
+the rendered Brain response — before any confirmation, before the
+`__post_init__`-level check v0.3.413 added to the persisted
+`ResearchClaimContradictionRecord` ever runs. An operator previewing a
+secret-shaped contradiction note today sees it echoed straight back in the
+preview response, which is exactly what the v0.3.411 security invariant
+("the candidate secret is never interpolated into an exception, Brain
+response, log, or stored record") forbids elsewhere. Confirmed by direct
+read: no equivalent preview object exists for evidence
+(`add_evidence`/`ResearchEvidenceRecord` writes directly, no preview) or for
+comparison reviews (`record_comparison_review` also writes directly, no
+preview) — `ResearchClaimContradictionWritePreview` is the only note-carrying
+preview object in the research-run model, so this is a single, complete fix,
+not a partial one.
+
+Scope: add the same `_refuse_sensitive_input` check (reusing the existing,
+unmodified `ResearchSensitiveInputPolicy`) directly inside
+`ResearchRunManager._normalize_claim_contradiction_note` — the one static
+method already shared by both `preview_claim_contradiction_write` and
+`record_claim_contradiction`, so a secret-shaped note is refused identically
+and immediately for both, before a preview object can ever be constructed
+with it. Add a test proving `preview_claim_contradiction_write` raises
+`ResearchError` (never reflecting the candidate value) for a secret-shaped
+note, to `ResearchRunManager`'s existing test file; add a cognition-layer
+test proving the `research_claim_contradiction_write_preview` Brain intent
+returns a failure response that never reflects the sentinel, to
+`CognitiveEngine`'s existing test coverage for that intent.
+
+Non-goals: no change to `ResearchSensitiveInputPolicy`,
+`ResearchClaimContradictionRecord`, `ResearchComparisonReviewRecord`,
+`ResearchEvidenceRecord`, or any other already-covered record; no change to
+`ResearchClaimContradictionWritePreview.py` itself (the dataclass is
+unchanged — it is simply never constructed with a refused note now); no
+change to `CognitiveEngine.py`'s existing generic
+`"Research claim contradiction could not be validated or saved."` catch-all
+failure message (it already discards every contradiction-refusal reason
+uniformly, including this one — verified, not assumed); no new preview type,
+no widening to any other domain's preview object beyond the one confirmed to
+exist; no secret storage, encryption, masking-and-keeping, credential
+reference/use, login, network/process capability, or any authority/budget/
+target/execution change.
+
+Security invariants: identical to v0.3.411/v0.3.412/v0.3.413 — classification
+stays deterministic, local, bounded, and side-effect-free; a refusal exposes
+only its fixed category (or, at the `CognitiveEngine` layer, the existing
+generic catch-all — never the candidate value) in the raised error or any
+Brain response; `record_claim_contradiction` remains doubly protected (this
+normalization check plus the existing `__post_init__` check on the persisted
+record); benign notes remain unaffected at both the preview and record paths.
+
+Test strategy: a manager-level test proving `preview_claim_contradiction_write`
+refuses a secret-shaped note without constructing a preview and without
+reflecting the candidate text; a differential test proving a benign note
+still previews and records exactly as before; a cognition-layer test proving
+the Brain-level preview intent returns a failure response without the
+sentinel; confirm the existing v0.3.413 `record_claim_contradiction`
+regression tests still pass unchanged (this milestone adds a second,
+earlier check on the same value, so no existing accept/refuse outcome for
+`record_claim_contradiction` should change); impacted suites focused first,
+full canonical gates once at release.
+
+Security review (hypatia-security, 2026-09-25): PASS, no findings. Confirmed
+the production diff is exactly one import, one module-level policy instance,
+and the new check inside `_normalize_claim_contradiction_note`; confirmed
+both `preview_claim_contradiction_write` and `record_claim_contradiction`
+call that one method; confirmed the raised error never carries the candidate
+text; confirmed `record_claim_contradiction` is now doubly protected without
+conflict; confirmed `CognitiveEngine.py`'s pre-existing generic catch-all for
+this intent is unchanged and untouched by this diff; confirmed every
+non-goal file (`ResearchSensitiveInputPolicy.py`,
+`ResearchClaimContradictionRecord.py`, `ResearchComparisonReviewRecord.py`,
+`ResearchEvidenceRecord.py`, `ResearchClaimContradictionWritePreview.py`) is
+byte-for-byte unchanged.
+
+QA review (hypatia-qa, 2026-09-25): PASS, no findings. Mutation testing on
+the new check confirmed both new tests fail without it, and — empirically
+validating the milestone's own "doubly protected" claim — the existing
+v0.3.413 `record_claim_contradiction` test still passed under the same
+mutation because the persisted record's `__post_init__` check independently
+catches it downstream. Confirmed the benign-note accept path is unaffected,
+confirmed the cognition-layer test's non-reflection assertion targets the
+correct field with no coincidental substring risk, and confirmed no existing
+test body was modified (pure insertions). Full focused run: 278 tests, OK;
+`black`/`ruff`/`mypy`/`git diff --check` clean.
+
+## Historical scope: v0.3.413 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Research-run note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | acf37a351ed3338c2f807b88aa5500336baf5fd4 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-lead closed one moderate test-hygiene gap; hypatia-lead: release |
 | Blockers | none |
 
@@ -1648,6 +1752,44 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.413: research-run note secret boundary |
+| SHA | 29c78805e8384fb1d74d6c1d8ebbccea1fbe6ec2 |
+| Linux desktop CI (exact-SHA) | success (run 36158436587) |
+| Windows desktop CI (exact-SHA) | success (run 36158440256) |
+| Status | delivered |
+| PR | #392, MERGED 2026-09-25T16:14:33Z, standard merge commit `cdc0125a070b00abf9e1b49e1204ab32f3af862a` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 29c7880 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`3e4cb4d`, `29c7880`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, hypatia-lead): PR #392 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (v0.3.412's documentation-only ledger reconciliation `acf37a3`, the
+v0.3.413 milestone lock `27f0c4f`, and release commit `29c7880`) across
+exactly 13 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered
+checks passed against the release SHA (`test-build-smoke` on both runners).
+The standard merge commit is on `origin/main`; all three carried commits are
+reachable from it; the release author remains Songül Kızılay via GitHub
+noreply email; the working tree is clean except this ledger reconciliation.
+
+Note: this bounded release widens the existing, unmodified
+`ResearchSensitiveInputPolicy` (v0.3.411) to three more operator-authored
+free-text `note` fields on the research-run model
+(`ResearchClaimContradictionRecord`, `ResearchComparisonReviewRecord`,
+`ResearchEvidenceRecord`), closing the residual list named when v0.3.412
+shipped. `ResearchEvidenceRecord.excerpt` (raw fetched source content) stays
+deliberately unclassified. Refusals expose only fixed categories and never
+echo the candidate value; a malicious persisted note fails closed on load.
+It introduces no secret storage, credential use, login, network/process
+capability, or scope, target, budget, credential, or execution authority.
+Security review found no findings (one pre-existing, out-of-scope
+observation recorded for future work); QA found one moderate test-hygiene
+gap recurring from v0.3.412, closed by hypatia-lead and verified non-vacuous
+by QA's mutation testing. Full canonical gates: 7103 tests, OK (skipped=3);
+Black, Ruff, MyPy, and `git diff --check` clean.
+
+## Historical scope: v0.3.412 (delivered)
 
 | Field | Value |
 | --- | --- |
