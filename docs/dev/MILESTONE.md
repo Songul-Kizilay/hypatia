@@ -14,6 +14,230 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Security Hypothesis model foundation (Bug Bounty foundation, step 6) |
+| Base SHA | 6217535373fc9e7e01545b377c49fc9d56ef5175 |
+| Status | implementation |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: user-directed. Item 6 of the Bug Bounty Researcher roadmap
+(`docs/Roadmap/Master_Roadmap.md`, recorded 2026-09-23). Items 1-5 are
+delivered (Asset Inventory, recon ingestion, HTTP Evidence, session
+contexts, secret-ingress boundary). Repository-grounded discovery
+(2026-09-25, hypatia-lead, direct file reads, not assumed) found this is
+**not** greenfield: a general-purpose `ResearchHypothesis` subsystem already
+exists in `src/research/`/`src/cognition/`
+(`ResearchHypothesis.py`/`HypothesisStatus.py`/`HypothesisApplicationService.py`/
+`JsonFileHypothesisStore.py` and siblings) — but it is `run_id`-scoped
+(a field on `ResearchRun`, the general deep-research Q&A engine), has no
+`program_id`, and its `supporting_evidence_ids`/`opposing_evidence_ids` are
+validated only against that same run's own `ResearchEvidenceRecord` tuple.
+`ResearchRun` (confirmed by direct read of its field list) carries no
+`program_id` field at all. The Bug Bounty vertical
+(`ResearchAssetInventoryApplicationService`, `ResearchHttpEvidenceRecord`,
+`ResearchSessionContextRecord`, `ResearchProgramScopeRevision`) is a
+completely separate, parallel, `program_id`-scoped system that never
+references `ResearchRun`/`run_id`. These two verticals do not currently
+bridge. A security hypothesis about a bug-bounty program's target therefore
+cannot honestly be represented by `ResearchHypothesis` without either
+bolting a `program_id` onto the general research-run engine (widening an
+unrelated subsystem) or building a new, `program_id`-scoped type that
+mirrors the SAME falsifiability discipline `ResearchHypothesis` already
+proves out (a required defeater/validation strategy, supporting vs. opposing
+evidence kept in separate, never-netted collections, status derived rather
+than declared as fact) inside the Bug Bounty vertical's own conventions.
+This milestone takes the second path: a new type, not a modification of
+`ResearchHypothesis`, `HypothesisStatus`, or anything under `src/security/`
+(which is a distinct, unrelated self-audit subsystem —
+`SecurityFinding`/`SecurityFindingKind`/`SecurityPostureAuditor` check
+Hypatia's *own* persisted state for problems, e.g. a non-HTTPS source URL;
+they have no concept of an external target and are not touched here).
+Also confirmed by direct read: `ResearchHttpEvidenceRecord` already carries
+`target_kind: ResearchAssetKind` (always `HOSTNAME`) and
+`target_canonical_value: str` (already-canonical, via
+`canonical_dns_hostname`) — the exact subject/target shape a hypothesis
+needs, reusable without new machinery.
+
+Scope: five new frozen types in `src/research/`, one new store, one new
+application service, minimal desktop and Brain wiring — modeled directly on
+the v0.3.407 Asset Inventory shape (append-only fact records plus a
+derived-only read projection, never a persisted merged/mutated entity):
+
+- `ResearchSecurityHypothesisKind` (`StrEnum`: `AUTHENTICATION`,
+  `AUTHORIZATION`, `INPUT_HANDLING`, `SERVER_SIDE_INTERACTION`,
+  `STATE_TRANSITION`, `CONFIGURATION`, `INFORMATION_EXPOSURE`, `UNKNOWN`) —
+  broad security-mechanism categories, not a per-CVE/per-vulnerability-name
+  enum; a specific vulnerability name is future knowledge-layer content, not
+  a hypothesis-kind value.
+- `ResearchSecurityHypothesisStatus` (`StrEnum`: `OPEN`, `NEEDS_EVIDENCE`,
+  `READY_FOR_VALIDATION`, `REFUTED`, plus a `.terminal` property true only
+  for `REFUTED`) — explicitly excludes any
+  confirmed/validated/exploited/severity vocabulary; `REFUTED` is terminal
+  (no transition out), everything else can move to `NEEDS_EVIDENCE`,
+  `READY_FOR_VALIDATION`, or `REFUTED`, and a same-state transition is
+  refused as a no-op. `.means_true`/equivalent is explicitly `False`
+  everywhere, mirroring `HypothesisStatus.means_true`'s existing discipline
+  of asserting this in a property (and a test) rather than a docstring.
+- `ResearchSecurityHypothesisOrigin` (`StrEnum`: exactly one member,
+  `OPERATOR_AUTHORED` — mirrors `ResearchAssetProvenanceKind`'s "exactly one
+  member until a second is truly needed" discipline; no automatic/model
+  origin kind is added since none is implemented this milestone).
+- `ResearchSecurityHypothesisEvidenceKind` (`StrEnum`: exactly one member,
+  `HTTP_EVIDENCE` — HTTP Evidence is "the first realistic subject" per this
+  milestone's own scope; Asset observations / research evidence / session
+  contexts are deferred, additive future members, not implemented now).
+- `ResearchSecurityHypothesisEvidenceRelation` (`StrEnum`: `SUPPORTS`,
+  `CONTRADICTS` — kept as two disjoint sets, never netted against each
+  other, mirroring `ResearchHypothesis`'s own
+  supporting/opposing-never-merged discipline).
+- `ResearchSecurityHypothesisRecord` (frozen dataclass, the immutable
+  founding fact): `hypothesis_id`, `program_id`, `hypothesis_kind`,
+  `subject_kind: ResearchAssetKind` (restricted to `HOSTNAME`/`IP_ADDRESS`,
+  reusing `ResearchAssetKind`/`canonicalize_asset_value` from Asset
+  Inventory — no new subject-identity machinery), `subject_canonical_value`
+  (must already be canonical, fail-closed re-validation exactly like
+  `ResearchAssetObservationRecord`), `statement` (concise, bounded ~500
+  chars — "what is inferred"), `rationale` (bounded ~2,000 chars — why the
+  cited evidence suggests it, "what is observed" tied to "what is
+  inferred"), `required_validation` (bounded ~1,000 chars — descriptive
+  strategy only, "what must still be tested"; never itself permission),
+  `origin`, `created_at`. Never mutated after creation.
+- `ResearchSecurityHypothesisEvidenceLinkRecord` (frozen dataclass, one
+  append-only fact per evidence citation): `link_id`, `hypothesis_id`,
+  `program_id`, `evidence_kind`, `evidence_id`, `relation`, `recorded_at`.
+  References evidence by stable identity only (`evidence_id`, validated as a
+  real `is_http_evidence_id` shape and required to exist for the same
+  `program_id` in the HTTP Evidence store) — never copies evidence content.
+- `ResearchSecurityHypothesisStatusTransitionRecord` (frozen dataclass, one
+  append-only fact per status change): `transition_id`, `hypothesis_id`,
+  `program_id`, `status`, `reason` (bounded ~500 chars, sensitive-input
+  checked), `recorded_at`.
+- `ResearchSecurityHypothesis` (derived read model, no `Record` suffix,
+  mirroring `ResearchAsset`'s own naming/derivation convention): assembled
+  fresh on every read from one founding record plus its evidence-link and
+  status-transition records for that `hypothesis_id` — never persisted as a
+  merged entity. Exposes `supporting_evidence`/`contradicting_evidence`
+  (deduplicated, ordered) and a derived `status` (the latest status
+  transition, or `OPEN` if none has ever been recorded).
+
+New persistence: `JsonFileResearchSecurityHypothesisStore` (new store,
+schema version 1) holding three flat lists (hypotheses, evidence links,
+status transitions) in one atomic file, modeled on
+`JsonFileResearchAssetInventoryStore`'s shape — strict field-set validation,
+bounded max counts, globally-unique ID rejection on save.
+
+New application service: `ResearchSecurityHypothesisApplicationService`
+(`src/cognition/`, mirroring `ResearchAssetInventoryApplicationService`'s
+and `ResearchSessionContextApplicationService`'s shape): `create_hypothesis`
+(validates program ID, applies `ResearchSensitiveInputPolicy` to
+`statement`/`rationale`/`required_validation`, requires at least one
+supporting evidence reference that exists for the same program, requires the
+hypothesis's subject to match the `target_kind`/`target_canonical_value` of
+at least one cited evidence record — a hypothesis can never cite evidence
+about a different host than the one it names, closing an authority-adjacent
+honesty gap the milestone brief did not explicitly name but that follows
+directly from "evidence-first" — and refuses an exact-identity duplicate:
+same `program_id`+`subject_kind`+`subject_canonical_value`+`hypothesis_kind`+
+normalized `statement`, directing the caller to attach evidence to the
+existing hypothesis instead of creating a near-duplicate); `attach_evidence`
+(supporting or contradicting, same program/existence checks);
+`transition_status` (validates the closed state machine, refuses a
+self-transition, applies the sensitive-input policy to `reason`);
+`hypotheses_for_program`/`hypothesis_by_id` (derived read projections); a
+read-only, never-cached `current_scope_resolution` dispatching to the
+unchanged `ResearchTargetScope.resolve_hostname`/`resolve_addresses` by
+`subject_kind` against the caller-supplied *currently active*
+`ResearchProgramScopeRevision` — exactly `ResearchAssetInventoryApplicationService`'s
+own pattern, reusing its `ActiveProgramScopeRevisionReader` protocol shape.
+
+Desktop: a new "Security Hypotheses" panel
+(`src/desktop/ResearchSecurityHypothesisPanel.py`), reusing the exact
+`ttk.Treeview`/entry-field/detail-pane idiom `ResearchAssetInventoryPanel.py`
+already established — list hypotheses per program with
+kind/subject/status/created-at, a detail pane showing statement, rationale,
+required validation, supporting/contradicting evidence IDs, origin, and
+current live scope resolution explicitly labelled "recomputed live from
+active policy, not stored"; entry fields to create a hypothesis, attach
+evidence, and transition status. No vulnerability dashboard, no severity
+display, no confidence score.
+
+Brain: new read/write intents mirroring the existing preview-then-record
+pattern (`research_security_hypothesis_create`,
+`research_security_hypothesis_evidence_attach`,
+`research_security_hypothesis_status_transition`,
+`research_security_hypothesis_preview` for a program listing) exposed
+through `CognitiveEngine.py`/`DesktopController.py`. Responses answer "what
+hypotheses are open", "what supports/contradicts this one", "what still
+needs validation" descriptively; every rendered response for a non-`REFUTED`
+hypothesis states explicitly that a hypothesis is not a finding.
+
+Non-goals (exhaustive, matching the locked instruction): no active
+validation, no Finding Lifecycle, no vulnerability confirmation, no CVSS or
+severity, no exploitation, no sqlmap/Nuclei/ffuf/Burp/browser/Kali-gateway
+execution of any kind, no generic shell execution, no vulnerability
+intelligence engine or CVE monitoring, no autonomous source-research loop,
+no business-logic state machine, no fuzzing, no report generation, no
+cloud/internal/AD execution, no desktop mouse/keyboard operator, no
+numeric/percentage confidence score of any kind, no `CONFIRMED`-flavoured
+status value, no modification of `ResearchHypothesis`/`HypothesisStatus`/
+anything under `src/security/`/`ResearchRun`/`ResearchClaimRecord`/
+`ResearchClaimContradictionRecord`/`ResearchAssetObservationRecord`/
+`ResearchAssetRelationRecord`/`ResearchHttpEvidenceRecord`/
+`ResearchSessionContextRecord` (all reused strictly by reference, byte-for-
+byte unchanged), no new evidence-kind beyond `HTTP_EVIDENCE`, no cross-
+program hypothesis or evidence reference of any kind, no new scope/target/
+credential/budget primitive, no automatic/LLM-generated hypothesis creation
+(operator-authored only this milestone — a future automatic-origin member
+is additive, not built now).
+
+Security invariants: hypothesis creation, evidence attachment, and status
+transition must never execute a network request, spawn a process, run a
+tool, modify scope, modify credentials, grant authority, create a budget, or
+enroll a target — this is reasoning/data only, proved by a no-network/
+no-process test. Model output, if ever produced by a future milestone,
+remains a proposal, never authority; this milestone adds no model-generated
+content path at all (origin is `OPERATOR_AUTHORED` only). Untrusted text
+embedded in evidence (header values, tool output, source prose) that looks
+like an instruction must remain inert data — it cannot alter status, become
+authority, or reach a Brain command; this hypothesis layer never reads
+evidence content itself (only its stable ID), so an instruction-shaped
+string inside an HTTP evidence header cannot reach the hypothesis layer at
+all except as an opaque evidence reference. `ResearchSensitiveInputPolicy`
+(unmodified) is applied to every operator-authored free-text field exactly
+as v0.3.411-414 established. Program isolation is real: an evidence
+reference, a status transition, or an evidence attachment must resolve to
+the exact same `program_id` as the hypothesis itself, fail-closed otherwise.
+`OUT_OF_SCOPE`/`UNCERTAIN` scope resolution remains purely a live, never-
+cached display value — creating or reading a hypothesis about an
+out-of-scope or unresolvable host executes nothing and authorizes nothing.
+
+Test strategy (per the locked instruction's own enumeration): model
+construction (valid hypothesis, immutability, invalid status/kind rejected,
+bounded text, missing-evidence rejection); evidence linkage (supporting and
+contradicting references work, nonexistent evidence rejected, cross-program
+evidence rejected, multiple evidence records preserved, subject-evidence
+consistency enforced); status transitions (valid transitions succeed,
+invalid/self transitions fail closed, no state implies a validated
+vulnerability); authority proof (hypothesis creation/evidence/transition
+never execute a request, spawn a process, run a tool, or touch scope/
+credential/budget/target primitives — a real no-network/no-process test, not
+an assertion by inspection alone); sensitive-data handling (secret-shaped
+rationale/statement/required_validation/reason refused, never reflected);
+untrusted-data inertness (an instruction-shaped evidence reference stays
+inert data); one realistic end-to-end flow building a hypothesis from real
+`ResearchHttpEvidenceRecord` fixtures, asserting the recorded statement
+never claims a confirmed vulnerability and no request is issued; a small,
+high-value mutation-testing pass (~3-5 mutations: allow cross-program
+evidence, let creation touch scope/authority, let instruction-shaped
+evidence content leak through, bypass the sensitive-input guard, treat
+`OPEN` as a confirmed finding) — each must be caught, all mutations
+restored; desktop reachability via a real constructed-widget test; impacted
+suites focused first, full canonical gates once at release.
+
+## Historical scope: v0.3.414 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Claim-contradiction preview secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | 37c756808a058d882583521bbfceeaf8ce3ed2d3 |
 | Status | delivered |
