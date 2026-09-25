@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Asset Inventory note secret-ingress boundary (Bug Bounty foundation, step 5 continued) |
 | Base SHA | eb3219f302b09f67354e81e07a0bb0df8eb41b72 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-lead closed one moderate test-coverage gap; hypatia-lead: release |
 | Blockers | none |
 
@@ -1526,6 +1526,43 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.412: asset inventory note secret boundary |
+| SHA | 089443a80bdba6694e22eb35ade0d9512eef3049 |
+| Linux desktop CI (exact-SHA) | success (run 36154333982) |
+| Windows desktop CI (exact-SHA) | success (run 36154337786) |
+| Status | delivered |
+| PR | #391, MERGED 2026-09-25T15:36:55Z, standard merge commit `3e4cb4d98630c08eb5252aa1cecd7a9f693516fb` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 089443a origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`a2f0918`, `089443a`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, hypatia-lead): PR #391 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (v0.3.411's documentation-only ledger reconciliation `eb3219f`, the
+v0.3.412 milestone lock `bb333ab`, and release commit `089443a`) across
+exactly 12 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered
+checks passed against the release SHA (`test-build-smoke` on both runners).
+The standard merge commit is on `origin/main`; all three carried commits are
+reachable from it; the release author remains Songül Kızılay via GitHub
+noreply email; the working tree is clean except this ledger reconciliation.
+
+Note: this bounded release widens the existing, unmodified
+`ResearchSensitiveInputPolicy` (v0.3.411) to the two operator-authored
+free-text `note` fields in the Bug Bounty Asset Inventory
+(`ResearchAssetObservationRecord`, `ResearchAssetRelationRecord`, v0.3.407)
+that predated the secret-ingress boundary. Refusals expose only fixed
+categories and never echo the candidate value; a malicious persisted note
+fails closed on load. It introduces no secret storage, credential use,
+login, network/process capability, or scope, target, budget, credential, or
+execution authority. Security review found no findings; QA found one
+moderate service-layer test-coverage gap plus one cosmetic desktop-caption
+gap against this milestone's own locked test strategy, both closed by
+hypatia-lead with new tests verified non-vacuous by QA's mutation testing.
+Full canonical gates: 7088 tests, OK (skipped=3); Black, Ruff, MyPy, and
+`git diff --check` clean.
+
+## Historical scope: v0.3.411 (delivered)
 
 | Field | Value |
 | --- | --- |
