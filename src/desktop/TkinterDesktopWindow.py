@@ -37,6 +37,7 @@ from desktop.MissionSourceIndependenceReview import (
 )
 from desktop.QuestionResearchDraft import QuestionResearchDraft
 from desktop.ResearchAssetInventoryPanel import ResearchAssetInventoryPanel
+from desktop.ResearchSecurityHypothesisPanel import ResearchSecurityHypothesisPanel
 from desktop.ResearchSessionContextPanel import ResearchSessionContextPanel
 from desktop.ResearchSourcePreviewPanel import ResearchSourcePreviewPanel
 from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
@@ -1638,6 +1639,16 @@ class TkinterDesktopWindow:
             tabs.append(session_context_tab)
             self._session_context_panel = ResearchSessionContextPanel(
                 session_context_tab,
+                self._controller,
+                self._start_request,
+            )
+            security_hypothesis_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(
+                security_hypothesis_tab, text="Security Hypotheses"
+            )
+            tabs.append(security_hypothesis_tab)
+            self._security_hypothesis_panel = ResearchSecurityHypothesisPanel(
+                security_hypothesis_tab,
                 self._controller,
                 self._start_request,
             )

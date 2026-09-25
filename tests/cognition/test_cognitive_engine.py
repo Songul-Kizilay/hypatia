@@ -70,6 +70,14 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 )
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
+from research.JsonFileResearchHttpEvidenceStore import (
+    JsonFileResearchHttpEvidenceStore,
+    ResearchHttpEvidenceDocument,
+)
+from research.JsonFileResearchSecurityHypothesisStore import (
+    JsonFileResearchSecurityHypothesisStore,
+)
+from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
@@ -79,11 +87,20 @@ from research.ResearchClaimContradictionProposalProvider import (
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ResearchHttpEvidenceProvenanceKind import (
+    ResearchHttpEvidenceProvenanceKind,
+)
+from research.ResearchHttpEvidenceRecord import ResearchHttpEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSecurityHypothesisEvidenceRelation import (
+    ResearchSecurityHypothesisEvidenceRelation,
+)
+from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
+from research.ResearchSecurityHypothesisStatus import ResearchSecurityHypothesisStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
@@ -8940,3 +8957,236 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.assertFalse(response.success)
                 self.assertEqual(response.intent, "research_source_load")
                 self.assertIn(expected, response.message)
+
+
+def _security_hypothesis_http_evidence(
+    evidence_id: str = "a" * 64,
+    program_id: str = "program-a",
+    target_value: str = "example.test",
+) -> ResearchHttpEvidenceRecord:
+    return ResearchHttpEvidenceRecord(
+        evidence_id=evidence_id,
+        program_id=program_id,
+        target_kind=ResearchAssetKind.HOSTNAME,
+        target_canonical_value=target_value,
+        scheme="https",
+        port=443,
+        path="/",
+        request_method="HEAD",
+        request_headers_observed=False,
+        response_status_code=200,
+        response_headers=(),
+        response_body_observed=False,
+        provenance=ResearchHttpEvidenceProvenanceKind.KALI_OPERATION_RESULT,
+        source_operation_digest="f" * 64,
+        recorded_at=datetime(2026, 9, 25, 12, tzinfo=UTC),
+    )
+
+
+class SecurityHypothesisDispatchTests(unittest.TestCase):
+    """The four new security-hypothesis Brain intents, wired and unwired."""
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        knowledge_path = Path(self.temporary_directory.name) / "knowledge.md"
+        knowledge_path.write_text("Hypatia\n\nKnowledge\n\nHypatia", encoding="utf-8")
+        self.knowledge_engine = KnowledgeEngine()
+        self.knowledge_engine.load(knowledge_path)
+        self.event_bus = EventBus()
+        self.memory_manager = MemoryManager(self.event_bus)
+        self.planner = Planner()
+        self.response_composer = ResponseComposer()
+        self.session_manager = SessionManager(self.event_bus)
+        self.session_rename_service = SessionRenameTransactionService(
+            session_manager=self.session_manager,
+            memory_manager=self.memory_manager,
+            event_bus=self.event_bus,
+        )
+        http_evidence_path = (
+            Path(self.temporary_directory.name) / "research_http_evidence.json"
+        )
+        self.http_evidence_store = JsonFileResearchHttpEvidenceStore(http_evidence_path)
+        self.http_evidence_store.save(
+            ResearchHttpEvidenceDocument(
+                records=(_security_hypothesis_http_evidence(),)
+            )
+        )
+        self.security_hypothesis_store_path = (
+            Path(self.temporary_directory.name) / "research_security_hypotheses.json"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def _wired_engine(self) -> ProductionCognitiveEngine:
+        return ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            http_evidence_store=self.http_evidence_store,
+            security_hypothesis_store=JsonFileResearchSecurityHypothesisStore(
+                self.security_hypothesis_store_path
+            ),
+        )
+
+    def _unwired_engine(self) -> ProductionCognitiveEngine:
+        return ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+        )
+
+    def _create_request(self) -> BrainRequest:
+        return BrainRequest(
+            message="Record security hypothesis",
+            metadata={
+                "intent": "research_security_hypothesis_create",
+                "program_id": "program-a",
+                "hypothesis_kind": ResearchSecurityHypothesisKind.AUTHORIZATION,
+                "subject_kind": ResearchAssetKind.HOSTNAME,
+                "subject_canonical_value": "example.test",
+                "statement": "statement",
+                "rationale": "rationale",
+                "required_validation": "required validation",
+                "supporting_evidence_ids": ("a" * 64,),
+            },
+        )
+
+    def test_hypothesis_create_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+
+        response = engine.process(self._create_request())
+
+        self.assertTrue(response.success, response.message)
+        self.assertIsNotNone(response.research_security_hypothesis)
+
+    def test_hypothesis_create_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(self._create_request())
+
+        self.assertFalse(response.success)
+        self.assertIn("Security hypotheses are not available.", response.message)
+
+    def test_evidence_attach_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        created = engine.process(self._create_request())
+        hypothesis = created.research_security_hypothesis
+        assert hypothesis is not None
+
+        response = engine.process(
+            BrainRequest(
+                message="Attach security hypothesis evidence",
+                metadata={
+                    "intent": "research_security_hypothesis_evidence_attach",
+                    "hypothesis_id": hypothesis.hypothesis_id,
+                    "program_id": "program-a",
+                    "evidence_ids": ("a" * 64,),
+                    "relation": ResearchSecurityHypothesisEvidenceRelation.CONTRADICTS,
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertIsNotNone(response.research_security_hypothesis)
+
+    def test_evidence_attach_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(
+            BrainRequest(
+                message="Attach security hypothesis evidence",
+                metadata={
+                    "intent": "research_security_hypothesis_evidence_attach",
+                    "hypothesis_id": "hypothesis-1",
+                    "program_id": "program-a",
+                    "evidence_ids": ("a" * 64,),
+                    "relation": ResearchSecurityHypothesisEvidenceRelation.SUPPORTS,
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("Security hypotheses are not available.", response.message)
+
+    def test_status_transition_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        created = engine.process(self._create_request())
+        hypothesis = created.research_security_hypothesis
+        assert hypothesis is not None
+
+        response = engine.process(
+            BrainRequest(
+                message="Transition security hypothesis status",
+                metadata={
+                    "intent": "research_security_hypothesis_status_transition",
+                    "hypothesis_id": hypothesis.hypothesis_id,
+                    "program_id": "program-a",
+                    "status": ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+                    "reason": "",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertIsNotNone(response.research_security_hypothesis_status_transition)
+
+    def test_status_transition_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(
+            BrainRequest(
+                message="Transition security hypothesis status",
+                metadata={
+                    "intent": "research_security_hypothesis_status_transition",
+                    "hypothesis_id": "hypothesis-1",
+                    "program_id": "program-a",
+                    "status": ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+                    "reason": "",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("Security hypotheses are not available.", response.message)
+
+    def test_hypothesis_preview_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        engine.process(self._create_request())
+
+        response = engine.process(
+            BrainRequest(
+                message="Preview security hypotheses",
+                metadata={
+                    "intent": "research_security_hypothesis_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(len(response.research_security_hypotheses), 1)
+
+    def test_hypothesis_preview_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(
+            BrainRequest(
+                message="Preview security hypotheses",
+                metadata={
+                    "intent": "research_security_hypothesis_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("Security hypotheses are not available.", response.message)

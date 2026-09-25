@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Security Hypothesis model foundation (Bug Bounty foundation, step 6) |
 | Base SHA | 6217535373fc9e7e01545b377c49fc9d56ef5175 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Status | release |
+| Specialists | hypatia-epistemics: sole implementer, plus a second bounded pass closing QA-found test-coverage gaps; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-epistemics closed one high and two moderate test-coverage gaps; hypatia-lead: release |
 | Blockers | none |
 
 Rationale: user-directed. Item 6 of the Bug Bounty Researcher roadmap
@@ -233,6 +233,42 @@ evidence content leak through, bypass the sensitive-input guard, treat
 `OPEN` as a confirmed finding) — each must be caught, all mutations
 restored; desktop reachability via a real constructed-widget test; impacted
 suites focused first, full canonical gates once at release.
+
+Security review (hypatia-security, 2026-09-25): PASS, no findings. Traced
+`create_hypothesis`/`attach_evidence`/`transition_status` line by line and
+confirmed none open a network socket, spawn a process, or touch any
+scope/credential/budget/authorization primitive — the only scope-related
+call is the read-only `current_scope_resolution` dispatch, called only from
+the preview path, never from a write path. Confirmed `ResearchSensitiveInputPolicy`
+byte-for-byte unchanged and applied to every free-text field including the
+status-transition `reason`; confirmed the hypothesis layer never reads
+evidence content (only its ID), so an instruction-shaped string embedded in
+evidence content structurally cannot reach a hypothesis field, verified by a
+genuine test; confirmed program isolation is enforced on every method that
+accepts both a hypothesis and program ID; confirmed the no-network/
+no-process test genuinely patches real dangerous call sites across a full
+create-attach-transition flow against a real temp-file store; confirmed
+`ResearchHypothesis.py`/`HypothesisStatus.py`/everything under `src/security/`
+are byte-for-byte unmodified.
+
+QA review (hypatia-qa, 2026-09-25): found one high and two moderate
+test-coverage gaps, no production-code defects. High: the new
+`DesktopController` methods, `CognitiveEngine` dispatch branches (including
+all four "service unavailable" fallback paths), and `Bootstrap` wiring had
+zero test coverage anywhere, breaking this codebase's own established
+per-file testing convention. Moderate: the exact-identity duplicate-rejection
+check had no negative counterpart — QA proved by mutation testing that
+removing the `hypothesis_kind` comparison from the dedup predicate left
+every existing test green; and no restart/reload test proved the *derived*
+`ResearchSecurityHypothesis` view (including computed `status`) survives a
+genuine restart identically, unlike the Asset Inventory precedent this
+milestone claims to mirror. hypatia-epistemics closed all three directly:
+added 15 `DesktopController` tests, 8 `CognitiveEngine` dispatch tests (4
+wired-success + 4 unwired-failure), 2 `Bootstrap` wiring tests, 3 dedup
+negative tests, and 1 restart/reload test proving byte-identical derived
+output across independent store/service instances. Re-verified QA's exact
+mutation is now caught. Re-run after the fix: 494 focused tests across seven
+impacted test modules, OK; `black`/`ruff`/`mypy`/`git diff --check` clean.
 
 ## Historical scope: v0.3.414 (delivered)
 

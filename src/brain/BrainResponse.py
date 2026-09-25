@@ -111,6 +111,14 @@ from research.ResearchRunMarkdownExportVerification import (
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSecurityHypothesis import ResearchSecurityHypothesis
+from research.ResearchSecurityHypothesisEntry import ResearchSecurityHypothesisEntry
+from research.ResearchSecurityHypothesisEvidenceLinkRecord import (
+    ResearchSecurityHypothesisEvidenceLinkRecord,
+)
+from research.ResearchSecurityHypothesisStatusTransitionRecord import (
+    ResearchSecurityHypothesisStatusTransitionRecord,
+)
 from research.ResearchSessionContextRecord import ResearchSessionContextRecord
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentWritePreview import (
@@ -276,3 +284,11 @@ class BrainResponse:
     research_http_evidence_for_target: ResearchHttpEvidenceForTargetView | None = None
     research_session_context_record: ResearchSessionContextRecord | None = None
     research_session_contexts: tuple[ResearchSessionContextRecord, ...] = ()
+    research_security_hypothesis: ResearchSecurityHypothesis | None = None
+    research_security_hypothesis_evidence_links: tuple[
+        ResearchSecurityHypothesisEvidenceLinkRecord, ...
+    ] = ()
+    research_security_hypothesis_status_transition: (
+        ResearchSecurityHypothesisStatusTransitionRecord | None
+    ) = None
+    research_security_hypotheses: tuple[ResearchSecurityHypothesisEntry, ...] = ()

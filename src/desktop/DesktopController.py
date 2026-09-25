@@ -35,6 +35,11 @@ from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
+from research.ResearchSecurityHypothesisEvidenceRelation import (
+    ResearchSecurityHypothesisEvidenceRelation,
+)
+from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
+from research.ResearchSecurityHypothesisStatus import ResearchSecurityHypothesisStatus
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
@@ -561,6 +566,122 @@ class DesktopController:
                 "Preview research session contexts",
                 metadata={
                     "intent": "research_session_context_preview",
+                    "program_id": normalized_program_id,
+                },
+            )
+        )
+
+    def create_research_security_hypothesis(
+        self,
+        program_id: str,
+        hypothesis_kind: str,
+        subject_kind: str,
+        subject_canonical_value: str,
+        statement: str,
+        rationale: str,
+        required_validation: str,
+        supporting_evidence_ids: tuple[str, ...],
+    ) -> BrainResponse:
+        """Record one durable, operator-authored security hypothesis."""
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        try:
+            normalized_hypothesis_kind = ResearchSecurityHypothesisKind(
+                hypothesis_kind.strip()
+            )
+            normalized_subject_kind = ResearchAssetKind(subject_kind.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Security hypothesis kind is invalid.") from error
+        return self._brain.process(
+            BrainRequest(
+                "Record security hypothesis",
+                metadata={
+                    "intent": "research_security_hypothesis_create",
+                    "program_id": normalized_program_id,
+                    "hypothesis_kind": normalized_hypothesis_kind,
+                    "subject_kind": normalized_subject_kind,
+                    "subject_canonical_value": subject_canonical_value.strip(),
+                    "statement": statement.strip(),
+                    "rationale": rationale.strip(),
+                    "required_validation": required_validation.strip(),
+                    "supporting_evidence_ids": supporting_evidence_ids,
+                },
+            )
+        )
+
+    def attach_research_security_hypothesis_evidence(
+        self,
+        hypothesis_id: str,
+        program_id: str,
+        evidence_ids: tuple[str, ...],
+        relation: str,
+    ) -> BrainResponse:
+        """Attach supporting or contradicting evidence to one hypothesis."""
+        normalized_hypothesis_id = hypothesis_id.strip()
+        normalized_program_id = program_id.strip()
+        if not normalized_hypothesis_id or not normalized_program_id:
+            raise ValueError("A hypothesis ID and program ID cannot be empty.")
+        try:
+            normalized_relation = ResearchSecurityHypothesisEvidenceRelation(
+                relation.strip()
+            )
+        except (AttributeError, ValueError) as error:
+            raise ValueError(
+                "Security hypothesis evidence relation is invalid."
+            ) from error
+        return self._brain.process(
+            BrainRequest(
+                "Attach security hypothesis evidence",
+                metadata={
+                    "intent": "research_security_hypothesis_evidence_attach",
+                    "hypothesis_id": normalized_hypothesis_id,
+                    "program_id": normalized_program_id,
+                    "evidence_ids": evidence_ids,
+                    "relation": normalized_relation,
+                },
+            )
+        )
+
+    def transition_research_security_hypothesis_status(
+        self,
+        hypothesis_id: str,
+        program_id: str,
+        status: str,
+        reason: str = "",
+    ) -> BrainResponse:
+        """Record one status transition for one existing security hypothesis."""
+        normalized_hypothesis_id = hypothesis_id.strip()
+        normalized_program_id = program_id.strip()
+        if not normalized_hypothesis_id or not normalized_program_id:
+            raise ValueError("A hypothesis ID and program ID cannot be empty.")
+        try:
+            normalized_status = ResearchSecurityHypothesisStatus(status.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Security hypothesis status is invalid.") from error
+        return self._brain.process(
+            BrainRequest(
+                "Transition security hypothesis status",
+                metadata={
+                    "intent": "research_security_hypothesis_status_transition",
+                    "hypothesis_id": normalized_hypothesis_id,
+                    "program_id": normalized_program_id,
+                    "status": normalized_status,
+                    "reason": reason.strip(),
+                },
+            )
+        )
+
+    def preview_research_security_hypotheses(self, program_id: str) -> BrainResponse:
+        """List one program's derived security hypotheses without side effects."""
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                "Preview security hypotheses",
+                metadata={
+                    "intent": "research_security_hypothesis_preview",
                     "program_id": normalized_program_id,
                 },
             )
