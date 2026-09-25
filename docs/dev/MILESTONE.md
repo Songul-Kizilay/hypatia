@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Security Hypothesis model foundation (Bug Bounty foundation, step 6) |
 | Base SHA | 6217535373fc9e7e01545b377c49fc9d56ef5175 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-epistemics: sole implementer, plus a second bounded pass closing QA-found test-coverage gaps; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and hypatia-epistemics closed one high and two moderate test-coverage gaps; hypatia-lead: release |
 | Blockers | none |
 
@@ -2012,6 +2012,47 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.415: security hypothesis model foundation |
+| SHA | 379884ffa661d07d8cca2db1b65a1e0b974bac19 |
+| Linux desktop CI (exact-SHA) | success (run 36185129132) |
+| Windows desktop CI (exact-SHA) | success (run 36185133690) |
+| Status | delivered |
+| PR | #394, MERGED 2026-09-25T20:40:04Z, standard merge commit `db88f94989d2ff29eec90ec499a11f68a7cafbca` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 379884f origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`742ab84`, `379884f`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-25, hypatia-lead): PR #394 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (v0.3.414's documentation-only ledger reconciliation `6217535`, the
+v0.3.415 milestone lock `0c4cc2b`, and release commit `379884f`) across
+exactly 31 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered
+checks passed against the release SHA (`test-build-smoke` on both runners).
+The standard merge commit is on `origin/main`; all three carried commits are
+reachable from it; the release author remains Songül Kızılay via GitHub
+noreply email; the working tree is clean except this ledger reconciliation.
+
+Note: this bounded release adds a new, program_id-scoped
+`ResearchSecurityHypothesisRecord` foundation (Bug Bounty Researcher roadmap
+item 6), distinct from the pre-existing, unrelated run_id-scoped
+`ResearchHypothesis` (general research falsifiability tracker) and the
+`src/security/` `SecurityFinding` self-audit subsystem, both untouched.
+Every hypothesis requires at least one cited HTTP Evidence reference for the
+same program, with its subject matching at least one citation's target. A
+closed status state machine (`OPEN`/`NEEDS_EVIDENCE`/`READY_FOR_VALIDATION`/
+`REFUTED`) tracks the operator's own evidence judgement; no status asserts a
+validated vulnerability. Hypothesis creation, evidence attachment, and
+status transitions perform no network request, process, tool execution, or
+scope/credential/budget/target change of any kind. Security review found no
+findings; QA found one high (zero test coverage for the new
+`DesktopController`/`CognitiveEngine`/`Bootstrap` wiring) and two moderate
+(dedup missing a negative case; no restart/reload proof for the derived read
+model) test-coverage gaps, all closed with 29 new tests, re-verified via
+mutation testing. Full canonical gates: 7244 tests, OK (skipped=3); Black,
+Ruff, MyPy, and `git diff --check` clean.
+
+## Historical scope: v0.3.414 (delivered)
 
 | Field | Value |
 | --- | --- |
