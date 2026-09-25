@@ -36,7 +36,10 @@ from research.ResearchAssetDnsIngestion import (
     ResearchAssetDnsIngestionPreview,
     ResearchAssetDnsIngestionResult,
 )
-from research.ResearchAssetInventoryEntry import ResearchAssetInventoryEntry
+from research.ResearchAssetInventoryEntry import (
+    ResearchAssetInventoryEntry,
+    ResearchAssetScopeResolutionView,
+)
 from research.ResearchAssetObservationRecord import ResearchAssetObservationRecord
 from research.ResearchAssetRelationRecord import ResearchAssetRelationRecord
 from research.ResearchAttemptResolution import ResearchAttemptResolution
@@ -65,6 +68,14 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchHttpEvidenceForTargetView import (
+    ResearchHttpEvidenceForTargetView,
+)
+from research.ResearchHttpEvidenceIngestion import (
+    ResearchHttpEvidenceIngestionPreview,
+    ResearchHttpEvidenceIngestionResult,
+)
+from research.ResearchHttpHeaderRecord import ResearchHttpHeaderRecord
 from research.ResearchKaliOperationAuthorization import (
     ResearchKaliOperationAuthorization,
 )
@@ -1434,6 +1445,208 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_asset_dns_ingestion_record",
+            memory_count=0,
+            success=False,
+        )
+
+    #: Header names whose *values* are masked in a rendered summary, case-
+    #: insensitively. The stored record always keeps the true value — only
+    #: this rendering ever redacts it, so an operator display never leaks a
+    #: credential-bearing header in plain text by accident.
+    _SENSITIVE_HTTP_HEADER_NAMES = frozenset(
+        {"authorization", "cookie", "set-cookie", "proxy-authorization"}
+    )
+
+    @classmethod
+    def _rendered_http_header_line(cls, header: ResearchHttpHeaderRecord) -> str:
+        if header.name.strip().lower() in cls._SENSITIVE_HTTP_HEADER_NAMES:
+            return f"- {header.name}: [redacted]"
+        return f"- {header.name}: {header.value}"
+
+    @staticmethod
+    def _rendered_http_evidence_scope_line(
+        scope: ResearchAssetScopeResolutionView,
+    ) -> str:
+        if scope.has_active_scope_revision and scope.resolution is not None:
+            return (
+                f"Scope: {scope.resolution.status.value} "
+                "(recomputed live from active policy, not stored)"
+            )
+        return "Scope: no active scope revision for this program"
+
+    def research_http_evidence_ingestion_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchHttpEvidenceIngestionPreview,
+    ) -> BrainResponse:
+        """Report a side-effect-free HTTP evidence preview; nothing is recorded."""
+        status_text = (
+            str(preview.status_code)
+            if preview.status_code is not None
+            else "not observed (operation did not complete successfully)"
+        )
+        lines = [
+            "HTTP evidence ingestion preview:",
+            f"Program: {preview.program_id}",
+            f"Operation digest: {preview.operation_digest}",
+            f"Evidence ID: {preview.evidence_id}",
+            f"Target: https://{preview.hostname}/",
+            f"Status: {status_text}",
+            f"Headers: {len(preview.headers)}",
+        ]
+        lines.extend(
+            self._rendered_http_header_line(header) for header in preview.headers
+        )
+        for row in preview.rejected_lines:
+            lines.append(f"Rejected: {row.raw_line!r} — {row.reason}")
+        lines.append("Body observed: false (a HEAD request never returns one)")
+        lines.append(self._rendered_http_evidence_scope_line(preview.scope))
+        lines.append(
+            "(already recorded — this exact event exists)"
+            if preview.already_recorded
+            else "(new event)"
+        )
+        lines.append("(preview only; nothing has been recorded)")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_http_evidence_ingestion_preview",
+            memory_count=0,
+            research_http_evidence_ingestion_preview=preview,
+        )
+
+    def research_http_evidence_ingestion_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid HTTP evidence preview."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "HTTP evidence ingestion preview rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_http_evidence_ingestion_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_http_evidence_ingestion_record(
+        self,
+        request: BrainRequest,
+        result: ResearchHttpEvidenceIngestionResult,
+    ) -> BrainResponse:
+        """Confirm one HTTP evidence ingestion; report what was recorded or replayed."""
+        record = result.record
+        status_text = (
+            str(record.response_status_code)
+            if record.response_status_code is not None
+            else "not observed (operation did not complete successfully)"
+        )
+        lines = [
+            (
+                "HTTP evidence already recorded (replay, no new event created):"
+                if result.already_recorded
+                else "HTTP evidence recorded:"
+            ),
+            f"Program: {record.program_id}",
+            f"Evidence ID: {record.evidence_id}",
+            f"Operation digest: {record.source_operation_digest}",
+            f"Target: {record.scheme}://{record.target_canonical_value}{record.path}",
+            f"Status: {status_text}",
+            f"Headers: {len(record.response_headers)}",
+        ]
+        lines.extend(
+            self._rendered_http_header_line(header)
+            for header in record.response_headers
+        )
+        lines.append("Body observed: false (a HEAD request never returns one)")
+        lines.append(self._rendered_http_evidence_scope_line(result.scope))
+        lines.append(
+            "(HTTP evidence only says what one HEAD request returned at one"
+            " point in time; it never changes scope, and a Location header is"
+            " never followed)"
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_http_evidence_ingestion_record",
+            memory_count=0,
+            research_http_evidence_ingestion_result=result,
+        )
+
+    def research_http_evidence_ingestion_record_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid HTTP evidence record write."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "HTTP evidence ingestion record rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_http_evidence_ingestion_record",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_http_evidence_for_target(
+        self,
+        request: BrainRequest,
+        view: ResearchHttpEvidenceForTargetView,
+    ) -> BrainResponse:
+        """Report stored HTTP evidence for one target; read-only, zero side effects."""
+        lines = [
+            f"HTTP evidence for {view.canonical_hostname} (program {view.program_id}):",
+            f"Events: {len(view.records)}",
+        ]
+        if view.scope.has_active_scope_revision and view.scope.resolution:
+            lines.append(
+                f"Scope: {view.scope.resolution.status.value} "
+                "(recomputed live from active policy, not stored)"
+            )
+        else:
+            lines.append("Scope: no active scope revision for this program")
+        for record in view.records:
+            status = (
+                record.response_status_code
+                if record.response_status_code is not None
+                else "not observed"
+            )
+            lines.append(
+                f"- {record.evidence_id}: status {status}, "
+                f"{len(record.response_headers)} header(s)"
+            )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_http_evidence_for_target",
+            memory_count=0,
+            research_http_evidence_for_target=view,
+        )
+
+    def research_http_evidence_for_target_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid HTTP evidence lookup."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "HTTP evidence lookup rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_http_evidence_for_target",
             memory_count=0,
             success=False,
         )

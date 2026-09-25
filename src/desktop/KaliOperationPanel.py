@@ -22,6 +22,21 @@ _OPERATIONS = {
     "HTTPS başlıklarını oku (curl)": "https_header_lookup",
 }
 
+#: Header names whose values are masked in the confirm-dialog summary,
+#: case-insensitively. Only this rendered dialog text is affected; the
+#: stored evidence record always keeps the true value.
+_SENSITIVE_HTTP_HEADER_NAMES = frozenset(
+    {"authorization", "cookie", "set-cookie", "proxy-authorization"}
+)
+
+
+def _redacted_header_value(header: object) -> str:
+    name = getattr(header, "name", "")
+    value = getattr(header, "value", "")
+    if isinstance(name, str) and name.strip().lower() in _SENSITIVE_HTTP_HEADER_NAMES:
+        return "[redacted]"
+    return str(value)
+
 
 class KaliOperationPanel:
     """Keep returned preview/approval separate from editable form fields."""
@@ -237,14 +252,21 @@ class KaliOperationPanel:
 
     def ingest(self) -> None:
         run = self._kali_operation_run
-        if (
-            run is None
-            or run.operation_kind != ResearchKaliOperationKind.DNS_RECORD_LOOKUP
+        if run is None or run.operation_kind not in (
+            ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
+            ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
         ):
             self.status.set(
-                "Önce başarılı bir DNS kaydı sorgusu çalıştır (3. Çalıştır)."
+                "Önce başarılı bir DNS kaydı veya HTTPS başlık sorgusu çalıştır"
+                " (3. Çalıştır)."
             )
             return
+        if run.operation_kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+            self._ingest_dns(run)
+        else:
+            self._ingest_https(run)
+
+    def _ingest_dns(self, run: ResearchKaliOperationRun) -> None:
         generation = self._generation
 
         def show(response: BrainResponse) -> None:
@@ -306,4 +328,76 @@ class KaliOperationPanel:
             lambda: self._controller.preview_research_asset_dns_ingestion(run),
             preview_complete,
             "Kali · Envantere aktar (önizle)",
+        )
+
+    def _ingest_https(self, run: ResearchKaliOperationRun) -> None:
+        generation = self._generation
+
+        def show(response: BrainResponse) -> None:
+            self.output.configure(state=tk.NORMAL)
+            self.output.delete("1.0", tk.END)
+            self.output.insert(tk.END, response.message)
+            self.output.configure(state=tk.DISABLED)
+
+        def preview_complete(response: BrainResponse) -> None:
+            if generation != self._generation:
+                self.status.set(
+                    "Seçim değişti; önceki yanıtla işlem yapılamaz. Yeniden önizle."
+                )
+                return
+            show(response)
+            if not response.success:
+                self.status.set("HTTP kanıtı önizlemesi başarısız. Ayrıntılar aşağıda.")
+                return
+            preview = response.research_http_evidence_ingestion_preview
+            if preview is None:
+                self.status.set("HTTP kanıtı önizlemesi başarısız. Ayrıntılar aşağıda.")
+                return
+            status_text = (
+                str(preview.status_code)
+                if preview.status_code is not None
+                else "gözlemlenmedi"
+            )
+            header_lines = "\n".join(
+                f"{header.name}: {_redacted_header_value(header)}"
+                for header in preview.headers
+            )
+            if not messagebox.askyesno(
+                "HTTP kanıtını kaydet",
+                f"Hedef: {preview.hostname}\n"
+                f"Durum kodu: {status_text}\n"
+                f"Program: {preview.program_id}\n"
+                f"Başlık sayısı: {len(preview.headers)}\n"
+                f"{header_lines}\n\n"
+                "Gövde gözlemlenmedi (HEAD isteği hiçbir zaman gövde"
+                " döndürmez).\n\n"
+                "Bu HTTPS başlık sonucu kanıt olarak kaydedilsin mi?",
+                parent=self.output,
+            ):
+                self.status.set("HTTP kanıtı kaydı iptal edildi.")
+                return
+            self._dispatch(
+                lambda: self._controller.record_research_http_evidence_ingestion(run),
+                record_complete,
+                "Kali · HTTP kanıtı (kaydet)",
+            )
+
+        def record_complete(response: BrainResponse) -> None:
+            if generation != self._generation:
+                self.status.set(
+                    "Seçim değişti; önceki yanıtla işlem yapılamaz. Yeniden önizle."
+                )
+                return
+            show(response)
+            if not response.success:
+                self.status.set("HTTP kanıtı kaydı tamamlanamadı. Ayrıntılar aşağıda.")
+                return
+            self.status.set(
+                "HTTP kanıtı kaydı tamamlandı. Sonucu aşağıdan inceleyebilirsin."
+            )
+
+        self._dispatch(
+            lambda: self._controller.preview_research_http_evidence_ingestion(run),
+            preview_complete,
+            "Kali · HTTP kanıtı (önizle)",
         )

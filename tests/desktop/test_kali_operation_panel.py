@@ -24,11 +24,15 @@ from cognition.KaliOperationRunApplicationService import (
 from cognition.ResearchAssetInventoryApplicationService import (
     ResearchAssetInventoryApplicationService,
 )
+from cognition.ResearchHttpEvidenceApplicationService import (
+    ResearchHttpEvidenceApplicationService,
+)
 from desktop.DesktopController import DesktopController
 from desktop.KaliOperationPanel import KaliOperationPanel
 from research.JsonFileResearchAssetInventoryStore import (
     ResearchAssetInventoryDocument,
 )
+from research.JsonFileResearchHttpEvidenceStore import ResearchHttpEvidenceDocument
 from research.JsonFileResearchKaliOperationAuthorizationStore import (
     JsonFileResearchKaliOperationAuthorizationStore,
 )
@@ -61,6 +65,17 @@ class InMemoryAssetInventoryStore:
         return self._document
 
     def save(self, document: ResearchAssetInventoryDocument) -> None:
+        self._document = document
+
+
+class InMemoryHttpEvidenceStore:
+    def __init__(self) -> None:
+        self._document = ResearchHttpEvidenceDocument()
+
+    def load(self) -> ResearchHttpEvidenceDocument:
+        return self._document
+
+    def save(self, document: ResearchHttpEvidenceDocument) -> None:
         self._document = document
 
 
@@ -113,6 +128,12 @@ class KaliOperationPanelTests(unittest.TestCase):
             composer,
             program_scope_revision_store=self.scopes,
         )
+        self.http_evidence_store = InMemoryHttpEvidenceStore()
+        self.http_evidence = ResearchHttpEvidenceApplicationService(
+            self.http_evidence_store,
+            composer,
+            program_scope_revision_store=self.scopes,
+        )
         self.requests = []
         brain = Mock()
 
@@ -127,6 +148,12 @@ class KaliOperationPanelTests(unittest.TestCase):
                 ),
                 "research_asset_dns_ingestion_record": (
                     self.assets.process_dns_ingestion_record
+                ),
+                "research_http_evidence_ingestion_preview": (
+                    self.http_evidence.process_ingestion_preview
+                ),
+                "research_http_evidence_ingestion_record": (
+                    self.http_evidence.process_ingestion_record
                 ),
             }[request.metadata["intent"]](request)
 
@@ -370,6 +397,18 @@ class KaliOperationPanelTests(unittest.TestCase):
         self.panel.run()
         self.finish()
 
+    def _complete_https_run(
+        self, stdout_lines=("HTTP/1.1 200 OK", "Content-Type: text/html"), exit_code=0
+    ):
+        self.panel.operation.set("HTTPS başlıklarını oku (curl)")
+        self.preview_and_approve()
+        preview = self.panel._preview
+        self.adapter.run.return_value = ResearchKaliOperationProcessResult(
+            preview.command_plan, exit_code, stdout_lines
+        )
+        self.panel.run()
+        self.finish()
+
 
 class KaliOperationPanelDnsIngestionTests(unittest.TestCase):
     """Step 4 ("Envantere aktar"), built on the same real-widget fixture.
@@ -390,7 +429,8 @@ class KaliOperationPanelDnsIngestionTests(unittest.TestCase):
         self.assertEqual(self.pending, [])
         self.assertIn("Önce başarılı", self.panel.status.get())
 
-    def test_an_https_run_cannot_be_ingested(self):
+    def test_an_https_run_is_never_routed_through_dns_ingestion(self):
+        """An HTTPS run is ingestable (as HTTP evidence), but never as a DNS asset."""
         self.panel.operation.set("HTTPS başlıklarını oku (curl)")
         self.preview_and_approve()
         self.adapter.run.return_value = ResearchKaliOperationProcessResult(
@@ -400,9 +440,11 @@ class KaliOperationPanelDnsIngestionTests(unittest.TestCase):
         self.finish()
 
         self.panel.ingest()
+        self.finish()
+        self.finish()
 
-        self.assertEqual(self.pending, [])
-        self.assertIn("Önce başarılı", self.panel.status.get())
+        self.assertEqual(self.asset_inventory_store.load().observations, ())
+        self.assertEqual(len(self.http_evidence_store.load().records), 1)
 
     def test_preview_then_confirm_records_hostname_address_and_relation(self):
         self._complete_dns_run()
@@ -461,6 +503,109 @@ class KaliOperationPanelDnsIngestionTests(unittest.TestCase):
         document = self.asset_inventory_store.load()
         self.assertEqual(len(document.observations), 4)
         self.assertEqual(len(document.relations), 2)
+
+
+class KaliOperationPanelHttpEvidenceIngestionTests(unittest.TestCase):
+    """Step 4 ("Envantere aktar") for a successful `HTTPS_HEADER_LOOKUP` run.
+
+    Reuses `KaliOperationPanelTests`' fixture methods directly (not by
+    subclassing it, which would re-run every one of its test methods a second
+    time under this class name too) — mirrors
+    `KaliOperationPanelDnsIngestionTests`'s own structure exactly.
+    """
+
+    setUp = KaliOperationPanelTests.setUp
+    finish = KaliOperationPanelTests.finish
+    preview_and_approve = KaliOperationPanelTests.preview_and_approve
+    _complete_https_run = KaliOperationPanelTests._complete_https_run
+
+    def test_ingest_before_any_run_reports_status_without_dispatching(self):
+        self.panel.ingest()
+
+        self.assertEqual(self.pending, [])
+        self.assertIn("Önce başarılı", self.panel.status.get())
+
+    def test_a_dns_run_is_never_routed_through_http_evidence_ingestion(self):
+        self.preview_and_approve()
+        self.adapter.run.return_value = ResearchKaliOperationProcessResult(
+            self.panel._preview.command_plan, 0, ("93.184.216.34",)
+        )
+        self.panel.run()
+        self.finish()
+
+        self.panel.ingest()
+        self.finish()
+        self.finish()
+
+        self.assertEqual(self.http_evidence_store.load().records, ())
+        self.assertEqual(len(self.asset_inventory_store.load().observations), 2)
+
+    def test_preview_then_confirm_records_http_evidence(self):
+        self._complete_https_run()
+        self.assertIsNotNone(self.panel._kali_operation_run)
+
+        self.panel.ingest()
+        # First pending action is the side-effect-free ingestion preview.
+        self.finish()
+        self.assertEqual(self.http_evidence_store.load().records, ())
+        # The confirm dialog (patched to return True) queued the record call.
+        self.finish()
+
+        document = self.http_evidence_store.load()
+        self.assertEqual(len(document.records), 1)
+        [record] = document.records
+        self.assertEqual(record.response_status_code, 200)
+        self.assertEqual(len(record.response_headers), 1)
+        self.assertFalse(record.response_body_observed)
+        self.assertFalse(record.request_headers_observed)
+        self.assertIn("HTTP kanıtı kaydı tamamlandı", self.panel.status.get())
+
+    def test_declining_the_confirm_dialog_sends_no_record_request(self):
+        self._complete_https_run()
+
+        self.dialog.return_value = False
+        self.panel.ingest()
+        self.finish()
+
+        self.assertEqual(self.pending, [])
+        self.assertEqual(self.http_evidence_store.load().records, ())
+        self.assertIn("iptal edildi", self.panel.status.get())
+
+    def test_sensitive_header_values_are_masked_in_the_confirm_dialog(self):
+        self._complete_https_run(
+            stdout_lines=("HTTP/1.1 200 OK", "Set-Cookie: session=super-secret")
+        )
+
+        self.panel.ingest()
+        self.finish()
+
+        dialog_text = self.dialog.call_args.args[1]
+        self.assertIn("Set-Cookie", dialog_text)
+        self.assertNotIn("super-secret", dialog_text)
+        self.finish()
+        # The stored record always keeps the true value.
+        [record] = self.http_evidence_store.load().records
+        [header] = record.response_headers
+        self.assertEqual(header.value, "session=super-secret")
+
+    def test_changing_selection_after_a_run_invalidates_the_stored_run(self):
+        self._complete_https_run()
+        self.panel.hostname.set("www.example.test")
+
+        self.assertIsNone(self.panel._kali_operation_run)
+        self.panel.ingest()
+        self.assertEqual(self.pending, [])
+
+    def test_recording_the_same_run_twice_yields_exactly_one_stored_event(self):
+        self._complete_https_run()
+
+        for _ in range(2):
+            self.panel.ingest()
+            self.finish()
+            self.finish()
+
+        document = self.http_evidence_store.load()
+        self.assertEqual(len(document.records), 1)
 
 
 if __name__ == "__main__":

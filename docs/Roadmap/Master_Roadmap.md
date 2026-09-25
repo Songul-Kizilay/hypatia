@@ -887,6 +887,22 @@ records) rather than item 1 itself. `require_hostname`/`require_addresses`
 remain the only real enforcement gates; the tri-state read is additive and
 explanatory only, and was independently security-reviewed to confirm no
 path lets `UNCERTAIN` or a bare `IN_SCOPE` read reach an active action.
+v0.3.407 delivered item 1, Asset Inventory + canonical asset identity
+(`ResearchAssetKind`/`ResearchAssetProvenanceKind`/`ResearchAssetRelationKind`,
+append-only observation/relation records, a derived-only `ResearchAsset`
+projection). v0.3.408 delivered item 2, Recon Result Ingestion /
+normalization, teaching the Asset Inventory to honestly attribute one
+already-completed, already-authorized `DNS_RECORD_LOOKUP` Kali operation
+result via a new `KALI_OPERATION_RESULT` provenance kind bound 1:1 to a
+`source_operation_digest`. v0.3.409 delivered item 3, the HTTP Evidence
+model: a new, narrowly-scoped `ResearchHttpEvidenceRecord` consuming one
+already-completed, already-authorized `HTTPS_HEADER_LOOKUP` operation
+result, with a deterministic content-derived `evidence_id` making
+replay-safety structural and a live, never-cached scope-resolution view
+threaded through every read. In every case, ingestion can only ever reach
+scope resolution through the existing, unchanged, live `resolve_hostname`/
+`resolve_addresses`, and no path lets discovered evidence manufacture
+authority.
 
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a

@@ -81,6 +81,10 @@ from cognition.ResearchGoalStartApplicationService import (
 from cognition.ResearchHonestyApplicationService import (
     ResearchHonestyApplicationService,
 )
+from cognition.ResearchHttpEvidenceApplicationService import (
+    ResearchHttpEvidenceApplicationService,
+    ResearchHttpEvidenceStore,
+)
 from cognition.ResearchMissionAuditApplicationService import (
     ResearchMissionAuditApplicationService,
 )
@@ -338,6 +342,7 @@ class CognitiveEngine:
         program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         asset_inventory_store: ResearchAssetInventoryStore | None = None,
+        http_evidence_store: ResearchHttpEvidenceStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -731,6 +736,17 @@ class CognitiveEngine:
                     program_scope_revision_store=program_scope_revision_store,
                 )
             )
+        self._research_http_evidence_service: (
+            ResearchHttpEvidenceApplicationService | None
+        ) = None
+        if http_evidence_store is not None:
+            self._research_http_evidence_service = (
+                ResearchHttpEvidenceApplicationService(
+                    http_evidence_store,
+                    response_composer,
+                    program_scope_revision_store=program_scope_revision_store,
+                )
+            )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
@@ -935,6 +951,35 @@ class CognitiveEngine:
                 fail = composer.research_asset_dns_ingestion_record_failure
                 return fail(request, "Asset inventory is not available.")
             return self._research_asset_inventory_service.process_dns_ingestion_record(
+                request
+            )
+
+        if ResearchHttpEvidenceApplicationService.is_ingestion_preview_request(request):
+            if self._research_http_evidence_service is None:
+                composer = self._response_composer
+                fail = composer.research_http_evidence_ingestion_preview_failure
+                return fail(request, "HTTP evidence is not available.")
+            return self._research_http_evidence_service.process_ingestion_preview(
+                request
+            )
+
+        if ResearchHttpEvidenceApplicationService.is_ingestion_record_request(request):
+            if self._research_http_evidence_service is None:
+                composer = self._response_composer
+                fail = composer.research_http_evidence_ingestion_record_failure
+                return fail(request, "HTTP evidence is not available.")
+            return self._research_http_evidence_service.process_ingestion_record(
+                request
+            )
+
+        if ResearchHttpEvidenceApplicationService.is_evidence_for_target_request(
+            request
+        ):
+            if self._research_http_evidence_service is None:
+                composer = self._response_composer
+                fail = composer.research_http_evidence_for_target_failure
+                return fail(request, "HTTP evidence is not available.")
+            return self._research_http_evidence_service.process_evidence_for_target(
                 request
             )
 

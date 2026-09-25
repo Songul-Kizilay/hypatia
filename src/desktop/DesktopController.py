@@ -502,6 +502,38 @@ class DesktopController:
             )
         )
 
+    def preview_research_http_evidence_ingestion(
+        self, run: ResearchKaliOperationRun
+    ) -> BrainResponse:
+        """Read-only preview of ingesting one completed HTTPS header lookup run.
+
+        Passes the already-completed, already-authorized run through
+        unchanged; this call itself performs no fetch, scan, or write.
+        """
+        return self._brain.process(
+            BrainRequest(
+                "Preview HTTP evidence ingestion",
+                metadata={
+                    "intent": "research_http_evidence_ingestion_preview",
+                    "kali_operation_run": run,
+                },
+            )
+        )
+
+    def record_research_http_evidence_ingestion(
+        self, run: ResearchKaliOperationRun
+    ) -> BrainResponse:
+        """Confirm one completed HTTPS header lookup run's parsed result as evidence."""
+        return self._brain.process(
+            BrainRequest(
+                "Record HTTP evidence ingestion",
+                metadata={
+                    "intent": "research_http_evidence_ingestion_record",
+                    "kali_operation_run": run,
+                },
+            )
+        )
+
     def select_session(self, session_id: str) -> BrainResponse:
         """Activate an existing session through its explicit Brain command."""
         normalized_session_id = session_id.strip()
