@@ -14,6 +14,278 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Finding Lifecycle foundation (Bug Bounty foundation, step 7) |
+| Base SHA | 45252c1e9690cb7e8177d0357db3d6d30522fce7 |
+| Status | implementation |
+| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: user-directed. Item 7 of the Bug Bounty Researcher roadmap,
+directly after delivered v0.3.415 (Security Hypothesis model foundation).
+Repository-grounded discovery (2026-09-26, hypatia-lead, direct file reads):
+three pre-existing "Finding"/"Vulnerability"-named things exist and are all
+confirmed unrelated, not reused, not touched. `src/security/SecurityFinding.py`/
+`SecurityFindingKind.py` audit Hypatia's own persisted state for internal
+integrity problems (e.g. a non-HTTPS source URL) — no target concept exists
+in that type at all. `src/research/ReflectionFindingKind.py`/
+`ResearchReflectionFinding.py` name bounded observations about how a
+*research run's own process* went (failures, contradictions, weak evidence)
+— meta-commentary on process quality, not a security claim about a target.
+`src/security/VulnerabilityFamilyGraph.py`/`VulnerabilityRelation.py`/
+`VulnerabilityRelationKind.py` is an authored, conceptual taxonomy graph of
+weakness *classes* (e.g. "SSRF enables metadata access") with, by its own
+docstring, "no node type for a system, no edge type for 'is vulnerable to',
+and no way to attach a target" — it describes a body of knowledge, never an
+attack surface, and has no `program_id`/subject/evidence concept whatsoever.
+`ResearchVulnerabilityRecord`/`ResearchVulnerabilityMetric` hold structured
+NVD/CVE provider metadata for research-source discovery candidates — "not
+fetched, not evidence, not trusted, not a claim." None of the four is a
+per-target, per-program finding record, and this milestone does not modify
+any of them.
+
+Scope: a new, `program_id`-scoped Finding Lifecycle sitting directly on top
+of the delivered v0.3.415 Security Hypothesis foundation, named
+`ResearchSecurityFinding*` to read as v0.3.415's sibling (same `research/`
+module, same naming discipline) while staying textually distinct from the
+unrelated `security.SecurityFinding`. Mirrors v0.3.415's exact architecture
+(append-only founding record + append-only evidence-link records +
+append-only status-transition records + a derived-only read model, modeled
+on `ResearchAsset`'s type-plus-builder shape) — reusing, not duplicating,
+`ResearchAssetKind`/`canonicalize_asset_value` for subject identity,
+`ResearchSensitiveInputPolicy` for every free-text field, and
+`ResearchAssetScopeResolutionView`/`ResearchTargetScope.resolve_hostname`/
+`resolve_addresses` for live scope display.
+
+New types in `src/research/`:
+- `ResearchSecurityFindingStatus` (`StrEnum`): `CANDIDATE`,
+  `VALIDATION_REQUIRED`, `VALIDATED`, `REFUTED`, `DUPLICATE`, `SUPERSEDED`.
+  A `.terminal` property true for `REFUTED`/`DUPLICATE`/`SUPERSEDED` only. A
+  `means_confirmed_vulnerability`-style property (name to match
+  `ResearchSecurityHypothesisStatus.means_validated_vulnerability`'s exact
+  discipline) that is `False` for every member, including `VALIDATED` — a
+  validated finding is evidence-backed reasoning, never authority, and this
+  milestone performs no active validation of any kind so nothing here could
+  honestly claim confirmation of exploitability. A pure
+  `is_valid_status_transition(current, new)` function implementing exactly:
+  `CANDIDATE` -> `{VALIDATION_REQUIRED, VALIDATED, REFUTED, DUPLICATE,
+  SUPERSEDED}`; `VALIDATION_REQUIRED` -> `{CANDIDATE, VALIDATED, REFUTED,
+  DUPLICATE, SUPERSEDED}`; `VALIDATED` -> `{REFUTED, DUPLICATE, SUPERSEDED}`
+  (never back to `CANDIDATE`/`VALIDATION_REQUIRED` — a corrected validation
+  is explicitly re-refuted, not silently reopened); `REFUTED`/`DUPLICATE`/
+  `SUPERSEDED` -> `{}` (terminal, mirroring `ResearchSecurityHypothesisStatus`'s
+  `REFUTED`-is-terminal discipline exactly). A same-state transition is
+  always invalid. The state-table function only knows the graph; the
+  additional business rule that a transition *to* `VALIDATED` requires real
+  validation evidence and zero unresolved contradicting evidence is enforced
+  at the application-service layer, not baked into this pure function
+  (mirroring exactly how v0.3.415 keeps `is_valid_status_transition` pure
+  and enforces the evidence floor in the service).
+- `ResearchSecurityFindingOrigin` (`StrEnum`): exactly one member,
+  `OPERATOR_AUTHORED` (mirrors `ResearchSecurityHypothesisOrigin`'s
+  one-member-until-truly-needed discipline; no automatic/model-origin member
+  is added this milestone).
+- `ResearchSecurityFindingEvidenceKind` (`StrEnum`): exactly one member,
+  `HTTP_EVIDENCE`. Deliberately its own enum, not a re-export of
+  `ResearchSecurityHypothesisEvidenceKind` — this codebase's own convention
+  (`ResearchAssetProvenanceKind` vs `ResearchHttpEvidenceProvenanceKind`)
+  is that each record type owns its evidence/provenance vocabulary
+  independently even where two enums currently hold the same one member, so
+  the two subsystems' evidence vocabularies can evolve independently later.
+- `ResearchSecurityFindingEvidenceRelation` (`StrEnum`): `SUPPORTS`,
+  `CONTRADICTS`, `VALIDATES` — its own enum, not a widened
+  `ResearchSecurityHypothesisEvidenceRelation` (which stays exactly
+  `SUPPORTS`/`CONTRADICTS`, untouched, unmodified). `VALIDATES` evidence is
+  the one and only real gate for the `VALIDATED` status.
+- `ResearchSecurityFindingRecord` (frozen dataclass, the immutable founding
+  fact): `finding_id`, `program_id`, `source_hypothesis_id`, `finding_kind:
+  ResearchSecurityHypothesisKind` (reused unchanged — "may inherit from
+  Security Hypothesis categories" per this milestone's own instruction; no
+  new classification vocabulary), `subject_kind: ResearchAssetKind`,
+  `subject_canonical_value`, `title` (bounded ~200 chars), `description`
+  (bounded ~2,000 chars), `required_followup` (bounded ~1,000 chars,
+  descriptive strategy only, never permission — same discipline as
+  `required_validation`), `origin`, `created_at`. Never mutated after
+  creation. No separate `disposition` field: `status` (on the derived read
+  model) already names the disposition, and a second field asserting the
+  same fact would only risk drifting from it.
+- `ResearchSecurityFindingEvidenceLinkRecord` (frozen dataclass, append-only
+  per citation): `link_id`, `finding_id`, `program_id`, `evidence_kind`,
+  `evidence_id` (validated `is_http_evidence_id` shape), `relation`,
+  `recorded_at`.
+- `ResearchSecurityFindingStatusTransitionRecord` (frozen dataclass,
+  append-only per status change): `transition_id`, `finding_id`,
+  `program_id`, `status`, `reason` (bounded ~500 chars, sensitive-input
+  checked, may be empty — mirrors the Hypothesis transition record exactly),
+  `duplicate_of_finding_id: str | None` (populated exactly when `status is
+  DUPLICATE`, `None` otherwise — fail-closed 1:1 binding, mirroring
+  `ResearchAssetObservationRecord`'s `source_operation_digest`/`provenance`
+  1:1-binding discipline), `superseded_by_finding_id: str | None`
+  (populated exactly when `status is SUPERSEDED`, `None` otherwise, same
+  1:1 binding), `recorded_at`.
+- `ResearchSecurityFinding` (derived read model, no `Record` suffix,
+  mirroring `ResearchAsset`/`ResearchSecurityHypothesis`'s own convention):
+  assembled fresh on every read from the founding record plus its evidence
+  links and status transitions — never persisted as a merged entity. Exposes
+  `supporting_evidence`/`contradicting_evidence`/`validation_evidence`
+  (three disjoint tuples, never netted against each other) and a derived
+  `status` (the latest transition, or `CANDIDATE` if none has ever been
+  recorded — mirroring `OPEN` as Hypothesis's zero-transition default).
+
+New persistence: `JsonFileResearchSecurityFindingStore` (new store, schema
+version 1), three flat lists (findings, evidence links, status transitions)
+in one atomic file, modeled directly on
+`JsonFileResearchSecurityHypothesisStore`'s shape — strict field-set
+validation, bounded ceilings, globally-unique ID rejection per ID space,
+dangling-reference rejection (an evidence link or status transition must
+reference a finding already present in the same document), fail-closed on
+malformed/truncated content.
+
+New application service: `ResearchSecurityFindingApplicationService`
+(`src/cognition/`, mirroring `ResearchSecurityHypothesisApplicationService`'s
+shape exactly), taking the finding store, an HTTP-evidence reader, a narrow
+`SecurityHypothesisReader` Protocol (`hypothesis_by_id(hypothesis_id,
+program_id) -> ResearchSecurityHypothesis | None`, satisfied naturally by
+`ResearchSecurityHypothesisApplicationService` itself — no import cycle, no
+hard coupling, mirroring the existing `ActiveProgramScopeRevisionReader`/
+`ResearchHttpEvidenceReader` Protocol-injection pattern), and the same
+optional `program_scope_revision_store`.
+
+- `create_finding(program_id, source_hypothesis_id, title, description,
+  required_followup)`: validates the source hypothesis exists for this
+  exact program via the injected reader; requires the hypothesis's current
+  (derived) status to be exactly `READY_FOR_VALIDATION` (the hypothesis
+  side's own explicit "an operator judges enough has been gathered" signal
+  — promoting an `OPEN`/`NEEDS_EVIDENCE` hypothesis, or a `REFUTED` one,
+  straight to a finding candidate would let a bare conjecture or a disproven
+  one masquerade as something worth tracking as a finding); copies
+  `finding_kind`/`subject_kind`/`subject_canonical_value` from the
+  hypothesis (never independently operator-typed, so a finding's identity
+  can never drift from the hypothesis that produced it); refuses a second
+  finding for the same `source_hypothesis_id` (the dedup rule — one
+  hypothesis maps to at most one finding lifecycle; the caller attaches
+  further evidence or transitions the existing finding instead of creating
+  a near-duplicate); carries the hypothesis's *current* supporting and
+  contradicting evidence forward as the finding's own initial evidence links
+  (same relation, same evidence IDs) — the finding starts from the same
+  evidentiary state as its hypothesis, then diverges independently.
+- `attach_evidence(finding_id, program_id, evidence_ids, relation)`:
+  supporting, contradicting, or validating; same-program existence check
+  against the HTTP evidence store, same-program finding-existence check;
+  always allowed regardless of current status (append-only audit trail,
+  mirroring the Hypothesis service's own unconditional `attach_evidence`).
+- `transition_status(finding_id, program_id, new_status, reason,
+  duplicate_of_finding_id=None, superseded_by_finding_id=None)`: validates
+  the finding exists for this program, validates the pure state-table
+  transition, and — only for a transition *to* `VALIDATED` — additionally
+  requires at least one `VALIDATES`-relation evidence link and refuses if
+  any `CONTRADICTS`-relation evidence link currently exists (the smallest
+  safe rule for unresolved contradictions per this milestone's own
+  instruction: a finding with live contradicting evidence simply cannot
+  validate, full stop, rather than adjudicating whether the validation
+  "outweighs" the contradiction); for a transition to `DUPLICATE` requires
+  `duplicate_of_finding_id` to name a different, existing, same-program
+  finding; for `SUPERSEDED` requires `superseded_by_finding_id` under the
+  same rule; applies the sensitive-input policy to `reason`.
+- `findings_for_program`/`finding_by_id`: derived read projections.
+- `current_scope_resolution`: read-only, never-cached dispatch, identical
+  shape to the Hypothesis service's own method, reusing
+  `ResearchAssetScopeResolutionView` unchanged.
+- Brain intents: `research_security_finding_create`,
+  `research_security_finding_evidence_attach`,
+  `research_security_finding_status_transition`,
+  `research_security_finding_preview`, mirroring the exact dispatch/failure
+  pattern `CognitiveEngine.py` already uses for the Hypothesis intents. Every
+  response for a non-terminal-status finding states a fixed, literal
+  disclaimer distinguishing a candidate from a validated finding and stating
+  that even `VALIDATED` is not authority to act.
+
+Desktop: a new "Findings" panel (`src/desktop/ResearchSecurityFindingPanel.py`),
+mirroring `ResearchSecurityHypothesisPanel.py`'s exact widget idiom — list
+findings per program (kind/subject/status/source hypothesis/created-at),
+detail pane showing title/description/required follow-up/supporting,
+contradicting, and validation evidence IDs/duplicate-or-superseded
+linkage/provenance/full status-transition history/current live scope
+resolution labelled "recomputed live from active policy, not stored". A
+visually plain distinction between `CANDIDATE` and `VALIDATED` (text labels
+only — no color/severity styling of any kind, since this milestone adds no
+severity concept). Entry fields to create a finding, attach evidence, and
+transition status.
+
+Non-goals (exhaustive): no active validation engine, no Validation Recipes,
+no Kali/Burp/browser/mouse-keyboard control, no shell/HTTP/network execution
+of any kind, no exploitation, no automated CVSS/severity, no Impact
+Reasoning, no Report Composer, no automatic root-cause correlation or fuzzy
+duplicate inference, no vulnerability intelligence engine, no CVE
+monitoring, no fuzzing, no business-logic state-machine engine, no
+internal/cloud execution; no modification of
+`ResearchSecurityHypothesisRecord`/`Status`/`Origin`/`EvidenceKind`/
+`EvidenceRelation`/`ApplicationService`/`Panel` (v0.3.415, reused strictly
+by reference/Protocol), `ResearchSensitiveInputPolicy`,
+`ResearchHttpEvidenceRecord`, `ResearchAssetKind`/`canonicalize_asset_value`,
+`SecurityFinding`/`SecurityFindingKind` (unrelated self-audit),
+`ReflectionFindingKind`/`ResearchReflectionFinding`,
+`VulnerabilityFamilyGraph`/`VulnerabilityRelation`/`VulnerabilityRelationKind`
+(unrelated taxonomy graph), or `ResearchVulnerabilityRecord`/
+`ResearchVulnerabilityMetric` (unrelated NVD candidate metadata); no
+automatic/LLM-generated finding content or validation (origin is
+`OPERATOR_AUTHORED` only); no new evidence kind beyond `HTTP_EVIDENCE`; no
+cross-program finding or evidence reference of any kind; no fuzzy/LLM
+similarity-based duplicate detection (deterministic
+one-hypothesis-per-finding identity only); no new scope/target/credential/
+budget primitive; no `disposition` field separate from `status`; no
+automatic downgrade of `VALIDATED` when new contradicting evidence arrives
+(attaching contradicting evidence is always allowed and always preserved,
+but a status change remains a separate, explicit, operator-driven action).
+
+Security invariants: finding creation, evidence attachment, and status
+transitions must never execute a network request, spawn a process, run a
+tool, or modify scope/credential/budget/target state — reasoning over
+already-recorded evidence only, proved by a no-network/no-process test
+mirroring v0.3.415's. `VALIDATED` never means permission to act — every
+consumer of that status (Brain response, desktop render) must render the
+fixed non-authority disclaimer. Program isolation is enforced on every
+finding/evidence/hypothesis-reference operation. `ResearchSensitiveInputPolicy`
+(unmodified) is applied to `title`, `description`, `required_followup`, and
+transition `reason`. Untrusted evidence content can never reach a finding
+field, status, or Brain response — the finding layer reads only evidence
+IDs, never evidence content, exactly like the Hypothesis layer.
+
+Test strategy: model construction/immutability/bounded-text/invalid-
+enum tests; every valid and invalid status transition (all 6 states as both
+source and target where the table allows, self-transition rejected for all
+6, every terminal state's zero outgoing transitions verified); the
+`VALIDATED` evidence gate (positive: validation evidence present and no
+contradicting evidence; negative: no validation evidence; negative: live
+contradicting evidence blocks validation even with validation evidence
+present); `DUPLICATE`/`SUPERSEDED` linkage validation (missing reference
+rejected, self-reference rejected, cross-program reference rejected);
+hypothesis-gate tests (wrong hypothesis status rejected, specifically a
+`REFUTED` hypothesis rejected, cross-program hypothesis rejected, evidence
+carried forward correctly from the hypothesis at creation time); dedup (a
+second finding for the same `source_hypothesis_id` refused); program
+isolation across findings/evidence/hypotheses; sensitive-input refusal on
+all four free-text fields; untrusted-evidence inertness; a no-network/
+no-process authority proof; a restart/reload test proving the derived read
+model (including computed status) survives identically; a realistic
+end-to-end flow building two real `ResearchHttpEvidenceRecord` fixtures
+(the object-ID-access scenario from this milestone's own instruction) and
+both a validated and a refuted outcome, proving no request is issued and no
+vulnerability is automatically declared confirmed; desktop reachability via
+a real constructed-widget test, including full coverage of the
+`DesktopController`/`CognitiveEngine`-dispatch/`Bootstrap`-wiring layer up
+front this time (the exact gap class QA found and closed after the fact in
+v0.3.415 — write these tests during initial implementation, not as a
+follow-up pass); a small, high-value mutation-testing pass (3-5 mutations:
+allow `VALIDATED` without validation evidence, allow cross-program evidence,
+let untrusted/model text set status, bypass the sensitive-input guard, let
+finding creation/transition touch scope or authority) — each caught, all
+restored; impacted suites focused first, full canonical gates once at
+release.
+
+## Historical scope: v0.3.415 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Security Hypothesis model foundation (Bug Bounty foundation, step 6) |
 | Base SHA | 6217535373fc9e7e01545b377c49fc9d56ef5175 |
 | Status | delivered |
