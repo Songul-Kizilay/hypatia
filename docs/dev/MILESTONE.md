@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Finding Lifecycle foundation (Bug Bounty foundation, step 7) |
 | Base SHA | 45252c1e9690cb7e8177d0357db3d6d30522fce7 |
-| Status | implementation |
-| Specialists | hypatia-epistemics: sole implementer; hypatia-security: independent review; hypatia-qa: independent review; hypatia-lead: release |
+| Status | release |
+| Specialists | hypatia-epistemics: sole implementer, plus a bounded completion pass closing review- and mutation-found gaps; hypatia-security: independent review, yes-with-caveats, no Critical/High findings, deferred findings recorded; hypatia-qa: independent review, ready-with-caveats, no production-code defects, test gaps closed; hypatia-lead: release |
 | Blockers | none |
 
 Rationale: user-directed. Item 7 of the Bug Bounty Researcher roadmap,
@@ -78,8 +78,10 @@ New types in `src/research/`:
   additional business rule that a transition *to* `VALIDATED` requires real
   validation evidence and zero unresolved contradicting evidence is enforced
   at the application-service layer, not baked into this pure function
-  (mirroring exactly how v0.3.415 keeps `is_valid_status_transition` pure
-  and enforces the evidence floor in the service).
+  (mirroring how v0.3.415 keeps `is_valid_status_transition` pure and
+  enforces its business rules in the service; correction recorded at
+  release: v0.3.415's evidence floor applies when a hypothesis is created,
+  not to its status transitions, which carry no evidence gate).
 - `ResearchSecurityFindingOrigin` (`StrEnum`): exactly one member,
   `OPERATOR_AUTHORED` (mirrors `ResearchSecurityHypothesisOrigin`'s
   one-member-until-truly-needed discipline; no automatic/model-origin member
@@ -281,6 +283,77 @@ let untrusted/model text set status, bypass the sensitive-input guard, let
 finding creation/transition touch scope or authority) — each caught, all
 restored; impacted suites focused first, full canonical gates once at
 release.
+
+Security review (hypatia-security, 2026-09-26): yes-with-caveats, no
+Critical or High findings. No path exists from finding state to tool,
+network, process, scope, or authority: nothing reads a finding status as
+permission, `means_confirmed_vulnerability` is `False` for every status, the
+service requires real enum instances for status and relation, the finding
+layer only tests evidence IDs for membership and never reads evidence
+content, the sensitive-input policy covers all four free-text fields on
+write and again on load, and program isolation holds on every write and read
+path. Deferred, non-blocking findings (no production change in this
+release): F1 (Medium) — `VALIDATES` evidence need only exist in the same
+program, so it may reference a different host; a future design should model
+explicit evidence-to-subject/scope relationships rather than assume hostname
+equality. F2 (Low) — evidence IDs carried forward from the hypothesis are
+not independently re-checked against the HTTP evidence store; defer to
+provenance/store hardening. F3 (Low, inherited from v0.3.415) — status
+order depends on wall-clock timestamps, so a clock step backwards can hide
+a later transition. F4 (Low, inherited) — store load validates structure,
+bounds, unique IDs, and dangling references but does not replay lifecycle
+invariants (transition legality, the `VALIDATED` gate, linkage targets,
+one-finding-per-hypothesis). F5-F10 are informational (no cross-process
+lock; deep-nesting fails closed; the contradiction gate is per finding by
+the spec's deterministic-identity choice; control characters allowed in
+operator free text). F11: this section's claim that v0.3.415 enforced an
+evidence floor on transitions was inaccurate and is corrected above.
+
+QA review (hypatia-qa, 2026-09-26): ready-with-caveats, no production-code
+defects. An 86-row acceptance-criterion traceability matrix found every
+criterion implemented; the gaps were in test evidence (no Brain-level
+`VALIDATED` disclaimer test, the 500-character reason bound, truncated JSON,
+failed atomic write, no-automatic-downgrade, several panel detail lines) and
+in the panel listing, which lacked the source hypothesis and created-at
+columns this section requires.
+
+Completion passes (approved by hypatia-lead, 2026-09-26):
+each panel row now shows kind, subject, status, source hypothesis, and
+created-at, and the detail pane shows created-at. The not-authority notice
+is one canonical constant in `response.ResponseComposer`, imported by the
+panel (`desktop` already depended on `response`; `response` never imports
+`desktop`, so no new layer direction). Lead decisions: (1) any
+`CONTRADICTS` link — including one carried from the hypothesis — blocks
+`VALIDATED` for the life of the finding in this release, since links are
+append-only and contradiction resolution is a separate future design,
+pinned by a regression test; (2) no hostname-equality rule for `VALIDATES`
+evidence (see F1); (3) the notice wording above, which superseded "a
+candidate finding" phrasing so that a `VALIDATED` finding is never
+mislabelled, is status-neutral: "Research finding only. This status does
+not grant authority to act, execute tools, access systems, or expand
+scope."; (4) F2 deferred. Fifteen tests were added across the two passes;
+no production behaviour changed beyond the panel columns and the notice
+wording.
+
+Mutation pass (2026-09-26): 45 mutants plus an unmutated control (which
+passed) across illegal transitions, the `VALIDATED` evidence gate,
+contradicting-evidence handling, `DUPLICATE`/`SUPERSEDED` linkage,
+cross-program isolation, one-finding-per-hypothesis, append-only history,
+the sensitive-input guard, the authority notice, and execution surfaces.
+43 caught. The first run left five meaningful survivors, each now caught by
+a new test: M05 (service judging a transition against the earliest status),
+M29 (append-only check ignoring status transitions), M35 (untrusted text
+coerced into a status), M36 (notice dropped for `VALIDATED` only), and M44
+(`os.system` inside `create_finding`). M21/M22 (the service's own program
+check removed before attach/transition) survive only because the
+lower-layer `ResearchSecurityFindingDocument` reference check still refuses
+the cross-program write; this was verified directly against both mutants.
+
+Release gates (2026-09-26): Linux, Python 3.14.7 — 7439 tests, 0 failures
+(34 skipped). Windows canonical environment — 7439 tests, OK (skipped=3);
+ResourceWarning output about unclosed file handles during the Windows run
+is recorded as non-blocking test-hygiene debt, not addressed here. Ruff and
+Black clean; MyPy 0 issues in 601 source files.
 
 ## Historical scope: v0.3.415 (delivered)
 

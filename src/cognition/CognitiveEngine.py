@@ -100,6 +100,10 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from cognition.ResearchPlanPreviewApplicationService import (
     ResearchPlanPreviewApplicationService,
 )
+from cognition.ResearchSecurityFindingApplicationService import (
+    ResearchSecurityFindingApplicationService,
+    ResearchSecurityFindingStore,
+)
 from cognition.ResearchSecurityHypothesisApplicationService import (
     ResearchSecurityHypothesisApplicationService,
     ResearchSecurityHypothesisStore,
@@ -353,6 +357,7 @@ class CognitiveEngine:
         http_evidence_store: ResearchHttpEvidenceStore | None = None,
         session_context_store: ResearchSessionContextStore | None = None,
         security_hypothesis_store: ResearchSecurityHypothesisStore | None = None,
+        security_finding_store: ResearchSecurityFindingStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -780,6 +785,23 @@ class CognitiveEngine:
                     program_scope_revision_store=program_scope_revision_store,
                 )
             )
+        self._research_security_finding_service: (
+            ResearchSecurityFindingApplicationService | None
+        ) = None
+        if (
+            security_finding_store is not None
+            and http_evidence_store is not None
+            and self._research_security_hypothesis_service is not None
+        ):
+            self._research_security_finding_service = (
+                ResearchSecurityFindingApplicationService(
+                    security_finding_store,
+                    http_evidence_store,
+                    self._research_security_hypothesis_service,
+                    response_composer,
+                    program_scope_revision_store=program_scope_revision_store,
+                )
+            )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
@@ -1071,6 +1093,46 @@ class CognitiveEngine:
                 return fail(request, "Security hypotheses are not available.")
             service = self._research_security_hypothesis_service
             return service.process_hypothesis_preview(request)
+
+        if ResearchSecurityFindingApplicationService.is_finding_create_request(request):
+            if self._research_security_finding_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_finding_create_failure
+                return fail(request, "Security findings are not available.")
+            return self._research_security_finding_service.process_finding_create(
+                request
+            )
+
+        if ResearchSecurityFindingApplicationService.is_evidence_attach_request(
+            request
+        ):
+            if self._research_security_finding_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_finding_evidence_attach_failure
+                return fail(request, "Security findings are not available.")
+            return self._research_security_finding_service.process_evidence_attach(
+                request
+            )
+
+        if ResearchSecurityFindingApplicationService.is_status_transition_request(
+            request
+        ):
+            if self._research_security_finding_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_finding_status_transition_failure
+                return fail(request, "Security findings are not available.")
+            finding_service = self._research_security_finding_service
+            return finding_service.process_status_transition(request)
+
+        if ResearchSecurityFindingApplicationService.is_finding_preview_request(
+            request
+        ):
+            if self._research_security_finding_service is None:
+                composer = self._response_composer
+                fail = composer.research_security_finding_preview_failure
+                return fail(request, "Security findings are not available.")
+            finding_service = self._research_security_finding_service
+            return finding_service.process_finding_preview(request)
 
         if KaliOperationPreviewApplicationService.is_preview_request(request):
             if self._kali_operation_preview_service is None:

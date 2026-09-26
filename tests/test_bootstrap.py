@@ -26,6 +26,9 @@ from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.JsonFileResearchSecurityFindingStore import (
+    JsonFileResearchSecurityFindingStore,
+)
 from research.JsonFileResearchSecurityHypothesisStore import (
     JsonFileResearchSecurityHypothesisStore,
 )
@@ -405,6 +408,38 @@ class BootstrapTests(unittest.TestCase):
 
         self.assertTrue(response.success, response.message)
         self.assertEqual(response.research_security_hypotheses, ())
+
+    def test_bootstrap_security_finding_store_builds_expected_type_and_path(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+
+        store = bootstrap._security_finding_store()
+
+        self.assertIsInstance(store, JsonFileResearchSecurityFindingStore)
+        self.assertEqual(
+            store._path,
+            self.research_run_path.with_name("research_security_findings.json"),
+        )
+
+    def test_bootstrap_wires_a_working_security_finding_dispatch_path(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+
+        response = bootstrap.container.resolve(Brain).process(
+            BrainRequest(
+                message="Preview security findings",
+                metadata={
+                    "intent": "research_security_finding_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(response.research_security_findings, ())
 
     def test_bootstrap_rejects_orphaned_research_content(self) -> None:
         source = ResearchSource(

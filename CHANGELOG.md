@@ -2,6 +2,73 @@
 
 All notable project changes are recorded here.
 
+## [0.3.416] - 2026-09-26
+
+### Added
+
+- A new, `program_id`-scoped Finding Lifecycle foundation (Bug Bounty
+  Researcher roadmap item 7): an operator-authored `ResearchSecurityFinding`
+  promoted from exactly one `READY_FOR_VALIDATION` Security Hypothesis,
+  copying its kind and subject and carrying its supporting and contradicting
+  evidence forward. At most one finding exists per hypothesis. Distinct from
+  the unrelated `SecurityFinding` self-audit, `ResearchReflectionFinding`,
+  `VulnerabilityFamilyGraph`, and `ResearchVulnerabilityRecord` subsystems,
+  all untouched.
+- Supporting, contradicting, and validating evidence are kept in separate
+  append-only link records, never netted against each other. Status changes
+  are append-only transition records; the current status is always derived.
+- A closed status state machine (`CANDIDATE`/`VALIDATION_REQUIRED`/
+  `VALIDATED`/`REFUTED`/`DUPLICATE`/`SUPERSEDED`; the last three terminal).
+  `VALIDATED` requires at least one validating evidence citation and no
+  contradicting evidence; `DUPLICATE`/`SUPERSEDED` must name a different,
+  existing finding in the same program.
+- A new `ResearchSecurityFindingApplicationService`, a new
+  `JsonFileResearchSecurityFindingStore` (schema version 1), four new Brain
+  intents, and a new desktop "Findings" panel listing each finding's kind,
+  subject, status, source hypothesis, and creation time.
+
+### Security
+
+- No finding status — `VALIDATED` included — is authority to act.
+  `means_confirmed_vulnerability` is `False` for every status, and every
+  non-terminal Brain response and every panel detail view states one
+  canonical notice: "Research finding only. This status does not grant
+  authority to act, execute tools, access systems, or expand scope."
+- Finding creation, evidence attachment, and status transitions perform no
+  network request, process, tool execution, or scope/credential/budget/
+  target change. The no-execution proof test forbids socket connections,
+  every `subprocess` entry point, `os.system`, `os.popen`, the
+  `os.spawn*`/`os.exec*`/`posix_spawn`/`fork` families, `os.startfile`, and
+  asyncio subprocess creation across a full create-attach-transition flow.
+- `ResearchSensitiveInputPolicy` (unchanged) is applied to the title,
+  description, required follow-up, and every transition reason. Program
+  isolation is enforced on every finding, evidence, hypothesis, and linkage
+  reference. The finding layer reads evidence IDs only, never evidence
+  content.
+
+### Verification
+
+- Linux, Python 3.14.7: 7439 tests, 0 failures (34 skipped). Windows
+  canonical environment: 7439 tests, OK (skipped=3). Ruff, Black, and MyPy
+  (0 issues in 601 source files) clean.
+- Mutation pass: 43 of 45 mutants caught. The two survivors (M21/M22, which
+  drop the service's own program check before attach/transition) are still
+  refused by the lower-layer document check, so no cross-program write is
+  possible.
+
+### Known limitation
+
+- Contradicting evidence permanently blocks `VALIDATED`: links are
+  append-only and no contradiction-resolution mechanism exists yet. This is
+  deliberate for this release.
+- Deferred, non-blocking review findings: `VALIDATES` evidence may reference
+  a different host inside the same program (F1); carried-forward evidence
+  IDs are not independently re-checked against the evidence store (F2);
+  status ordering depends on wall-clock timestamps (F3, inherited); store
+  load validates structure but does not replay lifecycle rules (F4,
+  inherited). ResourceWarning output about unclosed file handles during the
+  Windows test run is non-blocking test-hygiene debt.
+
 ## [0.3.415] - 2026-09-25
 
 ### Added

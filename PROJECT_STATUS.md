@@ -2,10 +2,38 @@
 
 ## Runtime Version
 
-`v0.3.415 (Genesis)`
+`v0.3.416 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.416 adds the Finding Lifecycle foundation — item 7 of the
+bounded Bug Bounty Researcher roadmap, built directly on v0.3.415's Security
+Hypothesis model. An operator can promote exactly one `READY_FOR_VALIDATION`
+hypothesis into a `program_id`-scoped `ResearchSecurityFinding`, which copies
+the hypothesis's kind and subject (never retyped) and carries its supporting
+and contradicting evidence forward; at most one finding exists per
+hypothesis. Supporting, contradicting, and validating evidence live in
+separate append-only link records, and status changes are append-only
+transition records from which the current status is always derived. A closed
+state machine (`CANDIDATE`/`VALIDATION_REQUIRED`/`VALIDATED`/`REFUTED`/
+`DUPLICATE`/`SUPERSEDED`, the last three terminal) governs the lifecycle:
+`VALIDATED` requires at least one validating citation and no contradicting
+evidence, so any contradiction — including one carried from the hypothesis —
+blocks validation in this release; `DUPLICATE`/`SUPERSEDED` must name a
+different, existing finding in the same program. No status, `VALIDATED`
+included, is authority to act: every non-terminal Brain response and every
+panel detail view states one canonical notice ("Research finding only. This
+status does not grant authority to act, execute tools, access systems, or
+expand scope."). Finding operations perform no network request, process,
+tool execution, or scope/credential/budget/target change, and read evidence
+IDs only, never evidence content. A new desktop "Findings" panel and four new
+Brain intents expose this model. No active validation, severity/CVSS, report
+composition, or tool/Kali/Burp/browser/shell execution is introduced.
+Deferred review findings (evidence-to-subject matching for `VALIDATES`
+citations, re-checking carried-forward evidence IDs, wall-clock status
+ordering, and lifecycle replay on store load) are recorded in
+`docs/dev/MILESTONE.md` for future evidence/provenance hardening.
 
 Version v0.3.415 adds the Security Hypothesis model foundation — item 6 of
 the bounded Bug Bounty Researcher roadmap. A new, `program_id`-scoped

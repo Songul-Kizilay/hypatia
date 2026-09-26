@@ -74,6 +74,9 @@ from research.JsonFileResearchHttpEvidenceStore import (
     JsonFileResearchHttpEvidenceStore,
     ResearchHttpEvidenceDocument,
 )
+from research.JsonFileResearchSecurityFindingStore import (
+    JsonFileResearchSecurityFindingStore,
+)
 from research.JsonFileResearchSecurityHypothesisStore import (
     JsonFileResearchSecurityHypothesisStore,
 )
@@ -96,6 +99,10 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSecurityFindingEvidenceRelation import (
+    ResearchSecurityFindingEvidenceRelation,
+)
+from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
 from research.ResearchSecurityHypothesisEvidenceRelation import (
     ResearchSecurityHypothesisEvidenceRelation,
 )
@@ -9190,3 +9197,274 @@ class SecurityHypothesisDispatchTests(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertIn("Security hypotheses are not available.", response.message)
+
+
+def _security_finding_http_evidence(
+    evidence_id: str = "a" * 64,
+    program_id: str = "program-a",
+    target_value: str = "example.test",
+) -> ResearchHttpEvidenceRecord:
+    return ResearchHttpEvidenceRecord(
+        evidence_id=evidence_id,
+        program_id=program_id,
+        target_kind=ResearchAssetKind.HOSTNAME,
+        target_canonical_value=target_value,
+        scheme="https",
+        port=443,
+        path="/",
+        request_method="HEAD",
+        request_headers_observed=False,
+        response_status_code=200,
+        response_headers=(),
+        response_body_observed=False,
+        provenance=ResearchHttpEvidenceProvenanceKind.KALI_OPERATION_RESULT,
+        source_operation_digest="f" * 64,
+        recorded_at=datetime(2026, 9, 26, 12, tzinfo=UTC),
+    )
+
+
+class SecurityFindingDispatchTests(unittest.TestCase):
+    """The four new security-finding Brain intents, wired and unwired."""
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        knowledge_path = Path(self.temporary_directory.name) / "knowledge.md"
+        knowledge_path.write_text("Hypatia\n\nKnowledge\n\nHypatia", encoding="utf-8")
+        self.knowledge_engine = KnowledgeEngine()
+        self.knowledge_engine.load(knowledge_path)
+        self.event_bus = EventBus()
+        self.memory_manager = MemoryManager(self.event_bus)
+        self.planner = Planner()
+        self.response_composer = ResponseComposer()
+        self.session_manager = SessionManager(self.event_bus)
+        self.session_rename_service = SessionRenameTransactionService(
+            session_manager=self.session_manager,
+            memory_manager=self.memory_manager,
+            event_bus=self.event_bus,
+        )
+        http_evidence_path = (
+            Path(self.temporary_directory.name) / "research_http_evidence.json"
+        )
+        self.http_evidence_store = JsonFileResearchHttpEvidenceStore(http_evidence_path)
+        self.http_evidence_store.save(
+            ResearchHttpEvidenceDocument(records=(_security_finding_http_evidence(),))
+        )
+        self.security_hypothesis_store_path = (
+            Path(self.temporary_directory.name) / "research_security_hypotheses.json"
+        )
+        self.security_finding_store_path = (
+            Path(self.temporary_directory.name) / "research_security_findings.json"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def _wired_engine(self) -> ProductionCognitiveEngine:
+        return ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            http_evidence_store=self.http_evidence_store,
+            security_hypothesis_store=JsonFileResearchSecurityHypothesisStore(
+                self.security_hypothesis_store_path
+            ),
+            security_finding_store=JsonFileResearchSecurityFindingStore(
+                self.security_finding_store_path
+            ),
+        )
+
+    def _unwired_engine(self) -> ProductionCognitiveEngine:
+        return ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+        )
+
+    def _ready_hypothesis_id(self, engine: ProductionCognitiveEngine) -> str:
+        created = engine.process(
+            BrainRequest(
+                message="Record security hypothesis",
+                metadata={
+                    "intent": "research_security_hypothesis_create",
+                    "program_id": "program-a",
+                    "hypothesis_kind": ResearchSecurityHypothesisKind.AUTHORIZATION,
+                    "subject_kind": ResearchAssetKind.HOSTNAME,
+                    "subject_canonical_value": "example.test",
+                    "statement": "statement",
+                    "rationale": "rationale",
+                    "required_validation": "required validation",
+                    "supporting_evidence_ids": ("a" * 64,),
+                },
+            )
+        )
+        hypothesis = created.research_security_hypothesis
+        assert hypothesis is not None
+        engine.process(
+            BrainRequest(
+                message="Transition security hypothesis status",
+                metadata={
+                    "intent": "research_security_hypothesis_status_transition",
+                    "hypothesis_id": hypothesis.hypothesis_id,
+                    "program_id": "program-a",
+                    "status": ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION,
+                    "reason": "",
+                },
+            )
+        )
+        return hypothesis.hypothesis_id
+
+    def _create_request(self, hypothesis_id: str) -> BrainRequest:
+        return BrainRequest(
+            message="Record security finding",
+            metadata={
+                "intent": "research_security_finding_create",
+                "program_id": "program-a",
+                "source_hypothesis_id": hypothesis_id,
+                "title": "title",
+                "description": "description",
+                "required_followup": "required followup",
+            },
+        )
+
+    def test_finding_create_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        hypothesis_id = self._ready_hypothesis_id(engine)
+
+        response = engine.process(self._create_request(hypothesis_id))
+
+        self.assertTrue(response.success, response.message)
+        self.assertIsNotNone(response.research_security_finding)
+
+    def test_finding_create_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(self._create_request("hypothesis-1"))
+
+        self.assertFalse(response.success)
+        self.assertIn("Security findings are not available.", response.message)
+
+    def test_evidence_attach_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        hypothesis_id = self._ready_hypothesis_id(engine)
+        created = engine.process(self._create_request(hypothesis_id))
+        finding = created.research_security_finding
+        assert finding is not None
+
+        response = engine.process(
+            BrainRequest(
+                message="Attach security finding evidence",
+                metadata={
+                    "intent": "research_security_finding_evidence_attach",
+                    "finding_id": finding.finding_id,
+                    "program_id": "program-a",
+                    "evidence_ids": ("a" * 64,),
+                    "relation": ResearchSecurityFindingEvidenceRelation.VALIDATES,
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertIsNotNone(response.research_security_finding)
+
+    def test_evidence_attach_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(
+            BrainRequest(
+                message="Attach security finding evidence",
+                metadata={
+                    "intent": "research_security_finding_evidence_attach",
+                    "finding_id": "finding-1",
+                    "program_id": "program-a",
+                    "evidence_ids": ("a" * 64,),
+                    "relation": ResearchSecurityFindingEvidenceRelation.SUPPORTS,
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("Security findings are not available.", response.message)
+
+    def test_status_transition_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        hypothesis_id = self._ready_hypothesis_id(engine)
+        created = engine.process(self._create_request(hypothesis_id))
+        finding = created.research_security_finding
+        assert finding is not None
+
+        response = engine.process(
+            BrainRequest(
+                message="Transition security finding status",
+                metadata={
+                    "intent": "research_security_finding_status_transition",
+                    "finding_id": finding.finding_id,
+                    "program_id": "program-a",
+                    "status": ResearchSecurityFindingStatus.VALIDATION_REQUIRED,
+                    "reason": "",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertIsNotNone(response.research_security_finding_status_transition)
+
+    def test_status_transition_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(
+            BrainRequest(
+                message="Transition security finding status",
+                metadata={
+                    "intent": "research_security_finding_status_transition",
+                    "finding_id": "finding-1",
+                    "program_id": "program-a",
+                    "status": ResearchSecurityFindingStatus.VALIDATION_REQUIRED,
+                    "reason": "",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("Security findings are not available.", response.message)
+
+    def test_finding_preview_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        hypothesis_id = self._ready_hypothesis_id(engine)
+        engine.process(self._create_request(hypothesis_id))
+
+        response = engine.process(
+            BrainRequest(
+                message="Preview security findings",
+                metadata={
+                    "intent": "research_security_finding_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(len(response.research_security_findings), 1)
+
+    def test_finding_preview_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(
+            BrainRequest(
+                message="Preview security findings",
+                metadata={
+                    "intent": "research_security_finding_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("Security findings are not available.", response.message)
