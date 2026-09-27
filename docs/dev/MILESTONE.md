@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Finding Lifecycle evidence-integrity hardening (Bug Bounty foundation, step 7 continued) |
 | Base SHA | 223fb1b5ce7854604eb022cde3f9b8d75bc019d8 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer (surgical, related-surface fix across two application services and two derived read models), plus mutation pass; hypatia-security: independent review, PASS, no findings above informational; hypatia-epistemics: independent review, PASS-with-caveats, two non-blocking documentation/epistemic notes, no defects; hypatia-qa: independent review, PASS, full acceptance-criterion traceability; hypatia-runtime: independent review, PASS, no missed derivation call sites, zero wiring/schema drift; hypatia-lead: release |
 | Blockers | none |
 
@@ -2653,6 +2653,86 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.417: finding lifecycle evidence-integrity hardening |
+| SHA | 828ba0f374a0a3d8228135ce2c77e90a65a967cb |
+| Linux desktop CI (exact-SHA) | success (run 36348936351) |
+| Windows desktop CI (exact-SHA) | success (run 36348938189) |
+| Status | delivered |
+| PR | #396, MERGED 2026-09-27T21:04:01Z, standard merge commit `b318203168479e9b8a53bfb65acbe7b42482a866` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 828ba0f origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`8d998c7`, `828ba0f`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-27, hypatia-lead): PR #396 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 3 commits (the v0.3.416 ledger reconciliation `223fb1b`, the
+v0.3.417 milestone lock `3e8f98b`, and release commit `828ba0f`) across
+exactly 13 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered
+`test-build-smoke` checks passed against the release SHA on both runners
+(completed 2026-09-27T20:42:38Z / 20:46:00Z), independently of the two
+manually dispatched exact-SHA workflow_dispatch runs above (also confirmed
+against the exact release SHA individually, not assumed from recency). The
+standard merge commit is on `origin/main`; all three carried commits are
+reachable from it; author/committer identity is unchanged (Songül Kızılay
+via GitHub noreply email); the working tree was clean except this ledger
+reconciliation.
+
+Note: this bounded release closes three findings deferred by v0.3.416's own
+security and QA review, on the same Finding Lifecycle foundation. F1
+(Medium): `attach_evidence` now refuses evidence whose subject does not
+match the finding's own subject, for all three relations
+(`SUPPORTS`/`CONTRADICTS`/`VALIDATES`) — closing the path by which a
+`VALIDATES` citation about an unrelated host could validate a finding it
+did not describe. F2 (Low): `create_finding` independently re-verifies
+every carried-forward evidence ID against the live evidence store before
+persisting, failing the whole creation closed on any missing reference,
+never mutating the source hypothesis. F3 (Low, inherited from v0.3.415):
+status derivation for both `ResearchSecurityFinding` and
+`ResearchSecurityHypothesis` (four call sites) now trusts each store's own
+append-only write order instead of `(recorded_at, transition_id)`, applied
+symmetrically to the Hypothesis side because `create_finding`'s own
+`READY_FOR_VALIDATION` gate reads `hypothesis.status` directly (verified in
+code). No schema or on-disk document change of any kind. M21/M22: new
+regression tests prove the Finding service's own program-isolation guard
+independently refuses a cross-program operation, closing the named
+mutation-testing gap. Security review: PASS, no findings above
+informational. Epistemics review: PASS-with-caveats, two non-blocking
+notes, no defects. QA review: PASS, full acceptance-criterion traceability.
+Runtime review: PASS, no missed derivation call sites, zero wiring/schema
+drift. Mutation pass: 6/6 targeted mutants caught (M21, M22, F1, F2, F3 at
+both the derived-model and application-service layers) via in-memory
+monkeypatching, verified without ever writing a weakened file to disk.
+Full canonical gates (Windows canonical environment): 7448 tests OK
+(skipped=3) — 9 net new tests over v0.3.416's 7439; Black, Ruff, MyPy (601
+source files), and `git diff --check` clean.
+
+Deferred, non-blocking findings carried forward (candidates for a future
+milestone, not fixed in this release): F4 (Low, inherited) — store load
+validates structure, bounds, unique IDs, and dangling references but does
+not replay lifecycle invariants (transition legality, the `VALIDATED`
+gate, linkage targets, one-finding-per-hypothesis) on load; closing this
+needs a reject-vs-quarantine design decision, not yet made. The symmetric
+F1-class subject-binding gap in
+`ResearchSecurityHypothesisApplicationService.attach_evidence` (confirmed
+present, deliberately left for a future, separately-scoped Hypothesis-side
+milestone) — with one downstream, fail-closed-direction consequence noted
+alongside it: a carried-forward `CONTRADICTS` link inherited from a
+hypothesis whose own evidence was never subject-checked could, in
+principle, wrongly block a finding from ever reaching `VALIDATED`
+(over-conservative, never a false validation). Request-ID/correlation-ID
+persistence into research records (a mature, already-built but completely
+unwired pattern exists in `src/tools/ToolExecutionOutcome`/
+`ToolExecutionService` that should be reused as the template if this is
+ever pursued, rather than inventing a new one). Non-blocking test-hygiene
+debt: a Windows-only `ResourceWarning` about unclosed file handles was
+observed across the full test run in both v0.3.416 and v0.3.417; confirmed
+(hypatia-qa read-only review) not sourced in the Finding/Hypothesis store
+or test code, which are fully context-manager-safe — the warning's origin
+elsewhere in the suite remains untraced and out of scope for the Finding
+Lifecycle line of work.
+
+## Historical scope: v0.3.416 (delivered)
 
 | Field | Value |
 | --- | --- |
