@@ -549,12 +549,10 @@ class AttachEvidenceTests(unittest.TestCase):
 def _advancing_clock(start: datetime):
     """Return a zero-argument clock that advances by one second per call.
 
-    A frozen clock would give every transition in a fast sequence of calls
-    the exact same `recorded_at`, leaving `hypotheses_for_program`'s
-    documented tie-break (by `transition_id`, not insertion order) to decide
-    which one is "latest" — deterministic, but not necessarily the one this
-    test just recorded. Advancing the clock removes that ambiguity so this
-    test can assert on intended chronological order.
+    `hypotheses_for_program` derives `status` from persisted append order,
+    not `recorded_at` — so a frozen clock would not actually create any
+    ambiguity today. This helper is kept anyway so `recorded_at` values in
+    test fixtures still read as a plausible, strictly increasing timeline.
     """
     state = {"moment": start}
 
@@ -647,6 +645,51 @@ class TransitionStatusTests(unittest.TestCase):
                 "unknown",
                 "program-a",
                 ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+            )
+
+    def test_current_status_reflects_append_order_despite_a_backward_clock_step(
+        self,
+    ) -> None:
+        """F3: `_current_status` must gate on append order, not `recorded_at`.
+
+        The second transition (`REFUTED`, terminal) is appended after the
+        first but carries an earlier wall-clock timestamp, simulating a
+        clock regression. A buggy `_current_status` would derive
+        `NEEDS_EVIDENCE` (the higher-`recorded_at` entry) as "current" and
+        wrongly permit a further transition out of what is really a
+        terminal `REFUTED` state.
+        """
+        evidence_store = InMemoryHttpEvidenceStore((http_evidence(),))
+        clock_state = {"moment": NOW + timedelta(seconds=10)}
+
+        def clock() -> datetime:
+            return clock_state["moment"]
+
+        service = make_service(InMemoryHypothesisStore(), evidence_store, clock=clock)
+        record = service.create_hypothesis(
+            "program-a",
+            ResearchSecurityHypothesisKind.AUTHORIZATION,
+            ResearchAssetKind.HOSTNAME,
+            "example.test",
+            "statement",
+            "rationale",
+            "required validation",
+            ("a" * 64,),
+        )
+        service.transition_status(
+            record.hypothesis_id,
+            "program-a",
+            ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+        )
+        clock_state["moment"] = NOW  # clock regresses for the next write
+        service.transition_status(
+            record.hypothesis_id, "program-a", ResearchSecurityHypothesisStatus.REFUTED
+        )
+        with self.assertRaisesRegex(ResearchError, "cannot move"):
+            service.transition_status(
+                record.hypothesis_id,
+                "program-a",
+                ResearchSecurityHypothesisStatus.OPEN,
             )
 
     def test_sensitive_reason_is_refused_without_write_or_reflection(self) -> None:

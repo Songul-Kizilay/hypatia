@@ -2,10 +2,33 @@
 
 ## Runtime Version
 
-`v0.3.416 (Genesis)`
+`v0.3.417 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.417 closes three deferred findings from v0.3.416's own security
+and QA reviews, on the same Finding Lifecycle foundation. Evidence attached
+to a finding (support, contradict, or — critically — validate) must now
+actually describe that finding's own subject, not merely share its program;
+a `VALIDATES` citation about the wrong host can no longer be attached at
+all, closing the one remaining path toward a subject-mismatched
+`VALIDATED`. Evidence carried forward from the source hypothesis at finding
+creation is independently re-verified against the live evidence store,
+failing the whole creation closed on a missing reference rather than
+silently dropping it. The derived "current status" for both
+`ResearchSecurityFinding` and `ResearchSecurityHypothesis` now trusts each
+store's own append-only, tamper-evident write order instead of re-deriving
+"latest" from a wall-clock timestamp, so a clock regression (or two
+transitions recorded in the same instant) can no longer mask the true
+latest transition — applied symmetrically to the Hypothesis side because
+Finding creation's own `READY_FOR_VALIDATION` gate reads that exact
+Hypothesis-derived value. No schema, store format, or Brain/desktop wiring
+changed; every fix is a same-file logic change with no data migration.
+Deferred: lifecycle replay validation on store load, the symmetric
+subject-binding gap on the Hypothesis side's own evidence attachment, and
+the pre-existing Windows test-hygiene `ResourceWarning` — recorded in
+`docs/dev/MILESTONE.md`.
 
 Version v0.3.416 adds the Finding Lifecycle foundation — item 7 of the
 bounded Bug Bounty Researcher roadmap, built directly on v0.3.415's Security

@@ -427,6 +427,47 @@ class CreateFindingTests(unittest.TestCase):
                 "a different followup",
             )
 
+    def test_missing_carried_evidence_fails_the_whole_creation_closed(self) -> None:
+        """F2: evidence carried forward from the hypothesis must still exist
+        in the live evidence store at finding-creation time — a missing
+        reference refuses the entire creation rather than silently dropping
+        it, and the source hypothesis is never mutated."""
+        hypothesis_evidence_store = InMemoryHttpEvidenceStore(
+            (http_evidence(evidence_id="a" * 64),)
+        )
+        hypothesis_service = make_hypothesis_service(
+            http_evidence_store=hypothesis_evidence_store
+        )
+        hypothesis = ready_hypothesis(
+            hypothesis_service, supporting_evidence_ids=("a" * 64,)
+        )
+        hypothesis_before = hypothesis_service.hypothesis_by_id(
+            hypothesis.hypothesis_id, "program-a"
+        )
+        # The finding service reads from a store where the cited evidence no
+        # longer exists, simulating a carried-forward reference gone missing.
+        finding_evidence_store = InMemoryHttpEvidenceStore(())
+        finding_store = InMemoryFindingStore()
+        service = make_finding_service(
+            finding_store, finding_evidence_store, hypothesis_service
+        )
+
+        with self.assertRaisesRegex(ResearchError, "not recorded"):
+            service.create_finding(
+                "program-a",
+                hypothesis.hypothesis_id,
+                "title",
+                "description",
+                "followup",
+            )
+
+        self.assertEqual(finding_store.load().findings, ())
+        self.assertEqual(finding_store.load().evidence_links, ())
+        self.assertEqual(
+            hypothesis_service.hypothesis_by_id(hypothesis.hypothesis_id, "program-a"),
+            hypothesis_before,
+        )
+
     def test_finding_and_evidence_links_are_saved_in_one_write(self) -> None:
         evidence_store = InMemoryHttpEvidenceStore(
             (http_evidence(evidence_id="a" * 64), http_evidence(evidence_id="b" * 64))
@@ -508,6 +549,50 @@ class AttachEvidenceTests(unittest.TestCase):
         self.assertEqual(len(derived.supporting_evidence), 2)
         self.assertEqual(len(derived.contradicting_evidence), 1)
         self.assertEqual(len(derived.validation_evidence), 1)
+
+    def test_subject_mismatched_evidence_is_rejected_for_every_relation(self) -> None:
+        """F1: evidence must describe this finding's own subject, not merely
+        share its program — checked for all three relations, including
+        `VALIDATES`, the sole gate for `VALIDATED`."""
+        evidence_store = InMemoryHttpEvidenceStore(
+            (
+                http_evidence(evidence_id="a" * 64),
+                http_evidence(evidence_id="b" * 64, target_value="other.test"),
+            )
+        )
+        service, finding_id = self._create(evidence_store)
+        for relation in (
+            ResearchSecurityFindingEvidenceRelation.SUPPORTS,
+            ResearchSecurityFindingEvidenceRelation.CONTRADICTS,
+            ResearchSecurityFindingEvidenceRelation.VALIDATES,
+        ):
+            with self.subTest(relation=relation):
+                with self.assertRaisesRegex(ResearchError, "does not match"):
+                    service.attach_evidence(
+                        finding_id, "program-a", ("b" * 64,), relation
+                    )
+
+    def test_a_finding_cannot_be_validated_via_subject_mismatched_evidence(
+        self,
+    ) -> None:
+        evidence_store = InMemoryHttpEvidenceStore(
+            (
+                http_evidence(evidence_id="a" * 64),
+                http_evidence(evidence_id="b" * 64, target_value="other.test"),
+            )
+        )
+        service, finding_id = self._create(evidence_store)
+        with self.assertRaisesRegex(ResearchError, "does not match"):
+            service.attach_evidence(
+                finding_id,
+                "program-a",
+                ("b" * 64,),
+                ResearchSecurityFindingEvidenceRelation.VALIDATES,
+            )
+        with self.assertRaisesRegex(ResearchError, "without at least one"):
+            service.transition_status(
+                finding_id, "program-a", ResearchSecurityFindingStatus.VALIDATED
+            )
 
     def test_multiple_evidence_links_in_one_call_are_all_preserved(self) -> None:
         evidence_store = InMemoryHttpEvidenceStore(
@@ -1072,6 +1157,49 @@ class TransitionStatusTests(unittest.TestCase):
             )
 
 
+class StatusOrderingTests(unittest.TestCase):
+    def test_current_status_reflects_append_order_despite_a_backward_clock_step(
+        self,
+    ) -> None:
+        """F3: `_current_status` must gate on append order, not `recorded_at`.
+
+        The second transition (`REFUTED`, terminal) is appended after the
+        first but carries an earlier wall-clock timestamp, simulating a
+        clock regression. A buggy `_current_status` would derive
+        `VALIDATION_REQUIRED` (the higher-`recorded_at` entry) as "current"
+        and wrongly permit a further transition out of what is really a
+        terminal `REFUTED` state.
+        """
+        evidence_store = InMemoryHttpEvidenceStore((http_evidence(),))
+        hypothesis_service = make_hypothesis_service(http_evidence_store=evidence_store)
+        hypothesis = ready_hypothesis(hypothesis_service)
+        clock_state = {"moment": NOW + timedelta(seconds=10)}
+
+        def clock() -> datetime:
+            return clock_state["moment"]
+
+        finding_store = InMemoryFindingStore()
+        service = make_finding_service(
+            finding_store, evidence_store, hypothesis_service, clock=clock
+        )
+        record = service.create_finding(
+            "program-a", hypothesis.hypothesis_id, "title", "description", "followup"
+        )
+        service.transition_status(
+            record.finding_id,
+            "program-a",
+            ResearchSecurityFindingStatus.VALIDATION_REQUIRED,
+        )
+        clock_state["moment"] = NOW  # clock regresses for the next write
+        service.transition_status(
+            record.finding_id, "program-a", ResearchSecurityFindingStatus.REFUTED
+        )
+        with self.assertRaises(ResearchError):
+            service.transition_status(
+                record.finding_id, "program-a", ResearchSecurityFindingStatus.CANDIDATE
+            )
+
+
 class ProgramIsolationTests(unittest.TestCase):
     def test_lookup_by_id_under_the_wrong_program_fails_closed(self) -> None:
         evidence_store = InMemoryHttpEvidenceStore((http_evidence(),))
@@ -1085,6 +1213,54 @@ class ProgramIsolationTests(unittest.TestCase):
         )
         self.assertIsNone(service.finding_by_id(record.finding_id, "program-b"))
         self.assertIsNotNone(service.finding_by_id(record.finding_id, "program-a"))
+
+    def test_attach_evidence_under_the_wrong_program_fails_closed_at_the_service_layer(
+        self,
+    ) -> None:
+        """M21: proves the SERVICE's own program-isolation guard, not merely
+        the store's document-level fallback — asserts the exact service-level
+        error message, which a mutant deleting the service guard (but leaving
+        the store's fallback intact) cannot produce."""
+        evidence_store = InMemoryHttpEvidenceStore(
+            (http_evidence(evidence_id="a" * 64),)
+        )
+        hypothesis_service = make_hypothesis_service(http_evidence_store=evidence_store)
+        hypothesis = ready_hypothesis(hypothesis_service)
+        service = make_finding_service(
+            http_evidence_store=evidence_store, hypothesis_reader=hypothesis_service
+        )
+        record = service.create_finding(
+            "program-a", hypothesis.hypothesis_id, "title", "description", "followup"
+        )
+        with self.assertRaisesRegex(ResearchError, "was not found for this program"):
+            service.attach_evidence(
+                record.finding_id,
+                "program-b",
+                ("a" * 64,),
+                ResearchSecurityFindingEvidenceRelation.SUPPORTS,
+            )
+
+    def test_transition_status_under_wrong_program_fails_closed_at_service_layer(
+        self,
+    ) -> None:
+        """M22: mirrors the `attach_evidence` case above for `transition_status`."""
+        evidence_store = InMemoryHttpEvidenceStore(
+            (http_evidence(evidence_id="a" * 64),)
+        )
+        hypothesis_service = make_hypothesis_service(http_evidence_store=evidence_store)
+        hypothesis = ready_hypothesis(hypothesis_service)
+        service = make_finding_service(
+            http_evidence_store=evidence_store, hypothesis_reader=hypothesis_service
+        )
+        record = service.create_finding(
+            "program-a", hypothesis.hypothesis_id, "title", "description", "followup"
+        )
+        with self.assertRaisesRegex(ResearchError, "was not found for this program"):
+            service.transition_status(
+                record.finding_id,
+                "program-b",
+                ResearchSecurityFindingStatus.VALIDATION_REQUIRED,
+            )
 
 
 class RestartReloadTests(unittest.TestCase):
