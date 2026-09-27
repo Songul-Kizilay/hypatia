@@ -22,6 +22,10 @@ from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSecurityFindingEvidenceRelation import (
+    ResearchSecurityFindingEvidenceRelation,
+)
+from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
 from research.ResearchSecurityHypothesisEvidenceRelation import (
     ResearchSecurityHypothesisEvidenceRelation,
 )
@@ -1612,6 +1616,236 @@ class DesktopControllerTests(unittest.TestCase):
     ) -> None:
         with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
             self.controller.preview_research_security_hypotheses("  ")
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_create_research_security_finding_sends_structured_metadata(self) -> None:
+        response = self.controller.create_research_security_finding(
+            "  program-a  ",
+            "  hypothesis-1  ",
+            "  title text  ",
+            "  description text  ",
+            "  required followup text  ",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Record security finding")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_finding_create",
+                "program_id": "program-a",
+                "source_hypothesis_id": "hypothesis-1",
+                "title": "title text",
+                "description": "description text",
+                "required_followup": "required followup text",
+            },
+        )
+
+    def test_create_research_security_finding_accepts_a_non_default_hypothesis_id(
+        self,
+    ) -> None:
+        response = self.controller.create_research_security_finding(
+            "program-a",
+            "hypothesis-42",
+            "title",
+            "description",
+            "required followup",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.metadata["source_hypothesis_id"], "hypothesis-42")
+
+    def test_create_research_security_finding_rejects_empty_program_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.create_research_security_finding(
+                "  ", "hypothesis-1", "title", "description", "required followup"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_create_research_security_finding_rejects_empty_hypothesis_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.create_research_security_finding(
+                "program-a", "  ", "title", "description", "required followup"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_attach_research_security_finding_evidence_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.attach_research_security_finding_evidence(
+            "  finding-1  ",
+            "  program-a  ",
+            ("evidence-1", "evidence-2"),
+            "validates",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Attach security finding evidence")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_finding_evidence_attach",
+                "finding_id": "finding-1",
+                "program_id": "program-a",
+                "evidence_ids": ("evidence-1", "evidence-2"),
+                "relation": ResearchSecurityFindingEvidenceRelation.VALIDATES,
+            },
+        )
+
+    def test_attach_research_security_finding_evidence_accepts_non_default_relation(
+        self,
+    ) -> None:
+        response = self.controller.attach_research_security_finding_evidence(
+            "finding-1",
+            "program-a",
+            ("evidence-1",),
+            "contradicts",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertIs(
+            request.metadata["relation"],
+            ResearchSecurityFindingEvidenceRelation.CONTRADICTS,
+        )
+
+    def test_attach_research_security_finding_evidence_rejects_empty_ids_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.attach_research_security_finding_evidence(
+                "", "program-a", ("evidence-1",), "supports"
+            )
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.attach_research_security_finding_evidence(
+                "finding-1", " ", ("evidence-1",), "supports"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_attach_research_security_finding_evidence_rejects_invalid_relation(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "relation is invalid"):
+            self.controller.attach_research_security_finding_evidence(
+                "finding-1", "program-a", ("evidence-1",), "not-a-relation"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_transition_research_security_finding_status_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.transition_research_security_finding_status(
+            "  finding-1  ",
+            "  program-a  ",
+            "duplicate",
+            "  a stated reason  ",
+            "  finding-2  ",
+            "",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Transition security finding status")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_finding_status_transition",
+                "finding_id": "finding-1",
+                "program_id": "program-a",
+                "status": ResearchSecurityFindingStatus.DUPLICATE,
+                "reason": "a stated reason",
+                "duplicate_of_finding_id": "finding-2",
+                "superseded_by_finding_id": None,
+            },
+        )
+
+    def test_transition_research_security_finding_status_accepts_non_default_status(
+        self,
+    ) -> None:
+        response = self.controller.transition_research_security_finding_status(
+            "finding-1",
+            "program-a",
+            "validated",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertIs(
+            request.metadata["status"],
+            ResearchSecurityFindingStatus.VALIDATED,
+        )
+        self.assertEqual(request.metadata["reason"], "")
+        self.assertIsNone(request.metadata["duplicate_of_finding_id"])
+        self.assertIsNone(request.metadata["superseded_by_finding_id"])
+
+    def test_transition_research_security_finding_status_rejects_empty_ids_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.transition_research_security_finding_status(
+                "", "program-a", "refuted"
+            )
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.transition_research_security_finding_status(
+                "finding-1", " ", "refuted"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_transition_research_security_finding_status_rejects_invalid_status(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "status is invalid"):
+            self.controller.transition_research_security_finding_status(
+                "finding-1", "program-a", "not-a-status"
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_preview_research_security_findings_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.preview_research_security_findings("  program-a  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Preview security findings")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_finding_preview",
+                "program_id": "program-a",
+            },
+        )
+
+    def test_preview_research_security_findings_rejects_empty_program_id_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
+            self.controller.preview_research_security_findings("  ")
 
         self.assertEqual(self.brain.requests, [])
 

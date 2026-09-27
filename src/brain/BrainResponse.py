@@ -111,6 +111,14 @@ from research.ResearchRunMarkdownExportVerification import (
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSecurityFinding import ResearchSecurityFinding
+from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
+from research.ResearchSecurityFindingEvidenceLinkRecord import (
+    ResearchSecurityFindingEvidenceLinkRecord,
+)
+from research.ResearchSecurityFindingStatusTransitionRecord import (
+    ResearchSecurityFindingStatusTransitionRecord,
+)
 from research.ResearchSecurityHypothesis import ResearchSecurityHypothesis
 from research.ResearchSecurityHypothesisEntry import ResearchSecurityHypothesisEntry
 from research.ResearchSecurityHypothesisEvidenceLinkRecord import (
@@ -292,3 +300,11 @@ class BrainResponse:
         ResearchSecurityHypothesisStatusTransitionRecord | None
     ) = None
     research_security_hypotheses: tuple[ResearchSecurityHypothesisEntry, ...] = ()
+    research_security_finding: ResearchSecurityFinding | None = None
+    research_security_finding_evidence_links: tuple[
+        ResearchSecurityFindingEvidenceLinkRecord, ...
+    ] = ()
+    research_security_finding_status_transition: (
+        ResearchSecurityFindingStatusTransitionRecord | None
+    ) = None
+    research_security_findings: tuple[ResearchSecurityFindingEntry, ...] = ()

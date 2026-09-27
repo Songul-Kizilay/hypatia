@@ -35,6 +35,10 @@ from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
+from research.ResearchSecurityFindingEvidenceRelation import (
+    ResearchSecurityFindingEvidenceRelation,
+)
+from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
 from research.ResearchSecurityHypothesisEvidenceRelation import (
     ResearchSecurityHypothesisEvidenceRelation,
 )
@@ -682,6 +686,116 @@ class DesktopController:
                 "Preview security hypotheses",
                 metadata={
                     "intent": "research_security_hypothesis_preview",
+                    "program_id": normalized_program_id,
+                },
+            )
+        )
+
+    def create_research_security_finding(
+        self,
+        program_id: str,
+        source_hypothesis_id: str,
+        title: str,
+        description: str,
+        required_followup: str,
+    ) -> BrainResponse:
+        """Promote one existing, ready-for-validation security hypothesis."""
+        normalized_program_id = program_id.strip()
+        normalized_source_hypothesis_id = source_hypothesis_id.strip()
+        if not normalized_program_id or not normalized_source_hypothesis_id:
+            raise ValueError("A program ID and source hypothesis ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                "Record security finding",
+                metadata={
+                    "intent": "research_security_finding_create",
+                    "program_id": normalized_program_id,
+                    "source_hypothesis_id": normalized_source_hypothesis_id,
+                    "title": title.strip(),
+                    "description": description.strip(),
+                    "required_followup": required_followup.strip(),
+                },
+            )
+        )
+
+    def attach_research_security_finding_evidence(
+        self,
+        finding_id: str,
+        program_id: str,
+        evidence_ids: tuple[str, ...],
+        relation: str,
+    ) -> BrainResponse:
+        """Attach supporting, contradicting, or validating evidence to a finding."""
+        normalized_finding_id = finding_id.strip()
+        normalized_program_id = program_id.strip()
+        if not normalized_finding_id or not normalized_program_id:
+            raise ValueError("A finding ID and program ID cannot be empty.")
+        try:
+            normalized_relation = ResearchSecurityFindingEvidenceRelation(
+                relation.strip()
+            )
+        except (AttributeError, ValueError) as error:
+            raise ValueError(
+                "Security finding evidence relation is invalid."
+            ) from error
+        return self._brain.process(
+            BrainRequest(
+                "Attach security finding evidence",
+                metadata={
+                    "intent": "research_security_finding_evidence_attach",
+                    "finding_id": normalized_finding_id,
+                    "program_id": normalized_program_id,
+                    "evidence_ids": evidence_ids,
+                    "relation": normalized_relation,
+                },
+            )
+        )
+
+    def transition_research_security_finding_status(
+        self,
+        finding_id: str,
+        program_id: str,
+        status: str,
+        reason: str = "",
+        duplicate_of_finding_id: str = "",
+        superseded_by_finding_id: str = "",
+    ) -> BrainResponse:
+        """Record one status transition for one existing security finding."""
+        normalized_finding_id = finding_id.strip()
+        normalized_program_id = program_id.strip()
+        if not normalized_finding_id or not normalized_program_id:
+            raise ValueError("A finding ID and program ID cannot be empty.")
+        try:
+            normalized_status = ResearchSecurityFindingStatus(status.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Security finding status is invalid.") from error
+        normalized_duplicate_of_finding_id = duplicate_of_finding_id.strip() or None
+        normalized_superseded_by_finding_id = superseded_by_finding_id.strip() or None
+        return self._brain.process(
+            BrainRequest(
+                "Transition security finding status",
+                metadata={
+                    "intent": "research_security_finding_status_transition",
+                    "finding_id": normalized_finding_id,
+                    "program_id": normalized_program_id,
+                    "status": normalized_status,
+                    "reason": reason.strip(),
+                    "duplicate_of_finding_id": normalized_duplicate_of_finding_id,
+                    "superseded_by_finding_id": normalized_superseded_by_finding_id,
+                },
+            )
+        )
+
+    def preview_research_security_findings(self, program_id: str) -> BrainResponse:
+        """List one program's derived security findings without side effects."""
+        normalized_program_id = program_id.strip()
+        if not normalized_program_id:
+            raise ValueError("A program ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                "Preview security findings",
+                metadata={
+                    "intent": "research_security_finding_preview",
                     "program_id": normalized_program_id,
                 },
             )

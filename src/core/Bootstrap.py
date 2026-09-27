@@ -118,6 +118,9 @@ from research.JsonFileResearchProgramScopeRevisionStore import (
     JsonFileResearchProgramScopeRevisionStore,
 )
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.JsonFileResearchSecurityFindingStore import (
+    JsonFileResearchSecurityFindingStore,
+)
 from research.JsonFileResearchSecurityHypothesisStore import (
     JsonFileResearchSecurityHypothesisStore,
 )
@@ -594,6 +597,7 @@ class Bootstrap:
         http_evidence_store = self._http_evidence_store()
         session_context_store = self._session_context_store()
         security_hypothesis_store = self._security_hypothesis_store()
+        security_finding_store = self._security_finding_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -699,6 +703,7 @@ class Bootstrap:
             http_evidence_store=http_evidence_store,
             session_context_store=session_context_store,
             security_hypothesis_store=security_hypothesis_store,
+            security_finding_store=security_finding_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -1028,6 +1033,15 @@ class Bootstrap:
         )
         return JsonFileResearchSecurityHypothesisStore(
             run_path.with_name("research_security_hypotheses.json")
+        )
+
+    def _security_finding_store(self) -> JsonFileResearchSecurityFindingStore:
+        """Create the operator-authored Bug Bounty security finding store."""
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchSecurityFindingStore(
+            run_path.with_name("research_security_findings.json")
         )
 
     def _kali_operation_authorization_store(

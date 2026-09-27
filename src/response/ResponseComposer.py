@@ -127,6 +127,8 @@ from research.ResearchRunMarkdownExportVerification import (
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSecurityFinding import ResearchSecurityFinding
+from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
 from research.ResearchSecurityHypothesis import ResearchSecurityHypothesis
 from research.ResearchSecurityHypothesisEntry import ResearchSecurityHypothesisEntry
 from research.ResearchSessionContextRecord import ResearchSessionContextRecord
@@ -177,6 +179,20 @@ NO_RESEARCH_STARTED_NOTICE = (
 #: never has to infer it from status vocabulary alone.
 SECURITY_HYPOTHESIS_NOT_A_FINDING_NOTICE = (
     "This is a hypothesis, not a finding or a validated vulnerability."
+)
+
+#: Fixed, literal, and unconditional on finding content: every rendered
+#: response for a non-terminal-status security finding states this, so a
+#: reader never has to infer it from status vocabulary alone. Deliberately
+#: status-neutral, so it reads truthfully under every status it accompanies —
+#: `VALIDATED` included, the one status a reader could most easily mistake for
+#: authority, although it names only that an operator recorded validating
+#: evidence with no live contradiction, never a confirmed exploit or
+#: permission to act. The one canonical copy: the desktop finding panel
+#: imports this constant rather than restating it.
+SECURITY_FINDING_NOT_AUTHORITY_NOTICE = (
+    "Research finding only. This status does not grant authority to act,"
+    " execute tools, access systems, or expand scope."
 )
 
 #: One bounded note per verdict, for a person rather than for a parser. Nothing
@@ -1903,6 +1919,182 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_security_hypothesis_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    @staticmethod
+    def _security_finding_summary_lines(
+        finding: ResearchSecurityFinding,
+    ) -> list[str]:
+        lines = [
+            f"Program: {finding.program_id}",
+            f"Source hypothesis: {finding.source_hypothesis_id}",
+            f"Kind: {finding.finding_kind.value}",
+            f"Subject: {finding.subject_kind.value}:{finding.subject_canonical_value}",
+            f"Status: {finding.status.value}",
+            f"Supporting evidence: {len(finding.supporting_evidence)}",
+            f"Contradicting evidence: {len(finding.contradicting_evidence)}",
+            f"Validation evidence: {len(finding.validation_evidence)}",
+        ]
+        if not finding.status.terminal:
+            lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+        return lines
+
+    def research_security_finding_create(
+        self,
+        request: BrainRequest,
+        finding: ResearchSecurityFinding,
+    ) -> BrainResponse:
+        """Confirm one durable, operator-authored security finding."""
+        lines = ["Security finding recorded:"]
+        lines.extend(self._security_finding_summary_lines(finding))
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_finding_create",
+            memory_count=0,
+            research_security_finding=finding,
+            research_security_finding_evidence_links=(
+                *finding.supporting_evidence,
+                *finding.contradicting_evidence,
+            ),
+        )
+
+    def research_security_finding_create_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid security finding write."""
+        return BrainResponse(
+            message="\n".join(("Security finding rejected:", f"Reason: {message}")),
+            request_id=request.request_id,
+            intent="research_security_finding_create",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_finding_evidence_attach(
+        self,
+        request: BrainRequest,
+        finding: ResearchSecurityFinding,
+    ) -> BrainResponse:
+        """Confirm evidence was attached to one existing security finding."""
+        lines = ["Security finding evidence attached:"]
+        lines.extend(self._security_finding_summary_lines(finding))
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_finding_evidence_attach",
+            memory_count=0,
+            research_security_finding=finding,
+            research_security_finding_evidence_links=(
+                *finding.supporting_evidence,
+                *finding.contradicting_evidence,
+                *finding.validation_evidence,
+            ),
+        )
+
+    def research_security_finding_evidence_attach_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid evidence attachment."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Security finding evidence attachment rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_security_finding_evidence_attach",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_finding_status_transition(
+        self,
+        request: BrainRequest,
+        finding: ResearchSecurityFinding,
+    ) -> BrainResponse:
+        """Confirm one security finding's status transition."""
+        lines = ["Security finding status transition recorded:"]
+        lines.extend(self._security_finding_summary_lines(finding))
+        transition = finding.status_history[-1] if finding.status_history else None
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_finding_status_transition",
+            memory_count=0,
+            research_security_finding=finding,
+            research_security_finding_status_transition=transition,
+        )
+
+    def research_security_finding_status_transition_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid status transition."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Security finding status transition rejected:",
+                    f"Reason: {message}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_security_finding_status_transition",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_finding_preview(
+        self,
+        request: BrainRequest,
+        entries: tuple[ResearchSecurityFindingEntry, ...],
+    ) -> BrainResponse:
+        """Report the derived, read-only security findings for one program.
+
+        Every scope column is explicitly labelled recomputed-live; this
+        listing itself performs no fetch, scan, or authorization.
+        """
+        lines = [f"Security findings: {len(entries)}"]
+        for entry in entries:
+            finding = entry.finding
+            if entry.scope.has_active_scope_revision and entry.scope.resolution:
+                scope_text = (
+                    f"{entry.scope.resolution.status.value} "
+                    "(recomputed live from active policy, not stored)"
+                )
+            else:
+                scope_text = "no active scope revision for this program"
+            lines.append(
+                f"- {finding.finding_kind.value} on "
+                f"{finding.subject_kind.value}:{finding.subject_canonical_value}"
+                f" ({finding.status.value}, "
+                f"{len(finding.supporting_evidence)} supporting, "
+                f"{len(finding.contradicting_evidence)} contradicting, "
+                f"{len(finding.validation_evidence)} validating, "
+                f"scope: {scope_text})"
+            )
+        if any(not entry.finding.status.terminal for entry in entries):
+            lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_finding_preview",
+            memory_count=0,
+            research_security_findings=entries,
+        )
+
+    def research_security_finding_preview_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid security finding preview."""
+        return BrainResponse(
+            message="\n".join(
+                ("Security finding preview rejected:", f"Reason: {message}")
+            ),
+            request_id=request.request_id,
+            intent="research_security_finding_preview",
             memory_count=0,
             success=False,
         )
