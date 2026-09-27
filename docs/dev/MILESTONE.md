@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Finding Lifecycle foundation (Bug Bounty foundation, step 7) |
 | Base SHA | 45252c1e9690cb7e8177d0357db3d6d30522fce7 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-epistemics: sole implementer, plus a bounded completion pass closing review- and mutation-found gaps; hypatia-security: independent review, yes-with-caveats, no Critical/High findings, deferred findings recorded; hypatia-qa: independent review, ready-with-caveats, no production-code defects, test gaps closed; hypatia-lead: release |
 | Blockers | none |
 
@@ -2357,6 +2357,68 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.416: finding lifecycle foundation |
+| SHA | 0462a4c43731c7e56f51871152f47cd605004e32 |
+| Linux desktop CI (exact-SHA) | success (run 36344330230) |
+| Windows desktop CI (exact-SHA) | success (run 36344332295) |
+| Status | delivered |
+| PR | #395, MERGED 2026-09-27T20:10:22Z, standard merge commit `8d998c7ec1a179e927d1b1008fe1fdf34caa6768` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 0462a4c origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`db88f94`, `0462a4c`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-27, hypatia-lead): PR #395 base `main`, head
+`feature/structured-learned-memory-extraction-v0.3.118`, carried exactly 3
+commits (the v0.3.415 ledger reconciliation `45252c1`, the v0.3.416 milestone
+lock `53c96e7`, and release commit `0462a4c`) across exactly 30 expected
+files. It was `MERGEABLE/CLEAN`, and both PR-triggered `test-build-smoke`
+checks passed against the release SHA on both runners, independently of the
+two manually dispatched exact-SHA workflow_dispatch runs above (also
+confirmed against the exact release SHA individually, not assumed from
+recency). The standard merge commit is on `origin/main`; all three carried
+commits are reachable from it; the release author remains Songül Kızılay via
+GitHub noreply email; the working tree was clean except this ledger
+reconciliation.
+
+Note: this bounded release adds a new, program_id-scoped Finding Lifecycle
+(`ResearchSecurityFinding*`) sitting directly on top of the delivered
+v0.3.415 Security Hypothesis foundation — an immutable founding record plus
+append-only evidence-link and status-transition records, with a
+derived-only read model assembled fresh on every read. `VALIDATED` is never
+authority to act (`means_confirmed_vulnerability` is `False` for every
+status); any `CONTRADICTS` link blocks `VALIDATED` for the life of a
+finding. Finding creation, evidence attachment, and status transitions
+perform no network request, process, tool execution, or scope/credential/
+budget/target change of any kind. Security review: yes-with-caveats, no
+Critical/High findings. QA review: ready-with-caveats, no production-code
+defects (test-coverage gaps only, closed). Mutation pass: 45 mutants plus an
+unmutated control, 43 caught; the 2 survivors (M21/M22) are caught anyway by
+a redundant lower-layer program-isolation check, not a live gap. Full
+canonical gates: Linux 7439 tests OK (34 skipped); Windows 7439 tests OK (3
+skipped); Black, Ruff, MyPy, and `git diff --check` clean.
+
+Deferred, non-blocking findings carried forward (candidates for v0.3.417 or
+later, not fixed in this release): F1 (Medium) — `VALIDATES` evidence need
+only exist in the same program, so it may reference a different host; no
+explicit evidence-to-subject/scope relationship is enforced today. F2 (Low)
+— evidence IDs carried forward from the hypothesis at finding creation are
+not independently re-checked against the live HTTP evidence store. F3 (Low,
+inherited from v0.3.415) — status order is derived from
+`(recorded_at, transition_id)` rather than persisted append order, so a
+wall-clock regression (or same-instant transitions, tie-broken by a random
+UUID) can misorder the derived `status`. F4 (Low, inherited) — store load
+validates structure, bounds, unique IDs, and dangling references but does
+not replay lifecycle invariants (transition legality, the `VALIDATED` gate,
+linkage targets, one-finding-per-hypothesis) on load. Non-blocking test-
+hygiene debt: a Windows-only `ResourceWarning` about unclosed file handles
+was observed across the full 7439-test Windows run; confirmed (2026-09-27,
+hypatia-qa read-only review) not sourced in the Finding/Hypothesis store or
+test code, which are fully context-manager-safe — the warning's origin
+elsewhere in the suite remains untraced and is out of scope for the Finding
+Lifecycle line of work.
+
+## Historical scope: v0.3.415 (delivered)
 
 | Field | Value |
 | --- | --- |
