@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Hypothesis Evidence subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
 | Base SHA | b4a4f257d00845fbf77e9af62abd81e64f9048a9 |
-| Status | implementation |
-| Specialists | hypatia-lead: sole implementer; hypatia-security: independent review; hypatia-epistemics: independent review; hypatia-qa: independent review; hypatia-runtime: independent review; hypatia-lead: release |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-epistemics: independent review, PASS-with-caveats, one accurate residual-gap finding folded into Non-goals/Deferred above, no defect in delivered code; hypatia-qa: independent review, PASS, full acceptance-criterion traceability; hypatia-runtime: independent review, PASS, no caveats; hypatia-lead: release |
 | Blockers | none |
 
 Rationale: bounded continuation of roadmap item 6/7, closing a deferred
@@ -98,8 +98,18 @@ In scope:
   no scope widening.
 
 Non-goals (exhaustive): no change to `create_hypothesis`'s existing "at
-least one" subject check (different call semantics, already correct); no
-change to `ResearchSecurityFindingApplicationService`/any Finding-side
+least one" subject check — deliberately out of scope, NOT because it is
+already correct: hypatia-epistemics's 2026-09-28 review traced it end to
+end and found that once at least one citation matches, `create_hypothesis`
+still turns *every* `supporting_evidence_ids` entry into a `SUPPORTS` link
+(`ResearchSecurityHypothesisApplicationService.py:210-221`), including any
+that fail the subject match — the same class of spurious-`SUPPORTS`-link
+gap this milestone fixes for `attach_evidence`, just unaddressed at the
+creation call site. This is a known, separately-scoped residual gap
+(recorded in Deferred findings below), not a closed one; severity is
+unaffected by leaving it deferred (still `SUPPORTS`-only, structurally
+incapable of reaching `VALIDATES`, per the Rationale above). No change to
+`ResearchSecurityFindingApplicationService`/any Finding-side
 file (v0.3.417 already closed that half); no F4 lifecycle-replay work of
 any kind (deferred, see Rationale, needs its own dedicated milestone given
 the real engineering surface identified); no request-ID/correlation-ID
@@ -172,6 +182,74 @@ not bundled here. Request-ID/correlation-ID persistence — rejected as
 speculative, no live traceability problem found; revisit only if a real
 replay/evaluation layer is ever actually proposed. The Windows
 `ResourceWarning` test-hygiene debt remains untraced and out of scope.
+`create_hypothesis`'s own residual spurious-`SUPPORTS`-link gap (found by
+hypatia-epistemics's 2026-09-28 review, see Non-goals above) — same defect
+class as this milestone's fix, deliberately deferred to keep this milestone
+narrow; severity unaffected (still `SUPPORTS`-only, never `VALIDATES`).
+
+Security review (hypatia-security, 2026-09-28): PASS, no findings. Confirmed
+the bound-record lookup (`next(...)`, requiring both `hypothesis_id` and
+`program_id`) precedes any subject/evidence work; confirmed the subject
+check applies to both `SUPPORTS`/`CONTRADICTS` uniformly and reuses the
+exact comparison already proven at `create_hypothesis` with a correctly
+different, stricter aggregation; confirmed the two new program-isolation
+tests assert the precise service-level message, textually distinct from
+the store's own dangling-reference wording, making them non-vacuous;
+confirmed no new I/O/subprocess/socket/tool surface, no schema/version
+bump, and every stated non-goal held.
+
+Epistemics review (hypatia-epistemics, 2026-09-28): PASS-with-caveats. Ran
+the tests and traced the diff directly rather than accepting the ledger's
+claims. Confirmed the "all must match" aggregation is genuinely
+implemented and correctly reasoned; confirmed the severity characterization
+(provenance-integrity, never authority-escalation) by independently
+re-tracing `_carried_relation`'s exhaustive `SUPPORTS`/`CONTRADICTS`
+mapping and the `VALIDATED` gate's `VALIDATES`-only requirement; confirmed
+both new tests are genuinely non-vacuous (the old code had no subject-
+comparison branch at all); confirmed no regression to F2/F3; confirmed
+zero store diff. One caveat, already corrected above: found that
+`create_hypothesis`'s own "at least one" check still lets a
+mismatched-subject citation become a spurious `SUPPORTS` link at creation
+time — the ledger's original "already correct" framing for that Non-goal
+was inaccurate and has been rewritten to state it as a known, deliberately
+deferred residual gap instead (severity unaffected either way).
+
+QA review (hypatia-qa, 2026-09-28): PASS. Built a full acceptance-criterion
+traceability table; ran the full 44-test module directly (`OK`) plus the
+untouched 64-test Finding-side sibling as a cross-check (`OK`). Confirmed
+the mixed-citation test is constructed to genuinely distinguish "all must
+match" from "at least one" by fixture design, not merely by regex wording
+— an "at least one" implementation would fail to raise on that fixture.
+Confirmed the pre-existing looser `test_hypothesis_from_a_different_program_is_rejected`
+test was preserved, not replaced; confirmed the two new program-isolation
+messages are textually disjoint from the store's own error wording;
+confirmed `tests/research/test_json_file_research_security_hypothesis_store.py`
+shows zero diff.
+
+Runtime review (hypatia-runtime, 2026-09-28): PASS, no caveats. Confirmed
+zero diff in the store and in `Bootstrap.py`; confirmed the new check
+reuses the single existing `_evidence_for_program` call, no second
+evidence-loading path; grepped the whole `src/` tree for any other
+independent subject/target comparison and found only display-only
+formatting in the desktop panel and response composer, nothing needing
+this fix; confirmed rollback safety (no new persisted field, plain revert
+restores prior behavior exactly); re-ran `RestartReloadTests`, `OK`.
+
+Mutation pass (2026-09-28, hypatia-lead): four targeted mutants applied via
+in-memory monkeypatching, never written to any file on disk (mirroring
+v0.3.417's own method) — remove the subject-binding check from
+`attach_evidence`; allow a mixed-citation set through; remove the
+service-level program check from `attach_evidence`; remove it from
+`transition_status`. All four caught; all four control runs against the
+real, unmutated code passed beforehand.
+
+Release gates (2026-09-28, Windows canonical environment, hypatia-lead):
+7452 tests, OK (skipped=3) — 4 net new tests over v0.3.417's 7448; Black,
+Ruff, and MyPy (601 source files) clean; `git diff --check` clean (one
+pre-existing CRLF-on-disk file unrelated to this diff, normalized by git
+per `.gitattributes` on the next touch, as for every text file in this
+repository — not introduced by this milestone). Linux exact-SHA CI pending
+dispatch.
 
 ## Historical scope: v0.3.417 (delivered)
 

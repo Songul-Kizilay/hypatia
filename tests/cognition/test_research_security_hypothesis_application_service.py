@@ -518,6 +518,58 @@ class AttachEvidenceTests(unittest.TestCase):
                 ResearchSecurityHypothesisEvidenceRelation.SUPPORTS,
             )
 
+    def test_subject_mismatched_evidence_is_rejected_for_every_relation(self) -> None:
+        """Mirrors v0.3.417's Finding-side F1 fix: evidence must describe
+        this hypothesis's own subject, not merely share its program. Only
+        SUPPORTS/CONTRADICTS exist on the Hypothesis side (no VALIDATES)."""
+        evidence_store = InMemoryHttpEvidenceStore(
+            (
+                http_evidence(evidence_id="a" * 64),
+                http_evidence(evidence_id="b" * 64, target_value="other.test"),
+            )
+        )
+        hypotheses = InMemoryHypothesisStore()
+        hypothesis_id = self._create(hypotheses, evidence_store)
+        service = make_service(hypotheses, evidence_store)
+        for relation in (
+            ResearchSecurityHypothesisEvidenceRelation.SUPPORTS,
+            ResearchSecurityHypothesisEvidenceRelation.CONTRADICTS,
+        ):
+            with self.subTest(relation=relation):
+                with self.assertRaisesRegex(ResearchError, "does not match"):
+                    service.attach_evidence(
+                        hypothesis_id, "program-a", ("b" * 64,), relation
+                    )
+
+    def test_a_mixed_citation_set_is_rejected_in_full(self) -> None:
+        """One matching, one mismatched citation in the same call must
+        refuse the whole call - proving "all must match," not "at least
+        one" (the aggregation `create_hypothesis` uses for a different
+        reason)."""
+        evidence_store = InMemoryHttpEvidenceStore(
+            (
+                http_evidence(evidence_id="a" * 64),
+                http_evidence(evidence_id="b" * 64),
+                http_evidence(evidence_id="c" * 64, target_value="other.test"),
+            )
+        )
+        hypotheses = InMemoryHypothesisStore()
+        hypothesis_id = self._create(hypotheses, evidence_store)
+        service = make_service(hypotheses, evidence_store)
+
+        with self.assertRaisesRegex(ResearchError, "does not match"):
+            service.attach_evidence(
+                hypothesis_id,
+                "program-a",
+                ("b" * 64, "c" * 64),
+                ResearchSecurityHypothesisEvidenceRelation.SUPPORTS,
+            )
+
+        (derived,) = service.hypotheses_for_program("program-a")
+        # Only the one supporting citation from _create's own creation call
+        # is present; the rejected mixed-citation attach added nothing.
+        self.assertEqual(len(derived.supporting_evidence), 1)
+
     def test_unknown_hypothesis_id_is_rejected(self) -> None:
         service = make_service(
             http_evidence_store=InMemoryHttpEvidenceStore((http_evidence(),))
@@ -745,6 +797,62 @@ class ProgramIsolationTests(unittest.TestCase):
         self.assertIsNotNone(
             service.hypothesis_by_id(record.hypothesis_id, "program-a")
         )
+
+    def test_attach_evidence_under_wrong_program_fails_closed_at_service_layer(
+        self,
+    ) -> None:
+        """Proves the SERVICE's own program-isolation guard for
+        attach_evidence, not merely the store's document-level fallback —
+        mirrors v0.3.417's Finding-side M21 regression test."""
+        evidence_store = InMemoryHttpEvidenceStore(
+            (http_evidence(evidence_id="a" * 64),)
+        )
+        hypotheses = InMemoryHypothesisStore()
+        service = make_service(hypotheses, evidence_store)
+        record = service.create_hypothesis(
+            "program-a",
+            ResearchSecurityHypothesisKind.AUTHORIZATION,
+            ResearchAssetKind.HOSTNAME,
+            "example.test",
+            "statement",
+            "rationale",
+            "required validation",
+            ("a" * 64,),
+        )
+        with self.assertRaisesRegex(ResearchError, "was not found for this program"):
+            service.attach_evidence(
+                record.hypothesis_id,
+                "program-b",
+                ("a" * 64,),
+                ResearchSecurityHypothesisEvidenceRelation.SUPPORTS,
+            )
+
+    def test_transition_status_under_wrong_program_fails_closed_at_service_layer(
+        self,
+    ) -> None:
+        """Mirrors v0.3.417's Finding-side M22 regression test for
+        transition_status."""
+        evidence_store = InMemoryHttpEvidenceStore(
+            (http_evidence(evidence_id="a" * 64),)
+        )
+        hypotheses = InMemoryHypothesisStore()
+        service = make_service(hypotheses, evidence_store)
+        record = service.create_hypothesis(
+            "program-a",
+            ResearchSecurityHypothesisKind.AUTHORIZATION,
+            ResearchAssetKind.HOSTNAME,
+            "example.test",
+            "statement",
+            "rationale",
+            "required validation",
+            ("a" * 64,),
+        )
+        with self.assertRaisesRegex(ResearchError, "was not found for this program"):
+            service.transition_status(
+                record.hypothesis_id,
+                "program-b",
+                ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+            )
 
 
 class RestartReloadTests(unittest.TestCase):

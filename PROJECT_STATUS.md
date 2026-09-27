@@ -2,10 +2,27 @@
 
 ## Runtime Version
 
-`v0.3.417 (Genesis)`
+`v0.3.418 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.418 closes the symmetric half of v0.3.417's evidence
+subject-binding fix: `ResearchSecurityHypothesisApplicationService.attach_evidence`
+now refuses evidence whose subject does not match the hypothesis's own
+subject, for both `SUPPORTS` and `CONTRADICTS` (there is no `VALIDATES`
+relation on the Hypothesis side). This is provenance-integrity hardening,
+not authority-escalation: mismatched evidence carried forward into a
+Finding can only ever become a spurious `SUPPORTS`/`CONTRADICTS` link,
+never a false `VALIDATED`. A known, separately-scoped residual gap in
+`create_hypothesis` itself (a mismatched citation can still become a
+spurious `SUPPORTS` link at creation time, once at least one other
+citation matches) is deliberately deferred, recorded in
+`docs/dev/MILESTONE.md`. Also deferred: F4 lifecycle replay validation on
+store load (a design recommendation, not an open policy fork, is recorded
+for a future dedicated milestone) and request-ID/correlation-ID
+persistence (rejected as speculative — no live traceability problem
+found). No schema, store, or wiring change of any kind.
 
 Version v0.3.417 closes three deferred findings from v0.3.416's own security
 and QA reviews, on the same Finding Lifecycle foundation. Evidence attached
