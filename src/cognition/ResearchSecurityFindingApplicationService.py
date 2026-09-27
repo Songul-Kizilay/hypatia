@@ -181,6 +181,27 @@ class ResearchSecurityFindingApplicationService:
                 " evidence or transition the existing finding instead of"
                 " creating a near-duplicate."
             )
+        carried_hypothesis_links = (
+            *hypothesis.supporting_evidence,
+            *hypothesis.contradicting_evidence,
+        )
+        # F2: independently re-verify every evidence ID carried forward from
+        # the hypothesis still exists in the live HTTP evidence store for
+        # this program before persisting anything — fail the whole creation
+        # closed rather than silently dropping a missing reference. The
+        # source hypothesis itself is never read again after this point and
+        # is never mutated.
+        evidence_by_id = self._evidence_for_program(normalized_program_id)
+        missing_carried = tuple(
+            link.evidence_id
+            for link in carried_hypothesis_links
+            if link.evidence_id not in evidence_by_id
+        )
+        if missing_carried:
+            raise ResearchError(
+                "Security finding cannot be created: evidence carried from"
+                " the source hypothesis is not recorded for this program."
+            )
         now = self._now()
         record = ResearchSecurityFindingRecord(
             finding_id=self._new_id(),
@@ -209,10 +230,7 @@ class ResearchSecurityFindingApplicationService:
                 relation=self._carried_relation(link),
                 recorded_at=now,
             )
-            for link in (
-                *hypothesis.supporting_evidence,
-                *hypothesis.contradicting_evidence,
-            )
+            for link in carried_hypothesis_links
         )
         self._save(
             ResearchSecurityFindingDocument(
@@ -249,11 +267,16 @@ class ResearchSecurityFindingApplicationService:
                 " evidence ID."
             )
         document = self._load()
-        if not any(
-            existing.finding_id == normalized_finding_id
-            and existing.program_id == normalized_program_id
-            for existing in document.findings
-        ):
+        finding = next(
+            (
+                existing
+                for existing in document.findings
+                if existing.finding_id == normalized_finding_id
+                and existing.program_id == normalized_program_id
+            ),
+            None,
+        )
+        if finding is None:
             raise ResearchError("Security finding was not found for this program.")
         evidence_by_id = self._evidence_for_program(normalized_program_id)
         missing = tuple(
@@ -265,6 +288,23 @@ class ResearchSecurityFindingApplicationService:
             raise ResearchError(
                 "Security finding cites HTTP evidence that is not recorded for"
                 " this program."
+            )
+        # F1: evidence must actually describe this finding's own subject, not
+        # merely share its program — applies to all three relations
+        # (SUPPORTS/CONTRADICTS/VALIDATES), so `VALIDATES`, the sole gate for
+        # `VALIDATED`, can never be satisfied by evidence about a different
+        # host. Reuses the exact target/subject comparison already proven at
+        # `ResearchSecurityHypothesisApplicationService.create_hypothesis`.
+        mismatched_subject = tuple(
+            evidence_id
+            for evidence_id in evidence_ids
+            if evidence_by_id[evidence_id].target_kind != finding.subject_kind
+            or evidence_by_id[evidence_id].target_canonical_value
+            != finding.subject_canonical_value
+        )
+        if mismatched_subject:
+            raise ResearchError(
+                "Security finding evidence does not match this finding's" " subject."
             )
         now = self._now()
         links = tuple(
@@ -660,14 +700,18 @@ class ResearchSecurityFindingApplicationService:
         finding_id: str,
         program_id: str,
     ) -> ResearchSecurityFindingStatus:
-        transitions = sorted(
-            (
-                transition
-                for transition in document.status_transitions
-                if transition.finding_id == finding_id
-                and transition.program_id == program_id
-            ),
-            key=lambda entry: (entry.recorded_at, entry.transition_id),
+        """Return the causally-latest status: the last matching entry in
+        `document.status_transitions`' own persisted append order.
+
+        Never re-sorted by `recorded_at` — the store's append-only write
+        discipline already makes list position causal and tamper-evident; a
+        wall-clock regression must never be able to reorder it.
+        """
+        transitions = tuple(
+            transition
+            for transition in document.status_transitions
+            if transition.finding_id == finding_id
+            and transition.program_id == program_id
         )
         if not transitions:
             return ResearchSecurityFindingStatus.CANDIDATE

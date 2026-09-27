@@ -644,14 +644,18 @@ class ResearchSecurityHypothesisApplicationService:
         hypothesis_id: str,
         program_id: str,
     ) -> ResearchSecurityHypothesisStatus:
-        transitions = sorted(
-            (
-                transition
-                for transition in document.status_transitions
-                if transition.hypothesis_id == hypothesis_id
-                and transition.program_id == program_id
-            ),
-            key=lambda entry: (entry.recorded_at, entry.transition_id),
+        """Return the causally-latest status: the last matching entry in
+        `document.status_transitions`' own persisted append order.
+
+        Never re-sorted by `recorded_at` — the store's append-only write
+        discipline already makes list position causal and tamper-evident; a
+        wall-clock regression must never be able to reorder it.
+        """
+        transitions = tuple(
+            transition
+            for transition in document.status_transitions
+            if transition.hypothesis_id == hypothesis_id
+            and transition.program_id == program_id
         )
         if not transitions:
             return ResearchSecurityHypothesisStatus.OPEN

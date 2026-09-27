@@ -2,6 +2,46 @@
 
 All notable project changes are recorded here.
 
+## [0.3.417] - 2026-09-27
+
+### Fixed
+
+- Finding evidence attachment (`attach_evidence`) now refuses any cited
+  evidence whose subject (`target_kind`/`target_canonical_value`) does not
+  match the finding's own `subject_kind`/`subject_canonical_value`, for all
+  three relations (`SUPPORTS`/`CONTRADICTS`/`VALIDATES`) — closing a Medium
+  finding from v0.3.416's own security review: evidence about an unrelated
+  host in the same program could previously support, contradict, or,
+  critically, validate a finding it did not actually describe.
+- `create_finding` now independently re-verifies every evidence ID carried
+  forward from the source hypothesis against the live HTTP evidence store
+  before persisting anything; a missing reference fails the whole creation
+  closed rather than silently dropping it, and the source hypothesis is
+  never mutated.
+- Status derivation for both `ResearchSecurityFinding` and
+  `ResearchSecurityHypothesis` (the derived read model and each
+  application service's internal gating helper — four call sites in total)
+  now trusts the store's own append-only, tamper-evident write order
+  instead of re-deriving "latest" from `(recorded_at, transition_id)`. A
+  wall-clock regression, or two transitions recorded in the same instant,
+  can no longer misorder or mask the true latest status. No schema or
+  on-disk document change of any kind.
+- Added regression tests proving the Finding service's own program-
+  isolation guard in `attach_evidence`/`transition_status` independently
+  refuses a cross-program operation, closing a mutation-testing gap
+  (M21/M22) left open by v0.3.416's own mutation pass.
+
+### Security
+
+- Evidence used to validate, support, or contradict a Finding must now
+  actually belong to that Finding's own subject, not merely share its
+  program — closing the one remaining path by which `VALIDATED` (still
+  never authority to act) could have been reached with evidence about the
+  wrong host.
+- Reasoning-only surface preserved exactly: no network request, process,
+  tool execution, or scope/credential/budget/target change was added or
+  touched by any of the above fixes.
+
 ## [0.3.416] - 2026-09-26
 
 ### Added

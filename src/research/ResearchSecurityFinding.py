@@ -8,10 +8,14 @@ never itself persisted — there is no "find an existing finding and mutate
 it" persistence logic anywhere; `findings_for_program` recomputes identical
 output from the same three flat logs on every call.
 
-`status` is the latest of `status_history` by `recorded_at` (ties broken by
-`transition_id`), or `CANDIDATE` if none has ever been recorded — never a
-stored, independently-settable field, so it can never drift from the
-transitions that produced it. No value `status` can take asserts a confirmed
+`status` is the latest of `status_history` by persisted append order (the
+store's own append-only write discipline already guarantees this order is
+causal and tamper-evident; wall-clock `recorded_at` is kept only as a
+displayed field, never as an ordering key, so a clock regression or two
+same-instant transitions can never misorder the derived status), or
+`CANDIDATE` if none has ever been recorded — never a stored,
+independently-settable field, so it can never drift from the transitions
+that produced it. No value `status` can take asserts a confirmed
 vulnerability (see
 `ResearchSecurityFindingStatus.means_confirmed_vulnerability`), including
 `VALIDATED`.
@@ -143,12 +147,15 @@ class ResearchSecurityFinding:
 def _latest_status(
     transitions: tuple[ResearchSecurityFindingStatusTransitionRecord, ...],
 ) -> ResearchSecurityFindingStatus:
+    """Return the causally-latest status: the last entry in append order.
+
+    `transitions` must already be in the store's own persisted append order
+    (see `findings_for_program` below) — never re-sorted by `recorded_at`,
+    which is a wall-clock display value, not a causal ordering signal.
+    """
     if not transitions:
         return ResearchSecurityFindingStatus.CANDIDATE
-    latest = max(
-        transitions, key=lambda entry: (entry.recorded_at, entry.transition_id)
-    )
-    return latest.status
+    return transitions[-1].status
 
 
 def findings_for_program(
@@ -205,16 +212,15 @@ def findings_for_program(
             and link.program_id == record.program_id
             and link.relation is ResearchSecurityFindingEvidenceRelation.VALIDATES
         )
+        # Preserve `status_transitions`' own persisted append order rather
+        # than re-sorting by `recorded_at` — the store's append-only write
+        # discipline already makes that order causal and tamper-evident; a
+        # wall-clock regression must never be able to reorder it.
         transitions = tuple(
-            sorted(
-                (
-                    transition
-                    for transition in status_transitions
-                    if transition.finding_id == record.finding_id
-                    and transition.program_id == record.program_id
-                ),
-                key=lambda entry: (entry.recorded_at, entry.transition_id),
-            )
+            transition
+            for transition in status_transitions
+            if transition.finding_id == record.finding_id
+            and transition.program_id == record.program_id
         )
         results.append(
             ResearchSecurityFinding(

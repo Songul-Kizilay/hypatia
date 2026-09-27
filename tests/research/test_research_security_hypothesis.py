@@ -395,7 +395,7 @@ class HypothesesForProgramTests(unittest.TestCase):
         self.assertEqual(derived.contradicting_evidence, ())
         self.assertEqual(derived.status_history, ())
 
-    def test_derives_latest_status_by_recorded_at(self) -> None:
+    def test_derives_latest_status_by_append_order(self) -> None:
         record = hypothesis_record()
         earlier = status_transition(
             transition_id="t1",
@@ -415,19 +415,51 @@ class HypothesesForProgramTests(unittest.TestCase):
         )
         self.assertEqual(derived.status_history, (earlier, later))
 
-    def test_ties_broken_by_transition_id(self) -> None:
+    def test_a_backward_clock_step_does_not_hide_the_true_latest_transition(
+        self,
+    ) -> None:
+        """F3: append order must win even when `recorded_at` regresses.
+
+        `appended_second` is appended AFTER `appended_first` (its true,
+        causal position) but carries an earlier wall-clock `recorded_at` —
+        simulating a clock stepped backwards between the two writes. This is
+        the scenario that matters most for `create_finding`'s own gate,
+        which reads `ResearchSecurityHypothesis.status` directly.
+        """
         record = hypothesis_record()
-        first = status_transition(
-            transition_id="a-transition",
-            status=ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
-            recorded_at=RECORDED,
+        appended_first = status_transition(
+            transition_id="t1",
+            status=ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION,
+            recorded_at=LATER,
         )
-        second = status_transition(
-            transition_id="b-transition",
+        appended_second = status_transition(
+            transition_id="t2",
             status=ResearchSecurityHypothesisStatus.REFUTED,
             recorded_at=RECORDED,
         )
-        (derived,) = hypotheses_for_program("program-a", (record,), (), (first, second))
+        (derived,) = hypotheses_for_program(
+            "program-a", (record,), (), (appended_first, appended_second)
+        )
+        self.assertIs(derived.status, ResearchSecurityHypothesisStatus.REFUTED)
+
+    def test_append_order_wins_over_transition_id_at_the_same_instant(self) -> None:
+        """Two same-`recorded_at` transitions must order by append position,
+        never by a coincidental string comparison of `transition_id` (a
+        random UUID in production, carrying no ordering meaning)."""
+        record = hypothesis_record()
+        appended_first = status_transition(
+            transition_id="z-transition",
+            status=ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+            recorded_at=RECORDED,
+        )
+        appended_second = status_transition(
+            transition_id="a-transition",
+            status=ResearchSecurityHypothesisStatus.REFUTED,
+            recorded_at=RECORDED,
+        )
+        (derived,) = hypotheses_for_program(
+            "program-a", (record,), (), (appended_first, appended_second)
+        )
         self.assertIs(derived.status, ResearchSecurityHypothesisStatus.REFUTED)
 
     def test_multiple_evidence_links_are_preserved_and_returned(self) -> None:
