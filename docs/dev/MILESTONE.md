@@ -14,6 +14,200 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Finding Lifecycle evidence-integrity hardening (Bug Bounty foundation, step 7 continued) |
+| Base SHA | 223fb1b5ce7854604eb022cde3f9b8d75bc019d8 |
+| Status | implementation |
+| Specialists | hypatia-lead: sole implementer (surgical, related-surface fix across two application services and two derived read models); hypatia-security: independent review; hypatia-epistemics: independent review; hypatia-qa: independent review; hypatia-runtime: independent review; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 7, closing deferred findings
+from the delivered v0.3.416 Finding Lifecycle foundation's own security and
+QA reviews (`docs/dev/MILESTONE.md`, "Historical scope: v0.3.416") without
+opening any new authority, execution, or provenance surface. Four candidate
+items were investigated read-only in parallel by hypatia-epistemics,
+hypatia-security, hypatia-runtime, and hypatia-qa (2026-09-27) before this
+lock: F1/F2 (evidence-integrity gaps in `ResearchSecurityFindingApplicationService`),
+F3 (wall-clock-dependent status ordering, inherited from v0.3.415), F4
+(no lifecycle-replay validation on load), the M21/M22 mutation-survivor
+gap, agent-output trust boundaries, and Safe Tool Gateway groundwork. F4,
+trust-class taxonomy, and tool-execution architecture were all found to
+require either a real design decision or a real new capability that does
+not yet exist, and are explicitly deferred (see Non-goals). F1/F2/F3 and
+M21/M22 are small, mechanical, and precedented, and are locked here.
+
+F3 scope decision (2026-09-27, hypatia-lead, direct code inspection — not
+assumed from the deferred-finding prose): traced
+`ResearchSecurityFindingApplicationService.create_finding`
+(`src/cognition/ResearchSecurityFindingApplicationService.py:167-168`),
+which gates finding creation on `hypothesis.status is
+ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION`. `hypothesis.status`
+is the v0.3.415 `ResearchSecurityHypothesis` derived read model's own
+`_latest_status` (`src/research/ResearchSecurityHypothesis.py:131-139`),
+which sorts transitions by `(entry.recorded_at, entry.transition_id)` —
+byte-for-byte the same wall-clock/random-UUID-tiebreak defect described for
+the Finding side, independently duplicated a third and fourth time in
+`ResearchSecurityHypothesisApplicationService._current_status`
+(`src/cognition/ResearchSecurityHypothesisApplicationService.py:641-655`).
+Because `create_finding`'s own allow/deny gate reads this exact
+Hypothesis-derived value, a wall-clock regression at the Hypothesis layer
+can misorder its transitions and cause `create_finding` to see a stale
+`status` — silently permitting promotion from a hypothesis whose true
+latest state is not `READY_FOR_VALIDATION` (e.g. a later `REFUTED`
+correction hidden behind an earlier-recorded `READY_FOR_VALIDATION`), or
+wrongly refusing a legitimately ready one. Fixing only the Finding-side
+derivation would leave this gate exposed to exactly the defect this
+milestone exists to close. Per the user's own stated preference hierarchy
+(correctness, then security invariants, then determinism, then minimal
+scope, then architectural consistency), **Option B is chosen**: the
+ordering fix is applied symmetrically to both derived read models
+(`ResearchSecurityFinding._latest_status`/`ResearchSecurityHypothesis._latest_status`)
+and both application services' internal `_current_status` helpers — four
+call sites, one bug, no schema change in any of them. This was not a case
+of two indistinguishable options, so no user check-in was needed.
+
+Scope: a surgical, non-schema-changing hardening pass over the v0.3.416
+Finding Lifecycle's evidence-attachment, finding-creation, and
+status-derivation logic, extending into the two v0.3.415 Hypothesis-side
+derivation call sites strictly for the F3 ordering fix identified above
+(no other Hypothesis-side file, type, or behavior changes).
+
+In scope:
+- **F1** (Medium, from v0.3.416 security review): `ResearchSecurityFindingApplicationService.attach_evidence`
+  gains a subject-binding check — reusing, not reinventing, the exact
+  `target_kind`/`target_canonical_value`-vs-`subject_kind`/`subject_canonical_value`
+  comparison already proven correct at hypothesis creation
+  (`ResearchSecurityHypothesisApplicationService.create_hypothesis`,
+  lines 166-174) — applied to all three relations
+  (`SUPPORTS`/`CONTRADICTS`/`VALIDATES`), so evidence about a different
+  subject in the same program can no longer support, contradict, or
+  (critically) validate a finding it does not actually describe.
+- **F2** (Low): `create_finding` independently re-verifies every
+  evidence ID carried forward from the source hypothesis against the live
+  HTTP evidence store for the same program before persisting the new
+  finding document; a missing ID fails the whole creation closed (no
+  partial/silent drop), and the source hypothesis itself is never mutated.
+- **F3** (Low, inherited from v0.3.415; scope per the decision above):
+  `ResearchSecurityFinding._latest_status`/its transitions-sort, and the
+  matching helpers in `ResearchSecurityFindingApplicationService`,
+  `ResearchSecurityHypothesis._latest_status`/its transitions-sort, and
+  `ResearchSecurityHypothesisApplicationService._current_status` all switch
+  from `(recorded_at, transition_id)` ordering to trusting the
+  already-persisted append-only list/tuple position as the sole ordering
+  signal (`recorded_at` remains a stored, displayed field — it is simply no
+  longer used to compute *which* transition is latest). No schema version
+  bump: this reads fields and positions that already exist on disk today.
+- **M21/M22** (mutation-survivor gap, from v0.3.416's own mutation pass):
+  two new regression tests proving `attach_evidence`/`transition_status`
+  themselves — not merely the store's document-level fallback — refuse a
+  real finding ID under the wrong `program_id`, with the exact service-level
+  error message asserted. The store's existing dangling-reference check is
+  kept exactly as-is (defense in depth, not redundancy to be removed).
+
+Non-goals (exhaustive): no lifecycle replay validation on load (F4 —
+deferred, needs a reject-vs-quarantine design decision this milestone does
+not make); no persisted sequence-number field or schema/version change of
+any kind (the F3 fix uses data already on disk); no change to
+`ResearchSecurityHypothesisRecord`/`Status`/`Origin`/`EvidenceKind`/
+`EvidenceRelation`/`create_hypothesis`/`attach_evidence`/`transition_status`
+business logic (only the two narrow `_latest_status`/`_current_status`
+ordering helpers are touched, strictly for F3); no agent autonomy, new tool
+execution, Safe Tool Gateway generalization, model-output authority,
+network capability, automatic exploitation, credential expansion, target
+expansion, or budget expansion of any kind; no generic trust-class/
+provenance-metadata taxonomy (`origin_agent`/`source_type`/`trust_class`/
+`correlation_id`/`parent_action_id`) — no automatic finding/hypothesis
+producer exists to warrant it; no broad correlation/replay architecture
+(the dormant `src/tools/ToolExecutionOutcome` correlation-ID pattern stays
+unwired); no unrelated cleanup; no Windows ResourceWarning fix (confirmed
+by hypatia-qa's 2026-09-27 read-only review to originate outside the
+Finding/Hypothesis store and test code, which are fully context-manager-safe) —
+it is fixed here only if a test this milestone directly touches proves the
+leak belongs to this feature, which is not expected.
+
+Security invariants (unchanged, restated): MODEL OUTPUT != AUTHORITY;
+SUBAGENT OUTPUT != AUTHORITY; a `VALIDATED` finding is never authority to
+act (`means_confirmed_vulnerability` stays `False` for every status,
+untouched by this milestone). Finding evidence attachment, finding
+creation, and status transitions/derivation must never execute a network
+request, spawn a process, run a tool, or modify scope/credential/budget/
+target state — reasoning over already-recorded evidence and already-
+persisted history only. Program isolation must be independently provable
+at the service layer for `attach_evidence`/`transition_status`, not merely
+incidentally caught by the store's fallback check. A finding's evidentiary
+state (supporting/contradicting/validating) must actually describe the
+finding's own subject, not merely share its program.
+
+Acceptance criteria:
+- `attach_evidence` refuses evidence whose `target_kind`/`target_canonical_value`
+  differs from the finding's `subject_kind`/`subject_canonical_value`, for
+  all three relations; a matching-subject case still succeeds unchanged.
+- A finding cannot reach `VALIDATED` via subject-mismatched `VALIDATES`
+  evidence even when relation/gate conditions otherwise hold.
+- `create_finding` refuses when any carried-forward evidence ID no longer
+  exists in the live evidence store for that program; succeeds unchanged
+  when all exist; never mutates the source hypothesis.
+- A transition sequence containing a later-appended, earlier-`recorded_at`
+  entry (backward clock, or same-instant transitions) still derives the
+  correct append-order latest status, identically for both
+  `ResearchSecurityFinding` and `ResearchSecurityHypothesis`, and
+  identically whether read via the derived model or the application
+  service's own internal helper.
+- `attach_evidence`/`transition_status` called with a real finding ID under
+  the wrong program each raise the exact existing service-level error,
+  independent of the store's fallback check.
+- Full existing v0.3.415/v0.3.416 regression suites unaffected; no existing
+  accept/refuse outcome changes.
+
+Test strategy: positive/negative subject-binding tests for all three
+evidence relations on `attach_evidence`, including a dedicated
+subject-mismatched-`VALIDATES` negative case; a carried-evidence
+existence-at-creation test (missing ID refused, all-present case
+unaffected, source hypothesis unmutated); a new `_regressing_clock` test
+helper (mirroring the existing `_advancing_clock`) exercising both
+subsystems' derivation paths (derived-model and application-service
+helper) under a backward clock step and under same-instant transitions;
+two new `ProgramIsolationTests` cases for `attach_evidence`/
+`transition_status` asserting the service-level error message directly;
+a differential run of every existing v0.3.415/v0.3.416 fixture proving no
+accept/refuse outcome changes; impacted suites focused first, full
+canonical gates once at release.
+
+Mutation strategy: deliberate local mutants (or equivalent targeted checks)
+for at least — remove the service-level program check from
+`attach_evidence`; remove it from `transition_status`; allow wrong-subject
+evidence into any of the three relations; skip carried-evidence
+revalidation in `create_finding`; accept a missing carried evidence ID;
+accept cross-program carried evidence; restore `(recorded_at,
+transition_id)` sorting in any of the four touched derivation call sites;
+regress the clock ordering fix specifically. Every meaningful mutant must
+be caught; if any survives due to genuine redundant defense in depth (as
+M21/M22 did in v0.3.416), that must be proven with an explicit test and
+documented as harmless, not silently accepted.
+
+Affected architectural layers: `cognition` (both application services'
+authorization/derivation logic) and `research` (both derived read models'
+ordering) — persistence schema, desktop panels, and Brain intent surface
+untouched.
+
+Rollback expectations: every change is a pure logic change over
+already-existing fields with no schema/version bump and no persisted-data
+mutation; rollback is a plain revert of the release commit with zero
+data-migration concern in either direction.
+
+Deferred findings carried forward unchanged: F4 (lifecycle replay
+validation on load — needs a reject-vs-quarantine design decision); the
+symmetric F1-class subject-binding gap in
+`ResearchSecurityHypothesisApplicationService.attach_evidence` (same defect
+class as Finding's F1, confirmed present by hypatia-epistemics's 2026-09-27
+review, deliberately left for a future, separately-scoped Hypothesis-side
+milestone rather than bundled here); request-ID/correlation-ID persistence
+into research records; origin/trust-class taxonomy; Safe Tool Gateway
+generalization; the Windows ResourceWarning test-hygiene debt.
+
+## Historical scope: v0.3.416 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Finding Lifecycle foundation (Bug Bounty foundation, step 7) |
 | Base SHA | 45252c1e9690cb7e8177d0357db3d6d30522fce7 |
 | Status | delivered |
