@@ -14,6 +14,169 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Hypothesis Evidence subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
+| Base SHA | b4a4f257d00845fbf77e9af62abd81e64f9048a9 |
+| Status | implementation |
+| Specialists | hypatia-lead: sole implementer; hypatia-security: independent review; hypatia-epistemics: independent review; hypatia-qa: independent review; hypatia-runtime: independent review; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 6/7, closing a deferred
+finding named explicitly in v0.3.417's own ledger. Three candidate next
+directions were investigated read-only in parallel by hypatia-epistemics,
+hypatia-security, hypatia-runtime, and hypatia-qa (2026-09-28) before this
+lock: (A) the symmetric F1-class subject-binding gap on the Hypothesis
+side's own `attach_evidence`; (B) F4 lifecycle replay validation on store
+load; (C) request-ID/correlation-ID persistence into research records for
+a future replay layer. All four specialists converged: (A) is small,
+precedented, zero schema impact, and ready now; (B) is not actually an
+undecided product-policy fork — the codebase's own precedent
+(`JsonFileVulnerabilityGraphStore`, which already replays business-rule
+invariants via the same runtime mutation methods used on write, and is
+reject-whole; zero quarantine precedent exists anywhere in this codebase)
+already decides "reject whole document on any violation" — but its correct
+implementation is nontrivial engineering (a point-in-time evidence-gate
+replay simulating append order rather than final state, a
+research/cognition import-cycle-safe way to share the validation logic
+between the store and the application service, and a new characterization
+test proving the replay is exactly as permissive as the write path, so the
+store never becomes stricter than legitimate history) and is deliberately
+NOT bundled into this narrow milestone; (C) was rejected outright — a full-
+tree grep for "correlation" found zero hits, no existing reader/audit/
+replay mechanism ever joins a research record back to its originating
+`BrainRequest`, and the one existing request-ID precedent
+(`ResearchMissionAudit.mission_request_id`) is a different, already-
+authority-bearing autonomous-mission subsystem, not evidence of a live gap
+here — speculative architecture with no observed pain point, correctly
+rejected per this investigation's own instruction to reject speculative
+justification.
+
+Severity of (A), stated precisely per the security/epistemics reviews:
+provenance-integrity hardening, not authority-escalation. Traced the worst
+case directly: `ResearchSecurityHypothesisEvidenceRelation` has only
+`SUPPORTS`/`CONTRADICTS` (no `VALIDATES` member exists on the Hypothesis
+side at all), and `create_finding`'s `_carried_relation` can therefore
+never turn carried-forward hypothesis evidence into a `VALIDATES` link on
+a finding — the sole gate for `VALIDATED`. So subject-mismatched evidence
+smuggled into a hypothesis via the unfixed `attach_evidence`, then carried
+forward into a finding, can only ever add a spurious `SUPPORTS` (no effect
+on any gate) or a spurious `CONTRADICTS` (over-conservative, blocks
+validation) — never a false `VALIDATED` finding. This matches, and closes
+the remaining half of, the exact deferred-findings note already recorded
+in v0.3.417's own ledger entry above.
+
+Scope: mirror the exact F1 fix pattern v0.3.417 already delivered and
+independently reviewed clean on the Finding side, applied to
+`ResearchSecurityHypothesisApplicationService.attach_evidence`
+(`src/cognition/ResearchSecurityHypothesisApplicationService.py:231-292`),
+plus one bundled, same-file/same-method-family test-coverage gap QA found
+during this investigation: `attach_evidence` under the wrong `program_id`
+is covered only by a loose `assertRaisesRegex(ResearchError, "was not
+found")` inside `AttachEvidenceTests`
+(`tests/cognition/test_research_security_hypothesis_application_service.py:533-546`)
+rather than the precise, M21-style message assertion inside
+`ProgramIsolationTests`, and `transition_status` under the wrong
+`program_id` (the M22-equivalent case) has no test at all in this file.
+
+In scope:
+- `attach_evidence`: change the existing boolean `any(...)` hypothesis
+  lookup (lines 255-259) into a bound-record lookup (mirroring
+  `next(...)`-style lookup already used on the Finding side), then add a
+  subject-binding check comparing every cited evidence's `target_kind`/
+  `target_canonical_value` against the *matched hypothesis's own*
+  `subject_kind`/`subject_canonical_value` — "all cited evidence in this
+  call must match" (the same aggregation v0.3.417 used, not
+  `create_hypothesis`'s "at least one", per the same reasoning: this
+  method gates an *addition* to an already-subject-established record, so
+  every citation in one call should describe that subject, not merely one
+  of them). Applied to both relations (`SUPPORTS`/`CONTRADICTS` — there is
+  no `VALIDATES` on this side to also cover).
+- Add a `ProgramIsolationTests`-style regression test proving
+  `attach_evidence` itself refuses a real hypothesis ID under the wrong
+  program with the exact service-level message, and a new
+  `transition_status`-under-wrong-program test (the M22-equivalent case),
+  closing the coverage gap QA identified — same file, same method family,
+  no scope widening.
+
+Non-goals (exhaustive): no change to `create_hypothesis`'s existing "at
+least one" subject check (different call semantics, already correct); no
+change to `ResearchSecurityFindingApplicationService`/any Finding-side
+file (v0.3.417 already closed that half); no F4 lifecycle-replay work of
+any kind (deferred, see Rationale, needs its own dedicated milestone given
+the real engineering surface identified); no request-ID/correlation-ID
+work; no schema/version bump in either store; no new evidence relation,
+status, or kind; no agent autonomy, new tool execution, Safe Tool Gateway
+work, model-output authority, network capability, or any authority/
+budget/target/credential change of any kind.
+
+Security invariants (unchanged, restated): hypothesis evidence attachment
+must never execute a network request, spawn a process, run a tool, or
+modify scope/credential/budget/target state. Program isolation must be
+independently provable at the service layer for `attach_evidence`/
+`transition_status`, not merely incidentally caught by the store's
+fallback check. A hypothesis's supporting/contradicting evidence must
+actually describe the hypothesis's own subject, not merely share its
+program. MODEL OUTPUT != AUTHORITY; SUBAGENT OUTPUT != AUTHORITY;
+`READY_FOR_VALIDATION` remains never a confirmed anything, untouched by
+this milestone.
+
+Acceptance criteria:
+- `attach_evidence` refuses evidence whose `target_kind`/
+  `target_canonical_value` differs from the hypothesis's own
+  `subject_kind`/`subject_canonical_value`, for both `SUPPORTS` and
+  `CONTRADICTS`; a matching-subject case, and every existing regression
+  fixture (which already uses matching subjects throughout), continue to
+  succeed unchanged.
+- A mixed citation set in one call (one matching, one mismatched) is
+  refused in full — proving "all must match," not "at least one."
+- `attach_evidence`/`transition_status` called with a real hypothesis ID
+  under the wrong program each raise the exact existing service-level
+  error, independent of the store's fallback check.
+- Full existing v0.3.415/v0.3.416/v0.3.417 regression suites unaffected;
+  no existing accept/refuse outcome changes.
+
+Test strategy: subject-mismatch negative tests for both relations
+(`SUPPORTS`/`CONTRADICTS`) plus a mixed-citation-set negative test, added
+to `AttachEvidenceTests`; the existing positive fixtures already exercise
+the matching-subject path, so no new positive test is required; two new
+`ProgramIsolationTests` cases (`attach_evidence`, `transition_status`)
+asserting the precise service-level message; a differential run of every
+existing v0.3.415/v0.3.416/v0.3.417 fixture proving no accept/refuse
+outcome changes; impacted suites focused first, full canonical gates once
+at release.
+
+Mutation strategy: deliberate local mutants (via in-memory monkeypatching,
+never written to disk, mirroring v0.3.417's own method) for at least —
+remove the new subject-binding check from `attach_evidence`; allow a
+mixed-citation set through; remove the service-level program check from
+`attach_evidence`; remove it from `transition_status`. Every meaningful
+mutant must be caught.
+
+Affected architectural layers: `cognition` only (one application service's
+authorization logic) — `research` types/records, persistence schema,
+desktop panel, and Brain intent surface all untouched.
+
+Rollback expectations: pure logic change over already-existing fields, no
+schema/version bump, no persisted-data mutation; rollback is a plain
+revert of the release commit with zero data-migration concern.
+
+Deferred findings carried forward: F4 (lifecycle replay validation on
+load) — design recommendation from hypatia-runtime's 2026-09-28 review:
+"reject whole document" on any business-rule-invariant violation is
+already the security-consistent, precedent-matching default (not an open
+policy fork), but implementation requires a point-in-time evidence-gate
+replay (not a final-state check), a research/cognition import-cycle-safe
+way to share validation logic between the store and application service,
+and a new characterization test proving replay-equivalence to the write
+path — real engineering surface for its own dedicated future milestone,
+not bundled here. Request-ID/correlation-ID persistence — rejected as
+speculative, no live traceability problem found; revisit only if a real
+replay/evaluation layer is ever actually proposed. The Windows
+`ResourceWarning` test-hygiene debt remains untraced and out of scope.
+
+## Historical scope: v0.3.417 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Finding Lifecycle evidence-integrity hardening (Bug Bounty foundation, step 7 continued) |
 | Base SHA | 223fb1b5ce7854604eb022cde3f9b8d75bc019d8 |
 | Status | delivered |
