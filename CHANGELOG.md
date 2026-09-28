@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.418] - 2026-09-28
+
+### Fixed
+
+- Hypothesis evidence attachment (`attach_evidence`) now refuses any cited
+  evidence whose subject (`target_kind`/`target_canonical_value`) does not
+  match the hypothesis's own `subject_kind`/`subject_canonical_value`, for
+  both `SUPPORTS` and `CONTRADICTS` (there is no `VALIDATES` relation on
+  the Hypothesis side) — mirroring v0.3.417's Finding-side fix. A mixed
+  citation set (one matching, one mismatched) in a single call is refused
+  in full.
+- Added regression tests proving the Hypothesis service's own
+  program-isolation guard in `attach_evidence`/`transition_status`
+  independently refuses a cross-program operation with its own distinct
+  error message.
+
+### Security
+
+- Evidence used to support or contradict a Hypothesis must now actually
+  belong to that Hypothesis's own subject, not merely share its program —
+  closing the symmetric half of the provenance-integrity gap v0.3.417
+  closed on the Finding side. Traced and confirmed: this is
+  provenance-integrity hardening, not an authority-escalation fix — the
+  Hypothesis side has no `VALIDATES` relation, so mismatched evidence
+  smuggled in here can never cause a false `VALIDATED` finding downstream,
+  only an over-conservative block.
+- Reasoning-only surface preserved exactly: no network request, process,
+  tool execution, or scope/credential/budget/target change was added or
+  touched.
+
 ## [0.3.417] - 2026-09-27
 
 ### Fixed

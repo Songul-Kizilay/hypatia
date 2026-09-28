@@ -240,7 +240,11 @@ class ResearchSecurityHypothesisApplicationService:
         The hypothesis must already exist for this exact `program_id`, and
         every cited evidence ID must exist for that same program — fail
         closed on a cross-program reference or an unknown hypothesis/evidence
-        ID.
+        ID. Every cited evidence record must also describe this hypothesis's
+        own subject (`target_kind`/`target_canonical_value` matching
+        `subject_kind`/`subject_canonical_value`) — reusing the exact
+        comparison already proven at `create_hypothesis`, applied here to
+        every citation in the call, not merely at least one.
         """
         normalized_program_id = self._normalize_program_id(program_id)
         normalized_hypothesis_id = self._normalize_hypothesis_id(hypothesis_id)
@@ -252,11 +256,16 @@ class ResearchSecurityHypothesisApplicationService:
                 " evidence ID."
             )
         document = self._load()
-        if not any(
-            existing.hypothesis_id == normalized_hypothesis_id
-            and existing.program_id == normalized_program_id
-            for existing in document.hypotheses
-        ):
+        hypothesis = next(
+            (
+                existing
+                for existing in document.hypotheses
+                if existing.hypothesis_id == normalized_hypothesis_id
+                and existing.program_id == normalized_program_id
+            ),
+            None,
+        )
+        if hypothesis is None:
             raise ResearchError("Security hypothesis was not found for this program.")
         evidence_by_id = self._evidence_for_program(normalized_program_id)
         missing = tuple(
@@ -268,6 +277,18 @@ class ResearchSecurityHypothesisApplicationService:
             raise ResearchError(
                 "Security hypothesis cites HTTP evidence that is not recorded"
                 " for this program."
+            )
+        mismatched_subject = tuple(
+            evidence_id
+            for evidence_id in evidence_ids
+            if evidence_by_id[evidence_id].target_kind != hypothesis.subject_kind
+            or evidence_by_id[evidence_id].target_canonical_value
+            != hypothesis.subject_canonical_value
+        )
+        if mismatched_subject:
+            raise ResearchError(
+                "Security hypothesis evidence does not match this hypothesis's"
+                " subject."
             )
         now = self._now()
         links = tuple(

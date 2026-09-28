@@ -14,9 +14,250 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Hypothesis Evidence subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
+| Base SHA | b4a4f257d00845fbf77e9af62abd81e64f9048a9 |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-epistemics: independent review, PASS-with-caveats, one accurate residual-gap finding folded into Non-goals/Deferred above, no defect in delivered code; hypatia-qa: independent review, PASS, full acceptance-criterion traceability; hypatia-runtime: independent review, PASS, no caveats; hypatia-lead: release |
+| Blockers | none |
+
+Rationale: bounded continuation of roadmap item 6/7, closing a deferred
+finding named explicitly in v0.3.417's own ledger. Three candidate next
+directions were investigated read-only in parallel by hypatia-epistemics,
+hypatia-security, hypatia-runtime, and hypatia-qa (2026-09-28) before this
+lock: (A) the symmetric F1-class subject-binding gap on the Hypothesis
+side's own `attach_evidence`; (B) F4 lifecycle replay validation on store
+load; (C) request-ID/correlation-ID persistence into research records for
+a future replay layer. All four specialists converged: (A) is small,
+precedented, zero schema impact, and ready now; (B) is not actually an
+undecided product-policy fork — the codebase's own precedent
+(`JsonFileVulnerabilityGraphStore`, which already replays business-rule
+invariants via the same runtime mutation methods used on write, and is
+reject-whole; zero quarantine precedent exists anywhere in this codebase)
+already decides "reject whole document on any violation" — but its correct
+implementation is nontrivial engineering (a point-in-time evidence-gate
+replay simulating append order rather than final state, a
+research/cognition import-cycle-safe way to share the validation logic
+between the store and the application service, and a new characterization
+test proving the replay is exactly as permissive as the write path, so the
+store never becomes stricter than legitimate history) and is deliberately
+NOT bundled into this narrow milestone; (C) was rejected outright — a full-
+tree grep for "correlation" found zero hits, no existing reader/audit/
+replay mechanism ever joins a research record back to its originating
+`BrainRequest`, and the one existing request-ID precedent
+(`ResearchMissionAudit.mission_request_id`) is a different, already-
+authority-bearing autonomous-mission subsystem, not evidence of a live gap
+here — speculative architecture with no observed pain point, correctly
+rejected per this investigation's own instruction to reject speculative
+justification.
+
+Severity of (A), stated precisely per the security/epistemics reviews:
+provenance-integrity hardening, not authority-escalation. Traced the worst
+case directly: `ResearchSecurityHypothesisEvidenceRelation` has only
+`SUPPORTS`/`CONTRADICTS` (no `VALIDATES` member exists on the Hypothesis
+side at all), and `create_finding`'s `_carried_relation` can therefore
+never turn carried-forward hypothesis evidence into a `VALIDATES` link on
+a finding — the sole gate for `VALIDATED`. So subject-mismatched evidence
+smuggled into a hypothesis via the unfixed `attach_evidence`, then carried
+forward into a finding, can only ever add a spurious `SUPPORTS` (no effect
+on any gate) or a spurious `CONTRADICTS` (over-conservative, blocks
+validation) — never a false `VALIDATED` finding. This matches, and closes
+the remaining half of, the exact deferred-findings note already recorded
+in v0.3.417's own ledger entry above.
+
+Scope: mirror the exact F1 fix pattern v0.3.417 already delivered and
+independently reviewed clean on the Finding side, applied to
+`ResearchSecurityHypothesisApplicationService.attach_evidence`
+(`src/cognition/ResearchSecurityHypothesisApplicationService.py:231-292`),
+plus one bundled, same-file/same-method-family test-coverage gap QA found
+during this investigation: `attach_evidence` under the wrong `program_id`
+is covered only by a loose `assertRaisesRegex(ResearchError, "was not
+found")` inside `AttachEvidenceTests`
+(`tests/cognition/test_research_security_hypothesis_application_service.py:533-546`)
+rather than the precise, M21-style message assertion inside
+`ProgramIsolationTests`, and `transition_status` under the wrong
+`program_id` (the M22-equivalent case) has no test at all in this file.
+
+In scope:
+- `attach_evidence`: change the existing boolean `any(...)` hypothesis
+  lookup (lines 255-259) into a bound-record lookup (mirroring
+  `next(...)`-style lookup already used on the Finding side), then add a
+  subject-binding check comparing every cited evidence's `target_kind`/
+  `target_canonical_value` against the *matched hypothesis's own*
+  `subject_kind`/`subject_canonical_value` — "all cited evidence in this
+  call must match" (the same aggregation v0.3.417 used, not
+  `create_hypothesis`'s "at least one", per the same reasoning: this
+  method gates an *addition* to an already-subject-established record, so
+  every citation in one call should describe that subject, not merely one
+  of them). Applied to both relations (`SUPPORTS`/`CONTRADICTS` — there is
+  no `VALIDATES` on this side to also cover).
+- Add a `ProgramIsolationTests`-style regression test proving
+  `attach_evidence` itself refuses a real hypothesis ID under the wrong
+  program with the exact service-level message, and a new
+  `transition_status`-under-wrong-program test (the M22-equivalent case),
+  closing the coverage gap QA identified — same file, same method family,
+  no scope widening.
+
+Non-goals (exhaustive): no change to `create_hypothesis`'s existing "at
+least one" subject check — deliberately out of scope, NOT because it is
+already correct: hypatia-epistemics's 2026-09-28 review traced it end to
+end and found that once at least one citation matches, `create_hypothesis`
+still turns *every* `supporting_evidence_ids` entry into a `SUPPORTS` link
+(`ResearchSecurityHypothesisApplicationService.py:210-221`), including any
+that fail the subject match — the same class of spurious-`SUPPORTS`-link
+gap this milestone fixes for `attach_evidence`, just unaddressed at the
+creation call site. This is a known, separately-scoped residual gap
+(recorded in Deferred findings below), not a closed one; severity is
+unaffected by leaving it deferred (still `SUPPORTS`-only, structurally
+incapable of reaching `VALIDATES`, per the Rationale above). No change to
+`ResearchSecurityFindingApplicationService`/any Finding-side
+file (v0.3.417 already closed that half); no F4 lifecycle-replay work of
+any kind (deferred, see Rationale, needs its own dedicated milestone given
+the real engineering surface identified); no request-ID/correlation-ID
+work; no schema/version bump in either store; no new evidence relation,
+status, or kind; no agent autonomy, new tool execution, Safe Tool Gateway
+work, model-output authority, network capability, or any authority/
+budget/target/credential change of any kind.
+
+Security invariants (unchanged, restated): hypothesis evidence attachment
+must never execute a network request, spawn a process, run a tool, or
+modify scope/credential/budget/target state. Program isolation must be
+independently provable at the service layer for `attach_evidence`/
+`transition_status`, not merely incidentally caught by the store's
+fallback check. A hypothesis's supporting/contradicting evidence must
+actually describe the hypothesis's own subject, not merely share its
+program. MODEL OUTPUT != AUTHORITY; SUBAGENT OUTPUT != AUTHORITY;
+`READY_FOR_VALIDATION` remains never a confirmed anything, untouched by
+this milestone.
+
+Acceptance criteria:
+- `attach_evidence` refuses evidence whose `target_kind`/
+  `target_canonical_value` differs from the hypothesis's own
+  `subject_kind`/`subject_canonical_value`, for both `SUPPORTS` and
+  `CONTRADICTS`; a matching-subject case, and every existing regression
+  fixture (which already uses matching subjects throughout), continue to
+  succeed unchanged.
+- A mixed citation set in one call (one matching, one mismatched) is
+  refused in full — proving "all must match," not "at least one."
+- `attach_evidence`/`transition_status` called with a real hypothesis ID
+  under the wrong program each raise the exact existing service-level
+  error, independent of the store's fallback check.
+- Full existing v0.3.415/v0.3.416/v0.3.417 regression suites unaffected;
+  no existing accept/refuse outcome changes.
+
+Test strategy: subject-mismatch negative tests for both relations
+(`SUPPORTS`/`CONTRADICTS`) plus a mixed-citation-set negative test, added
+to `AttachEvidenceTests`; the existing positive fixtures already exercise
+the matching-subject path, so no new positive test is required; two new
+`ProgramIsolationTests` cases (`attach_evidence`, `transition_status`)
+asserting the precise service-level message; a differential run of every
+existing v0.3.415/v0.3.416/v0.3.417 fixture proving no accept/refuse
+outcome changes; impacted suites focused first, full canonical gates once
+at release.
+
+Mutation strategy: deliberate local mutants (via in-memory monkeypatching,
+never written to disk, mirroring v0.3.417's own method) for at least —
+remove the new subject-binding check from `attach_evidence`; allow a
+mixed-citation set through; remove the service-level program check from
+`attach_evidence`; remove it from `transition_status`. Every meaningful
+mutant must be caught.
+
+Affected architectural layers: `cognition` only (one application service's
+authorization logic) — `research` types/records, persistence schema,
+desktop panel, and Brain intent surface all untouched.
+
+Rollback expectations: pure logic change over already-existing fields, no
+schema/version bump, no persisted-data mutation; rollback is a plain
+revert of the release commit with zero data-migration concern.
+
+Deferred findings carried forward: F4 (lifecycle replay validation on
+load) — design recommendation from hypatia-runtime's 2026-09-28 review:
+"reject whole document" on any business-rule-invariant violation is
+already the security-consistent, precedent-matching default (not an open
+policy fork), but implementation requires a point-in-time evidence-gate
+replay (not a final-state check), a research/cognition import-cycle-safe
+way to share validation logic between the store and application service,
+and a new characterization test proving replay-equivalence to the write
+path — real engineering surface for its own dedicated future milestone,
+not bundled here. Request-ID/correlation-ID persistence — rejected as
+speculative, no live traceability problem found; revisit only if a real
+replay/evaluation layer is ever actually proposed. The Windows
+`ResourceWarning` test-hygiene debt remains untraced and out of scope.
+`create_hypothesis`'s own residual spurious-`SUPPORTS`-link gap (found by
+hypatia-epistemics's 2026-09-28 review, see Non-goals above) — same defect
+class as this milestone's fix, deliberately deferred to keep this milestone
+narrow; severity unaffected (still `SUPPORTS`-only, never `VALIDATES`).
+
+Security review (hypatia-security, 2026-09-28): PASS, no findings. Confirmed
+the bound-record lookup (`next(...)`, requiring both `hypothesis_id` and
+`program_id`) precedes any subject/evidence work; confirmed the subject
+check applies to both `SUPPORTS`/`CONTRADICTS` uniformly and reuses the
+exact comparison already proven at `create_hypothesis` with a correctly
+different, stricter aggregation; confirmed the two new program-isolation
+tests assert the precise service-level message, textually distinct from
+the store's own dangling-reference wording, making them non-vacuous;
+confirmed no new I/O/subprocess/socket/tool surface, no schema/version
+bump, and every stated non-goal held.
+
+Epistemics review (hypatia-epistemics, 2026-09-28): PASS-with-caveats. Ran
+the tests and traced the diff directly rather than accepting the ledger's
+claims. Confirmed the "all must match" aggregation is genuinely
+implemented and correctly reasoned; confirmed the severity characterization
+(provenance-integrity, never authority-escalation) by independently
+re-tracing `_carried_relation`'s exhaustive `SUPPORTS`/`CONTRADICTS`
+mapping and the `VALIDATED` gate's `VALIDATES`-only requirement; confirmed
+both new tests are genuinely non-vacuous (the old code had no subject-
+comparison branch at all); confirmed no regression to F2/F3; confirmed
+zero store diff. One caveat, already corrected above: found that
+`create_hypothesis`'s own "at least one" check still lets a
+mismatched-subject citation become a spurious `SUPPORTS` link at creation
+time — the ledger's original "already correct" framing for that Non-goal
+was inaccurate and has been rewritten to state it as a known, deliberately
+deferred residual gap instead (severity unaffected either way).
+
+QA review (hypatia-qa, 2026-09-28): PASS. Built a full acceptance-criterion
+traceability table; ran the full 44-test module directly (`OK`) plus the
+untouched 64-test Finding-side sibling as a cross-check (`OK`). Confirmed
+the mixed-citation test is constructed to genuinely distinguish "all must
+match" from "at least one" by fixture design, not merely by regex wording
+— an "at least one" implementation would fail to raise on that fixture.
+Confirmed the pre-existing looser `test_hypothesis_from_a_different_program_is_rejected`
+test was preserved, not replaced; confirmed the two new program-isolation
+messages are textually disjoint from the store's own error wording;
+confirmed `tests/research/test_json_file_research_security_hypothesis_store.py`
+shows zero diff.
+
+Runtime review (hypatia-runtime, 2026-09-28): PASS, no caveats. Confirmed
+zero diff in the store and in `Bootstrap.py`; confirmed the new check
+reuses the single existing `_evidence_for_program` call, no second
+evidence-loading path; grepped the whole `src/` tree for any other
+independent subject/target comparison and found only display-only
+formatting in the desktop panel and response composer, nothing needing
+this fix; confirmed rollback safety (no new persisted field, plain revert
+restores prior behavior exactly); re-ran `RestartReloadTests`, `OK`.
+
+Mutation pass (2026-09-28, hypatia-lead): four targeted mutants applied via
+in-memory monkeypatching, never written to any file on disk (mirroring
+v0.3.417's own method) — remove the subject-binding check from
+`attach_evidence`; allow a mixed-citation set through; remove the
+service-level program check from `attach_evidence`; remove it from
+`transition_status`. All four caught; all four control runs against the
+real, unmutated code passed beforehand.
+
+Release gates (2026-09-28, Windows canonical environment, hypatia-lead):
+7452 tests, OK (skipped=3) — 4 net new tests over v0.3.417's 7448; Black,
+Ruff, and MyPy (601 source files) clean; `git diff --check` clean (one
+pre-existing CRLF-on-disk file unrelated to this diff, normalized by git
+per `.gitattributes` on the next touch, as for every text file in this
+repository — not introduced by this milestone). Linux exact-SHA CI pending
+dispatch.
+
+## Historical scope: v0.3.417 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Finding Lifecycle evidence-integrity hardening (Bug Bounty foundation, step 7 continued) |
 | Base SHA | 223fb1b5ce7854604eb022cde3f9b8d75bc019d8 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer (surgical, related-surface fix across two application services and two derived read models), plus mutation pass; hypatia-security: independent review, PASS, no findings above informational; hypatia-epistemics: independent review, PASS-with-caveats, two non-blocking documentation/epistemic notes, no defects; hypatia-qa: independent review, PASS, full acceptance-criterion traceability; hypatia-runtime: independent review, PASS, no missed derivation call sites, zero wiring/schema drift; hypatia-lead: release |
 | Blockers | none |
 
@@ -2653,6 +2894,86 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.417: finding lifecycle evidence-integrity hardening |
+| SHA | 828ba0f374a0a3d8228135ce2c77e90a65a967cb |
+| Linux desktop CI (exact-SHA) | success (run 36348936351) |
+| Windows desktop CI (exact-SHA) | success (run 36348938189) |
+| Status | delivered |
+| PR | #396, MERGED 2026-09-27T21:04:01Z, standard merge commit `b318203168479e9b8a53bfb65acbe7b42482a866` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 828ba0f origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`8d998c7`, `828ba0f`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-27, hypatia-lead): PR #396 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 3 commits (the v0.3.416 ledger reconciliation `223fb1b`, the
+v0.3.417 milestone lock `3e8f98b`, and release commit `828ba0f`) across
+exactly 13 expected files. It was `MERGEABLE/CLEAN`, and both PR-triggered
+`test-build-smoke` checks passed against the release SHA on both runners
+(completed 2026-09-27T20:42:38Z / 20:46:00Z), independently of the two
+manually dispatched exact-SHA workflow_dispatch runs above (also confirmed
+against the exact release SHA individually, not assumed from recency). The
+standard merge commit is on `origin/main`; all three carried commits are
+reachable from it; author/committer identity is unchanged (Songül Kızılay
+via GitHub noreply email); the working tree was clean except this ledger
+reconciliation.
+
+Note: this bounded release closes three findings deferred by v0.3.416's own
+security and QA review, on the same Finding Lifecycle foundation. F1
+(Medium): `attach_evidence` now refuses evidence whose subject does not
+match the finding's own subject, for all three relations
+(`SUPPORTS`/`CONTRADICTS`/`VALIDATES`) — closing the path by which a
+`VALIDATES` citation about an unrelated host could validate a finding it
+did not describe. F2 (Low): `create_finding` independently re-verifies
+every carried-forward evidence ID against the live evidence store before
+persisting, failing the whole creation closed on any missing reference,
+never mutating the source hypothesis. F3 (Low, inherited from v0.3.415):
+status derivation for both `ResearchSecurityFinding` and
+`ResearchSecurityHypothesis` (four call sites) now trusts each store's own
+append-only write order instead of `(recorded_at, transition_id)`, applied
+symmetrically to the Hypothesis side because `create_finding`'s own
+`READY_FOR_VALIDATION` gate reads `hypothesis.status` directly (verified in
+code). No schema or on-disk document change of any kind. M21/M22: new
+regression tests prove the Finding service's own program-isolation guard
+independently refuses a cross-program operation, closing the named
+mutation-testing gap. Security review: PASS, no findings above
+informational. Epistemics review: PASS-with-caveats, two non-blocking
+notes, no defects. QA review: PASS, full acceptance-criterion traceability.
+Runtime review: PASS, no missed derivation call sites, zero wiring/schema
+drift. Mutation pass: 6/6 targeted mutants caught (M21, M22, F1, F2, F3 at
+both the derived-model and application-service layers) via in-memory
+monkeypatching, verified without ever writing a weakened file to disk.
+Full canonical gates (Windows canonical environment): 7448 tests OK
+(skipped=3) — 9 net new tests over v0.3.416's 7439; Black, Ruff, MyPy (601
+source files), and `git diff --check` clean.
+
+Deferred, non-blocking findings carried forward (candidates for a future
+milestone, not fixed in this release): F4 (Low, inherited) — store load
+validates structure, bounds, unique IDs, and dangling references but does
+not replay lifecycle invariants (transition legality, the `VALIDATED`
+gate, linkage targets, one-finding-per-hypothesis) on load; closing this
+needs a reject-vs-quarantine design decision, not yet made. The symmetric
+F1-class subject-binding gap in
+`ResearchSecurityHypothesisApplicationService.attach_evidence` (confirmed
+present, deliberately left for a future, separately-scoped Hypothesis-side
+milestone) — with one downstream, fail-closed-direction consequence noted
+alongside it: a carried-forward `CONTRADICTS` link inherited from a
+hypothesis whose own evidence was never subject-checked could, in
+principle, wrongly block a finding from ever reaching `VALIDATED`
+(over-conservative, never a false validation). Request-ID/correlation-ID
+persistence into research records (a mature, already-built but completely
+unwired pattern exists in `src/tools/ToolExecutionOutcome`/
+`ToolExecutionService` that should be reused as the template if this is
+ever pursued, rather than inventing a new one). Non-blocking test-hygiene
+debt: a Windows-only `ResourceWarning` about unclosed file handles was
+observed across the full test run in both v0.3.416 and v0.3.417; confirmed
+(hypatia-qa read-only review) not sourced in the Finding/Hypothesis store
+or test code, which are fully context-manager-safe — the warning's origin
+elsewhere in the suite remains untraced and out of scope for the Finding
+Lifecycle line of work.
+
+## Historical scope: v0.3.416 (delivered)
 
 | Field | Value |
 | --- | --- |
