@@ -2,10 +2,25 @@
 
 ## Runtime Version
 
-`v0.3.418 (Genesis)`
+`v0.3.419 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.419 closes the last residual subject-binding gap deferred by
+v0.3.418: `ResearchSecurityHypothesisApplicationService.create_hypothesis`
+now refuses a supporting-evidence citation set unless every cited item's
+subject matches the new hypothesis's own declared subject, not merely "at
+least one" — mirroring `attach_evidence`'s identical aggregation. Traced
+directly by this milestone's epistemics review: the hypothesis subject is
+an explicit, caller-supplied parameter in both methods, never derived from
+evidence, so the earlier framing that treated the two methods' checks as
+intentionally different ("establishing" a subject vs. "gating an
+addition") was not supported by the code and is corrected here. No schema,
+store, or wiring change of any kind. F4 lifecycle replay validation on
+store load and the next roadmap capability (Business-logic/state-transition
+model) remain deferred — both require real, not-yet-done design work,
+recorded in `docs/dev/MILESTONE.md`.
 
 Version v0.3.418 closes the symmetric half of v0.3.417's evidence
 subject-binding fix: `ResearchSecurityHypothesisApplicationService.attach_evidence`

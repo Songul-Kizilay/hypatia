@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.419] - 2026-09-28
+
+### Fixed
+
+- Security hypothesis creation (`create_hypothesis`) now refuses a
+  supporting-evidence citation set unless *every* cited evidence item's
+  subject (`target_kind`/`target_canonical_value`) matches the new
+  hypothesis's own declared `subject_kind`/`subject_canonical_value`, not
+  merely "at least one" — closing the last residual gap explicitly
+  deferred by v0.3.418's own ledger. A mixed citation set (one matching,
+  one mismatched) in a single creation call is refused in full; nothing is
+  persisted on refusal.
+
+### Security
+
+- A security hypothesis's supporting evidence must now actually describe
+  the hypothesis's own subject in full at creation time, not merely
+  partially — the same provenance-integrity floor `attach_evidence`
+  already enforces (v0.3.417/v0.3.418), applied symmetrically to
+  `create_hypothesis`. Traced directly: the hypothesis subject is an
+  explicit, caller-supplied parameter, never derived from the cited
+  evidence, so this is a pure anti-hallucination/provenance tightening,
+  not an authority-escalation fix.
+- Reasoning-only surface preserved exactly: no network request, process,
+  tool execution, or scope/credential/budget/target change was added or
+  touched.
+
 ## [0.3.418] - 2026-09-28
 
 ### Fixed

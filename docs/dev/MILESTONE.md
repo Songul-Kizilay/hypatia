@@ -14,9 +14,158 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Security Hypothesis creation-time subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
+| Base SHA | b52c23f (v0.3.418 delivery reconciliation) |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-security: independent review, PASS; hypatia-epistemics: independent review, PASS; hypatia-runtime: independent review, PASS; hypatia-qa: independent review, PASS-with-caveats (one non-blocking test-strength recommendation, applied); hypatia-lead: release |
+| Blockers | none |
+
+Rationale: closes the last named residual gap explicitly deferred by the
+v0.3.418 ledger's own Non-goals. `create_hypothesis` required only "at
+least one" cited supporting-evidence item to match the new hypothesis's
+declared `subject_kind`/`subject_canonical_value`, yet unconditionally
+turned *every* cited evidence ID into a `SUPPORTS` link regardless of
+whether it individually matched — so a mismatched-subject citation riding
+alongside one matching citation in the same creation call could still
+become a spurious `SUPPORTS` link, the exact defect class already fixed on
+`ResearchSecurityFindingApplicationService.attach_evidence` (v0.3.417) and
+`ResearchSecurityHypothesisApplicationService.attach_evidence` (v0.3.418).
+
+Investigated directly, not assumed: a prior hypatia-runtime review
+(v0.3.417 ledger entry) had characterized this "at least one" aggregation
+as *intentionally* different from `attach_evidence`'s "all must match" —
+reasoning that `create_hypothesis` "establishes" a hypothesis's initial
+subject from its evidence while `attach_evidence` merely "gates an
+addition" to an already-established one. This session's hypatia-epistemics
+review traced the actual code and found that framing unsupported:
+`subject_kind`/`subject_canonical_value` are explicit, caller-supplied
+parameters to `create_hypothesis`, never derived from or established by
+the cited evidence at any point — structurally identical to `attach_evidence`,
+which likewise never derives a hypothesis's subject from evidence, just
+reads it from an already-persisted field instead of a fresh parameter. The
+evidence-matching check in both methods is the same anti-hallucination/
+provenance-integrity floor, not two different design intents. This
+supersedes and corrects the v0.3.417 runtime note.
+
+Also considered and rejected this session (read-only investigation before
+locking): F4 (lifecycle replay validation on load) remains real engineering
+surface — a point-in-time evidence-gate replay, an import-cycle-safe way to
+share validation logic between the `research` store and `cognition`
+application service, and a new replay-equivalence characterization test —
+correctly sized for its own dedicated future milestone, not this one. The
+next roadmap item after the delivered evidence-hypothesis-finding chain
+(`docs/Roadmap/Master_Roadmap.md`'s Bug Bounty Researcher priority order,
+item 8, "Business-logic/state-transition model") has no existing precedent
+or design in this codebase and is not size-appropriate for a bounded
+milestone; it is left for a future dedicated design pass. This milestone
+is chosen per the stated preference order: it closes a real, confirmed
+correctness gap, is small and reviewable, needs no schema change, is fully
+deterministic, and is meaningful progress on the already-delivered
+Hypothesis/Finding lifecycle line.
+
+Scope: `ResearchSecurityHypothesisApplicationService.create_hypothesis`
+(`src/cognition/ResearchSecurityHypothesisApplicationService.py`) only —
+the subject-matching check changes from `any(...)` ("at least one cited
+evidence item matches") to a `mismatched_subject` tuple check mirroring
+`attach_evidence`'s exact aggregation shape ("every cited evidence item
+must match, or the whole call is refused"). The check runs strictly before
+`self._load()`/`self._save()`, so refusal is fail-closed with zero partial
+persistence — no hypothesis, and no evidence link, is ever written on
+refusal. Docstring and module-level docstring updated to match. No schema
+or on-disk document change of any kind; no change to `attach_evidence` or
+`transition_status` (both already correct since v0.3.418); no new evidence
+relation, status, or kind.
+
+Non-goals (exhaustive): no F4 lifecycle-replay work; no request-ID/
+correlation-ID persistence; no change to any Finding-side file (already
+strict since v0.3.417); no new roadmap capability (item 8 or later); no
+schema/version bump in either store; no agent autonomy, new tool
+execution, Safe Tool Gateway work, model-output authority, network
+capability, or any authority/budget/target/credential change of any kind.
+
+Security invariants (unchanged, restated): hypothesis creation must never
+execute a network request, spawn a process, run a tool, or modify scope/
+credential/budget/target state. A hypothesis's supporting evidence must
+actually describe the hypothesis's own subject in full, not merely share
+its program or partially match. MODEL OUTPUT != AUTHORITY; SUBAGENT OUTPUT
+!= AUTHORITY.
+
+Acceptance criteria:
+- `create_hypothesis` refuses a mixed citation set (one matching, one
+  mismatched) in a single call, in full — nothing is persisted.
+- A single mismatched citation continues to be refused (pre-existing
+  coverage, unaffected in outcome, renamed for clarity).
+- A genuinely all-matching multi-citation call continues to succeed and
+  every cited evidence ID is linked as `SUPPORTS`.
+- Every existing v0.3.415/v0.3.416/v0.3.417/v0.3.418 regression fixture is
+  unaffected — no fixture in this codebase relied on the old "at least
+  one" behavior with a genuinely mismatched co-citation.
+
+Test strategy: renamed the pre-existing single-citation-mismatch test for
+accuracy (no behavior change); replaced the old positive
+"at-least-one-of-several-succeeds" test with a same-named-pattern negative
+test proving the whole mixed-citation call is refused and nothing is
+persisted (`hypotheses_for_program(...) == ()`); added a new positive test
+proving an all-matching multi-citation call succeeds and asserting the
+exact linked evidence IDs and `SUPPORTS` relation (tightened per
+hypatia-qa's non-blocking review recommendation, applied); full differential
+run of the 45-test module plus the store's own test file.
+
+Mutation strategy: one targeted mutant (temporarily reverting the
+`mismatched_subject` check back to the old `any(...)` check) applied and
+reverted via direct file edit under version control (not written to any
+committed state), confirming exactly one test
+(`test_a_mixed_citation_set_is_rejected_in_full`) fails under the mutant
+and all 11 sibling `CreateHypothesisTests` remain green — non-vacuous,
+narrowly targeted.
+
+Security review (hypatia-security): PASS. Confirmed the check precedes
+every read/write in the method with no partial-persistence path; confirmed
+no authority/budget/replay/provenance invariant is touched; confirmed
+program isolation is unaffected (evidence is still scoped to
+`_evidence_for_program` before the subject check ever runs); confirmed the
+new error message is textually distinct from every other error this method
+raises.
+
+Epistemics review (hypatia-epistemics): PASS. Independently traced
+`create_hypothesis`'s parameters to confirm the subject is never
+evidence-derived, correcting the v0.3.417 runtime note's "different call
+semantics" framing; confirmed every existing fixture citing more than one
+evidence ID together already used only matching subjects; confirmed the
+desktop panel test calls a mock, not the real service, and is unaffected;
+ran the full module (45/45) and `mypy` on the touched file.
+
+Runtime review (hypatia-runtime): PASS, no caveats. Confirmed zero diff in
+any store/persistence file and zero wiring change in `CognitiveEngine.py`
+(the actual construction site — not `Bootstrap.py`); grepped `src/` for
+any other independent subject-vs-evidence comparison and found only the
+sibling Finding-side `attach_evidence`, already correct and untouched;
+confirmed rollback safety (pure logic change, no persisted-data migration
+concern); ran 78/78 tests across the module and the store's own test file.
+
+QA review (hypatia-qa): PASS-with-caveats. Directly traced the removed
+`any(...)` logic against the new mixed-citation fixture to confirm it is a
+genuine behavioral discriminator, not a wording-only change; confirmed the
+"nothing persisted on refusal" assertion documents the fail-closed
+invariant even though it cannot currently fail independently of the
+accompanying `assertRaisesRegex`, given the single-write-path architecture;
+one non-blocking recommendation — tighten the new positive test to assert
+exact linked evidence IDs and relation, not just a count — applied by
+hypatia-lead before release; confirmed zero diff to the desktop panel test.
+
+Release gates (Windows canonical environment, hypatia-lead): 7453 tests,
+OK (skipped=3) — 1 net new test over v0.3.418's 7452; Black, Ruff, and
+MyPy (601 source files) clean; `git diff --check` clean (the same
+pre-existing CRLF-on-disk normalization warning as every prior milestone,
+not introduced by this diff).
+
+## Historical scope: v0.3.418 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Hypothesis Evidence subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
 | Base SHA | b4a4f257d00845fbf77e9af62abd81e64f9048a9 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-epistemics: independent review, PASS-with-caveats, one accurate residual-gap finding folded into Non-goals/Deferred above, no defect in delivered code; hypatia-qa: independent review, PASS, full acceptance-criterion traceability; hypatia-runtime: independent review, PASS, no caveats; hypatia-lead: release |
 | Blockers | none |
 
@@ -2894,6 +3043,77 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.418: hypothesis evidence subject-binding symmetry |
+| SHA | ac7b62c1f5b505bf2e66b719e2d3bd9ebd59c129 |
+| Linux desktop CI (exact-SHA) | success (run 36351608455) |
+| Windows desktop CI (exact-SHA) | success (run 36351611189) |
+| Linux desktop CI (PR-triggered) | success (run 36351590932) |
+| Windows desktop CI (PR-triggered) | success (run 36351590942) |
+| Status | delivered |
+| PR | #397, MERGED 2026-09-28T07:04:17Z, standard merge commit `ef15e431dc3956ec759de1d9b5a200a131c38d35` |
+| origin/main reachability | verified: `git merge-base --is-ancestor ac7b62c origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`b318203`, `ac7b62c`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-28, hypatia-lead): PR #397 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 3 commits (the v0.3.417 ledger reconciliation `b4a4f25`, the
+v0.3.418 milestone lock `b9589a6`, and release commit `ac7b62c`) across
+exactly 7 changed files. It was `MERGEABLE`/`CLEAN`, and both PR-triggered
+`test-build-smoke` checks passed against the release SHA on both runners
+(completed 2026-09-27T21:26:16Z / 21:29:26Z), independently of the two
+manually dispatched exact-SHA `workflow_dispatch` runs above (also
+confirmed against the exact release SHA individually, not assumed from
+recency). The standard merge commit is on `origin/main`; all three carried
+commits are reachable from it; author/committer identity is unchanged
+(Songül Kızılay via GitHub noreply email); the working tree was clean
+except this ledger reconciliation.
+
+Note: this bounded release closes the symmetric F1-class subject-binding
+gap on the Hypothesis side, deferred explicitly by v0.3.417's own ledger.
+`ResearchSecurityHypothesisApplicationService.attach_evidence` now uses a
+bound-record lookup (mirroring the Finding-side `next(...)` pattern) and
+refuses any cited evidence — for both `SUPPORTS` and `CONTRADICTS` — whose
+`target_kind`/`target_canonical_value` differs from the matched
+hypothesis's own `subject_kind`/`subject_canonical_value`, with "all cited
+evidence in one call must match" aggregation (not "at least one"), proven
+by a dedicated mixed-citation-set negative test. Two new
+`ProgramIsolationTests` cases close a same-file coverage gap QA identified
+(`attach_evidence`/`transition_status` under the wrong `program_id`, M22-
+equivalent). No schema or on-disk document change of any kind; no new
+evidence relation, status, or kind. Security review: PASS, no findings.
+Epistemics review: PASS-with-caveats, one accurate residual-gap finding
+folded into the ledger's own Non-goals (no defect in delivered code). QA
+review: PASS, full acceptance-criterion traceability. Runtime review:
+PASS, no caveats. Mutation pass: 4/4 targeted mutants caught (remove the
+subject-binding check; allow a mixed-citation set through; remove the
+service-level program check from `attach_evidence`; remove it from
+`transition_status`) via in-memory monkeypatching, verified without ever
+writing a weakened file to disk. Full canonical gates (Windows canonical
+environment): 7452 tests OK (skipped=3) — 4 net new tests over v0.3.417's
+7448; Black, Ruff, MyPy (601 source files), and `git diff --check` clean.
+
+Deferred, non-blocking findings carried forward (candidates for a future
+milestone, not fixed in this release): F4 (lifecycle replay validation on
+load) — "reject whole document" on any business-rule-invariant violation
+is the security-consistent, precedent-matching default, but implementation
+needs a point-in-time evidence-gate replay (not a final-state check), an
+import-cycle-safe way to share validation logic between the store and
+application service, and a characterization test proving replay-
+equivalence to the write path; real engineering surface for its own
+dedicated milestone. `create_hypothesis`'s own residual spurious-`SUPPORTS`-
+link gap (same defect class as this milestone's fix — once at least one
+citation matches, every `supporting_evidence_ids` entry still becomes a
+`SUPPORTS` link including mismatched ones — deliberately deferred to keep
+this milestone narrow; severity unaffected, still `SUPPORTS`-only,
+structurally incapable of reaching `VALIDATES`). Request-ID/correlation-ID
+persistence into research records — rejected as speculative in this
+milestone's own investigation, no live traceability problem found. The
+Windows `ResourceWarning` test-hygiene debt remains untraced and out of
+scope.
+
+## Historical scope: v0.3.417 (delivered)
 
 | Field | Value |
 | --- | --- |

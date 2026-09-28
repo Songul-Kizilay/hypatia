@@ -133,10 +133,12 @@ class ResearchSecurityHypothesisApplicationService:
         first" floor: with only `OPERATOR_AUTHORED` origin, a hypothesis with
         zero cited evidence would be an unfounded assertion this service has
         no honest way to distinguish from a guess). Every cited ID must exist
-        for this exact program, and the hypothesis's own subject must match
-        at least one cited evidence record's target — a hypothesis can never
-        cite evidence about a different host than the one it names. Refuses
-        an exact-identity duplicate (same program, subject, kind, and
+        for this exact program, and every cited evidence record's target must
+        match the hypothesis's own subject — a hypothesis can never cite
+        evidence about a different host than the one it names, and a
+        mismatched citation can never quietly become a spurious SUPPORTS
+        link (mirrors `attach_evidence`'s "all must match" aggregation).
+        Refuses an exact-identity duplicate (same program, subject, kind, and
         normalized statement), directing the caller to attach evidence to the
         existing hypothesis instead.
         """
@@ -163,14 +165,16 @@ class ResearchSecurityHypothesisApplicationService:
                 "Security hypothesis cites HTTP evidence that is not recorded"
                 " for this program."
             )
-        if not any(
-            evidence_by_id[evidence_id].target_kind == subject_kind
-            and evidence_by_id[evidence_id].target_canonical_value == canonical_value
+        mismatched_subject = tuple(
+            evidence_id
             for evidence_id in supporting_evidence_ids
-        ):
+            if evidence_by_id[evidence_id].target_kind != subject_kind
+            or evidence_by_id[evidence_id].target_canonical_value != canonical_value
+        )
+        if mismatched_subject:
             raise ResearchError(
-                "Security hypothesis subject does not match any cited evidence"
-                " target."
+                "Security hypothesis subject does not match every cited"
+                " evidence target."
             )
         document = self._load()
         normalized_statement = _normalized_statement(
