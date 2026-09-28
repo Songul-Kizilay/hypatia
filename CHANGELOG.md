@@ -2,6 +2,67 @@
 
 All notable project changes are recorded here.
 
+## [0.3.423] - 2026-09-28
+
+### Added
+
+- A new "Validation Recipes" desktop tab, making v0.3.421's
+  `ResearchSecurityValidationRecipeApplicationService` foundation actually
+  usable by a researcher: record and list an operator-authored, append-only
+  list of plain-text validation steps for an already-recorded security
+  hypothesis or finding. The service itself is unchanged — this is a pure
+  UI layer over it.
+- `src/desktop/ResearchSecurityValidationRecipePanel.py` (new): subject
+  fields (program ID, subject kind, subject ID), a multi-line steps entry
+  (one step per line) plus notes, a load action and a record action, and a
+  `Treeview` + detail pane listing that subject's recipes in persisted
+  append order. Reuses the exact widget/dispatch pattern already
+  established by `ResearchSecurityFindingPanel`/`ResearchSecurityHypothesisPanel`.
+- Two new `DesktopController` methods
+  (`record_research_security_validation_recipe`,
+  `preview_research_security_validation_recipes`), following the file's
+  existing pattern exactly: local input validation, then a `BrainRequest`
+  to the two Brain intents v0.3.421 already wired.
+- New "Validation Recipes" tab in `TkinterDesktopWindow.py`, gated by the
+  same `program_scope_enrollment_service` condition already gating the
+  Findings/Hypotheses tabs.
+
+### Security
+
+- **VALIDATION RECIPE != AUTHORITY TO ACT.** No code path added by this
+  milestone fetches, executes a tool, spawns a process, or expands scope.
+  A recipe's steps render as plain text in the detail pane, never as a
+  clickable or otherwise executable affordance. Recording a recipe never
+  mutates the hypothesis or finding it names — verified directly against
+  the unchanged `ResearchSecurityValidationRecipeApplicationService`,
+  which only performs a read-only existence check on the subject.
+- Steps and notes fields carry the same "never enter a secret" labeling
+  convention as every other free-text field in the Findings/Hypotheses
+  panels; the not-authority notice
+  (`SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE`, added in v0.3.421)
+  is shown for every listed recipe.
+
+### Verification
+
+- 24 new tests (16 panel, 8 controller). Windows canonical environment:
+  7579 tests, `OK (skipped=3)` — 24 net new over v0.3.422's 7555. Black,
+  Ruff, MyPy (`src`) clean. `git diff --check` clean.
+- 4 independent specialist reviews (security, epistemics, runtime, QA),
+  all PASS; QA found one real, concrete test-coverage gap (no test
+  distinguished a successful, empty recipe list from a failed preview
+  request in `_render`), independently confirmed by an external Abacus
+  (route-llm) review of the same diff. Closed with a new regression test.
+  An EVREN review attempt failed closed (no retry, per policy); Abacus
+  was used instead and completed cleanly.
+- Abacus separately asked whether the panel's independent `program_id`
+  field was an isolation inconsistency versus other panels — verified
+  false: `ResearchSecurityFindingPanel`/`ResearchSecurityHypothesisPanel`
+  both already use the identical independent-per-panel pattern; no shared
+  "current program" selector exists anywhere in this desktop app.
+- Panel construction smoke-tested in a real (withdrawn) `tk.Tk()` root,
+  not just the recorder-widget test harness, to catch any real-Tkinter
+  layout issue the mocked tests wouldn't.
+
 ## [0.3.422] - 2026-09-28
 
 ### Added

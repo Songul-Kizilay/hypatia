@@ -10,14 +10,16 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current
+## Historical scope: v0.3.420 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Security Hypothesis/Finding store load-time replay validation, phase 1 (F4 phase 1; Bug Bounty foundation, hardening the delivered step 6/7 lifecycle) |
 | Base SHA | d1e3b18 (v0.3.419 delivery reconciliation) |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-security, hypatia-epistemics, hypatia-runtime, hypatia-qa: independent parallel read-only investigation (2026-09-28), converged on F4 as highest-priority real gap; hypatia-lead: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-epistemics: independent review, PASS, empirically re-verified both the fix and its intentional boundary; hypatia-runtime: independent review, PASS, no caveats; hypatia-qa: independent review, PASS-with-caveats (one non-blocking test-strategy-literalness gap, closed by hypatia-lead before release); hypatia-lead: release |
+| PR | #399, MERGED 2026-09-28T18:05:34Z, standard merge commit `30c28ad2b88d0e87032618f00990a9de717a6146` |
+| origin/main reachability | verified: merge commit `30c28ad2` has parents `06c22aa174ad87a07f9a0c0de3115f9a0b521156` (prior `origin/main`) and `32be4e09be2544884efac77e8f4d501ddb83e7aa` (this release); `git merge-base --is-ancestor 32be4e09... origin/main` succeeds |
 | Blockers | none |
 
 Rationale: after v0.3.419 delivered (PR #398, merge commit `06c22aa1`, verified
@@ -328,26 +330,22 @@ Release gates (2026-09-28, Windows canonical environment, hypatia-lead):
 clean; `git status` confirmed exactly the intended files touched, no
 untracked artifacts.
 
-## Current (independent branch) — v0.3.421
+## Historical scope: v0.3.421 (delivered)
 
-Note on ledger structure: the "## Current" entry above this one (v0.3.420,
-status `release`) describes PR #399, which was still open and pending human
-merge review when this entry was written, per an explicit instruction not
-to add next-milestone code to that PR. This entry is deliberately separate
-and does not supersede it. v0.3.421 was built on its own new branch
-(`feature/research-security-validation-recipe-v0.3.421`, a `git worktree`
-sibling of the PR #399 checkout), forked from v0.3.420's exact commit
-(`32be4e09be2544884efac77e8f4d501ddb83e7aa`), so PR #399's checkout was
-never switched or touched. `feature/structured-learned-memory-extraction-v0.3.118`
-(PR #399) is unaffected by anything below.
+Note on ledger structure (kept for record; superseded by delivery below):
+this entry was originally written while PR #399 was still open, on a
+deliberately separate independent branch so as not to contaminate it. Both
+have since merged to `origin/main` in sequence, verified below.
 
 | Field | Value |
 | --- | --- |
 | Milestone | Validation recipes, foundation (Bug Bounty Researcher roadmap item 9) |
-| Base SHA | 32be4e0 (v0.3.420, same commit PR #399 carries as HEAD) |
-| Branch | `feature/research-security-validation-recipe-v0.3.421` (new, independent; not part of PR #399) |
-| Status | release |
+| Base SHA | 32be4e0 (v0.3.420, same commit PR #399 carried as HEAD) |
+| Branch | `feature/research-security-validation-recipe-v0.3.421` |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer, sole reviewer (single bounded autonomous milestone; no dual-writer risk since the isolated worktree has no concurrent writer) |
+| PR | #400, MERGED 2026-09-28T18:11:21Z, standard merge commit `2e0abcb0d82e61c892421e78af6c7c1fade41e46` |
+| origin/main reachability | verified: merge commit `2e0abcb0` has parents `30c28ad2b88d0e87032618f00990a9de717a6146` (v0.3.420's own merge, prior `origin/main`) and `d672cc5b41ea2381080f2e50d7db07c2c49a5343` (this release); `git merge-base --is-ancestor d672cc5b... origin/main` succeeds; PR #400's diff against its base (`main`@`30c28ad2`) was exactly the 20 files this milestone's own scope names, with no overlap from v0.3.420 |
 | Blockers | none |
 
 Rationale: continuing this autonomous session's read-only roadmap discovery
@@ -447,25 +445,25 @@ Replaced with a new, dedicated `SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE`
 constant and added a regression test asserting the correct wording appears
 and the finding-specific wording does not.
 
-## Current (independent branch) — v0.3.422
+## Historical scope: v0.3.422 (delivered)
 
-Note on ledger structure: same convention as the v0.3.421 entry above.
-This entry is separate from and does not supersede either the v0.3.420
-"## Current" entry (PR #399) or the v0.3.421 entry. Built on
-`feature/llm-lifecycle-grounding-v0.3.422`, a `git worktree` sibling
-forked from v0.3.421's exact commit
-(`d672cc5b41ea2381080f2e50d7db07c2c49a5343`, verified via `git log`/
-`git rev-parse HEAD` at implementation time), so neither PR #399's
+Note on ledger structure (kept for record; superseded by delivery below):
+built on `feature/llm-lifecycle-grounding-v0.3.422`, a `git worktree`
+sibling forked from v0.3.421's exact commit
+(`d672cc5b41ea2381080f2e50d7db07c2c49a5343`), so neither PR #399's
 checkout nor the published v0.3.421 branch history was touched or
-rewritten.
+rewritten. All three (v0.3.420, v0.3.421, v0.3.422) have since merged to
+`origin/main` in sequence, verified below.
 
 | Field | Value |
 | --- | --- |
 | Milestone | Authoritative conversation grounding for security lifecycle semantics |
 | Base SHA | d672cc5 (v0.3.421, self-review-fixed tip) |
-| Branch | `feature/llm-lifecycle-grounding-v0.3.422` (new, independent; not part of PR #399 or the v0.3.421 branch's own history) |
-| Status | release |
+| Branch | `feature/llm-lifecycle-grounding-v0.3.422` |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-security/hypatia-epistemics/hypatia-runtime/hypatia-qa: independent parallel review, each PASS-with-one-CONCERN; EVREN (deepseek-v4.1-flash): independent external review, NEEDS_LOCAL_VERIFICATION, 5 findings; all concerns/findings triaged and the substantive ones closed before release |
+| PR | #401, MERGED 2026-09-28T18:17:47Z, standard merge commit `9f06388a9bb8c624af5df7f567d100be041d33d9` |
+| origin/main reachability | verified: merge commit `9f06388a` has parents `2e0abcb0d82e61c892421e78af6c7c1fade41e46` (v0.3.421's own merge, prior `origin/main`) and `a60b6937ab501dbfdb0c1d56a6a30149cf7bf79e` (this release); `git merge-base --is-ancestor a60b6937... origin/main` succeeds; PR #401's diff against its base (`main`@`2e0abcb0`) was exactly the 8 files this milestone's own scope names |
 | Blockers | none |
 
 Rationale: the user reported that EVREN, now answering fluently in
@@ -583,6 +581,110 @@ was deliberately not also run for this smaller, lower-risk, prompt-text-only
 change, given the claims were independently proven against live service
 behavior in the same pass — judged sufficient convergent verification
 without spending a second external call pointlessly.
+
+## Current — v0.3.423
+
+| Field | Value |
+| --- | --- |
+| Milestone | Security Validation Recipe desktop workflow (Bug Bounty Researcher roadmap item 9, desktop UI) |
+| Base SHA | 9f06388 (origin/main tip, after v0.3.420-422 all delivered) |
+| Branch | `feature/validation-recipe-desktop-v0.3.423`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-security/hypatia-epistemics/hypatia-runtime: independent parallel review, each PASS with zero findings; hypatia-qa: independent review, PASS with one real test-coverage gap, closed before release; Abacus (route-llm): independent external review, NEEDS_LOCAL_VERIFICATION, independently converged on the same gap QA found plus resolved one NEEDS_VERIFICATION question against source; EVREN attempted and failed closed (no retry, per policy) |
+| Blockers | none |
+
+Rationale: with v0.3.420, v0.3.421, and v0.3.422 all delivered to
+`origin/main` this session (verified below, Phase 5 main-health check
+green — 7555 tests, `OK (skipped=3)`, all gates clean, all three release
+SHAs confirmed ancestors via genuine 2-parent merges), read-only discovery
+for the next Bug Bounty Researcher milestone inspected the actual desktop
+architecture (`src/desktop/TkinterDesktopWindow.py`,
+`ResearchSecurityFindingPanel.py`, `ResearchSecurityHypothesisPanel.py`,
+`DesktopController.py`) rather than assuming the suggested title. v0.3.421
+delivered the Validation Recipe application-service/store foundation with
+explicitly no desktop panel, deliberately deferred. That foundation is
+otherwise reachable only through raw Brain intents — no researcher-facing
+surface exists for it yet. This is the smallest coherent next step:
+`ResearchSecurityValidationRecipeApplicationService` was already fully
+built, tested, and wired into `CognitiveEngine`/`Bootstrap`; the desktop
+layer needed no `CognitiveEngine`/`Bootstrap`/service changes at all —
+`DesktopController` methods only construct a `BrainRequest` and dispatch
+through the already-existing Brain intents, exactly like every sibling
+panel's controller methods.
+
+Scope: `src/desktop/ResearchSecurityValidationRecipePanel.py` (new): a
+subject block (program ID, subject kind combobox, subject ID — the
+service has no program-wide listing, only a per-subject one, so load and
+record share the same three fields), a multi-line steps entry (one step
+per line, split/stripped/blank-filtered client-side) plus a notes entry, a
+`Treeview` + detail pane listing that subject's recipes in persisted
+append order. Reuses the exact `ttk.Treeview`/scrollbar/`<<TreeviewSelect>>`/
+`iid -> detail-text` pattern `ResearchSecurityFindingPanel`/
+`ResearchSecurityHypothesisPanel` already established, and imports
+`SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE` (added in v0.3.421)
+rather than restating it. Two new `DesktopController` methods
+(`record_research_security_validation_recipe`,
+`preview_research_security_validation_recipes`), matching the file's
+existing local-validate-then-dispatch pattern exactly. One new tab in
+`TkinterDesktopWindow.py`, wired inside the identical
+`if self._program_scope_enrollment_service is not None:` gate already
+wrapping the Findings/Hypotheses tabs — confirmed by a dedicated
+`WindowReachabilityTests` negative case that a window built without that
+service constructs no recipe panel and no "Load recipes" control. No
+change to `ResearchSecurityValidationRecipeApplicationService`, its store,
+or any Brain/CognitiveEngine wiring — this milestone is a pure UI layer.
+
+VALIDATION RECIPE != AUTHORITY TO ACT, preserved structurally: no code
+path added by this diff fetches, executes a tool, spawns a process, or
+expands scope. A recipe's steps render as plain `ttk.Label` text in the
+detail pane, never as a clickable or bound-command affordance; `_on_select`
+only reads an already-loaded local dict and issues no request. Recording a
+recipe cannot mutate its subject — confirmed directly from
+`ResearchSecurityValidationRecipeApplicationService.record_validation_recipe`,
+whose only subject-touching call is the existing read-only
+`hypothesis_by_id`/`finding_by_id` existence check (no writer is even
+injected into that service).
+
+Review findings and how each was resolved:
+- **hypatia-qa** found a concrete, real test-coverage gap: no test
+  exercised `_render` with a successful, empty recipe list, so nothing
+  distinguished "zero recipes recorded" from "the request failed" beyond
+  incidental message text a future change could silently break.
+  **Independently confirmed by Abacus's own review of the same diff**
+  (its Finding 1, same root cause, same missing branch). **Closed**:
+  added `test_render_distinguishes_a_successful_empty_result_from_a_failure`.
+- **Abacus** separately raised a NEEDS_VERIFICATION question: whether the
+  panel's independent `program_id` field was an isolation inconsistency
+  versus other panels sharing a "current program" selector this one
+  lacks. **Resolved by direct inspection, not left open**: grepped
+  `ResearchSecurityFindingPanel.py`/`ResearchSecurityHypothesisPanel.py`
+  — both already use the identical independent-per-panel
+  `self.program_id = tk.StringVar(master=parent)` pattern; no shared
+  "current program" selector exists anywhere in this desktop app for
+  these tabs. Not an inconsistency.
+- **Abacus** noted (Informational, explicitly "not a pinnable UI defect
+  within this diff") that steps/notes are advisory-only free text with no
+  redaction, and asked whether any downstream export/log path could turn
+  this into an exfiltration surface. **Scoped out, not silently
+  dropped**: this diff introduces no export/log path of any kind; it
+  matches the identical precedent `ResearchSecurityFindingRecord.
+  required_followup` already sets, cited in this panel's own module
+  docstring. A downstream-export audit, if ever needed, is unrelated to
+  this milestone's actual diff.
+- **EVREN**'s live call failed closed (no diagnostic content — errors are
+  suppressed to protect credentials, per the review helper's design). No
+  retry, per policy. Abacus was tried as the independent external review
+  instead of retrying the same provider, and completed cleanly.
+
+Verification (2026-09-28, Windows canonical environment, hypatia-lead):
+panel construction also smoke-tested directly in a real, withdrawn
+`tk.Tk()` root (not just the `RecordingWidget` test harness, which never
+builds a real widget tree) to catch any genuine Tkinter grid/layout
+exception — succeeded with no exception. 24 new tests (16 panel + 8
+controller) plus the full pre-existing suite, all green. Black, Ruff, and
+MyPy (`src`) clean. `git diff --check` clean. `git status` on the branch
+showed exactly 10 files touched (3 source, 2 test, 5 doc/version), no
+unrelated or untracked changes.
 
 ## Historical scope: v0.3.419 (delivered)
 

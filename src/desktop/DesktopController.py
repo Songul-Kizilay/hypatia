@@ -44,6 +44,9 @@ from research.ResearchSecurityHypothesisEvidenceRelation import (
 )
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
 from research.ResearchSecurityHypothesisStatus import ResearchSecurityHypothesisStatus
+from research.ResearchSecurityValidationRecipeSubjectKind import (
+    ResearchSecurityValidationRecipeSubjectKind,
+)
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from research.ResearchSourceIndependence import ResearchSourceIndependence
@@ -797,6 +800,75 @@ class DesktopController:
                 metadata={
                     "intent": "research_security_finding_preview",
                     "program_id": normalized_program_id,
+                },
+            )
+        )
+
+    def record_research_security_validation_recipe(
+        self,
+        program_id: str,
+        subject_kind: str,
+        subject_id: str,
+        steps: tuple[str, ...],
+        notes: str,
+    ) -> BrainResponse:
+        """Record one validation recipe for an already-recorded subject.
+
+        Purely descriptive strategy text: never fetches, runs, or
+        authorizes anything, and never mutates the subject it names.
+        """
+        normalized_program_id = program_id.strip()
+        normalized_subject_id = subject_id.strip()
+        if not normalized_program_id or not normalized_subject_id:
+            raise ValueError("A program ID and subject ID cannot be empty.")
+        try:
+            normalized_subject_kind = ResearchSecurityValidationRecipeSubjectKind(
+                subject_kind.strip()
+            )
+        except (AttributeError, ValueError) as error:
+            raise ValueError(
+                "Security validation recipe subject kind is invalid."
+            ) from error
+        if not steps:
+            raise ValueError("A security validation recipe requires at least one step.")
+        return self._brain.process(
+            BrainRequest(
+                "Record validation recipe",
+                metadata={
+                    "intent": "research_security_validation_recipe_record",
+                    "program_id": normalized_program_id,
+                    "subject_kind": normalized_subject_kind,
+                    "subject_id": normalized_subject_id,
+                    "steps": steps,
+                    "notes": notes.strip(),
+                },
+            )
+        )
+
+    def preview_research_security_validation_recipes(
+        self, program_id: str, subject_kind: str, subject_id: str
+    ) -> BrainResponse:
+        """List one subject's recorded validation recipes without side effects."""
+        normalized_program_id = program_id.strip()
+        normalized_subject_id = subject_id.strip()
+        if not normalized_program_id or not normalized_subject_id:
+            raise ValueError("A program ID and subject ID cannot be empty.")
+        try:
+            normalized_subject_kind = ResearchSecurityValidationRecipeSubjectKind(
+                subject_kind.strip()
+            )
+        except (AttributeError, ValueError) as error:
+            raise ValueError(
+                "Security validation recipe subject kind is invalid."
+            ) from error
+        return self._brain.process(
+            BrainRequest(
+                "Preview validation recipes",
+                metadata={
+                    "intent": "research_security_validation_recipe_preview",
+                    "program_id": normalized_program_id,
+                    "subject_kind": normalized_subject_kind,
+                    "subject_id": normalized_subject_id,
                 },
             )
         )
