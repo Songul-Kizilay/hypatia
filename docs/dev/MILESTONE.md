@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Hypothesis Evidence subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
 | Base SHA | b4a4f257d00845fbf77e9af62abd81e64f9048a9 |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-epistemics: independent review, PASS-with-caveats, one accurate residual-gap finding folded into Non-goals/Deferred above, no defect in delivered code; hypatia-qa: independent review, PASS, full acceptance-criterion traceability; hypatia-runtime: independent review, PASS, no caveats; hypatia-lead: release |
 | Blockers | none |
 
@@ -2894,6 +2894,77 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.418: hypothesis evidence subject-binding symmetry |
+| SHA | ac7b62c1f5b505bf2e66b719e2d3bd9ebd59c129 |
+| Linux desktop CI (exact-SHA) | success (run 36351608455) |
+| Windows desktop CI (exact-SHA) | success (run 36351611189) |
+| Linux desktop CI (PR-triggered) | success (run 36351590932) |
+| Windows desktop CI (PR-triggered) | success (run 36351590942) |
+| Status | delivered |
+| PR | #397, MERGED 2026-09-28T07:04:17Z, standard merge commit `ef15e431dc3956ec759de1d9b5a200a131c38d35` |
+| origin/main reachability | verified: `git merge-base --is-ancestor ac7b62c origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`b318203`, `ac7b62c`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-28, hypatia-lead): PR #397 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 3 commits (the v0.3.417 ledger reconciliation `b4a4f25`, the
+v0.3.418 milestone lock `b9589a6`, and release commit `ac7b62c`) across
+exactly 7 changed files. It was `MERGEABLE`/`CLEAN`, and both PR-triggered
+`test-build-smoke` checks passed against the release SHA on both runners
+(completed 2026-09-27T21:26:16Z / 21:29:26Z), independently of the two
+manually dispatched exact-SHA `workflow_dispatch` runs above (also
+confirmed against the exact release SHA individually, not assumed from
+recency). The standard merge commit is on `origin/main`; all three carried
+commits are reachable from it; author/committer identity is unchanged
+(Songül Kızılay via GitHub noreply email); the working tree was clean
+except this ledger reconciliation.
+
+Note: this bounded release closes the symmetric F1-class subject-binding
+gap on the Hypothesis side, deferred explicitly by v0.3.417's own ledger.
+`ResearchSecurityHypothesisApplicationService.attach_evidence` now uses a
+bound-record lookup (mirroring the Finding-side `next(...)` pattern) and
+refuses any cited evidence — for both `SUPPORTS` and `CONTRADICTS` — whose
+`target_kind`/`target_canonical_value` differs from the matched
+hypothesis's own `subject_kind`/`subject_canonical_value`, with "all cited
+evidence in one call must match" aggregation (not "at least one"), proven
+by a dedicated mixed-citation-set negative test. Two new
+`ProgramIsolationTests` cases close a same-file coverage gap QA identified
+(`attach_evidence`/`transition_status` under the wrong `program_id`, M22-
+equivalent). No schema or on-disk document change of any kind; no new
+evidence relation, status, or kind. Security review: PASS, no findings.
+Epistemics review: PASS-with-caveats, one accurate residual-gap finding
+folded into the ledger's own Non-goals (no defect in delivered code). QA
+review: PASS, full acceptance-criterion traceability. Runtime review:
+PASS, no caveats. Mutation pass: 4/4 targeted mutants caught (remove the
+subject-binding check; allow a mixed-citation set through; remove the
+service-level program check from `attach_evidence`; remove it from
+`transition_status`) via in-memory monkeypatching, verified without ever
+writing a weakened file to disk. Full canonical gates (Windows canonical
+environment): 7452 tests OK (skipped=3) — 4 net new tests over v0.3.417's
+7448; Black, Ruff, MyPy (601 source files), and `git diff --check` clean.
+
+Deferred, non-blocking findings carried forward (candidates for a future
+milestone, not fixed in this release): F4 (lifecycle replay validation on
+load) — "reject whole document" on any business-rule-invariant violation
+is the security-consistent, precedent-matching default, but implementation
+needs a point-in-time evidence-gate replay (not a final-state check), an
+import-cycle-safe way to share validation logic between the store and
+application service, and a characterization test proving replay-
+equivalence to the write path; real engineering surface for its own
+dedicated milestone. `create_hypothesis`'s own residual spurious-`SUPPORTS`-
+link gap (same defect class as this milestone's fix — once at least one
+citation matches, every `supporting_evidence_ids` entry still becomes a
+`SUPPORTS` link including mismatched ones — deliberately deferred to keep
+this milestone narrow; severity unaffected, still `SUPPORTS`-only,
+structurally incapable of reaching `VALIDATES`). Request-ID/correlation-ID
+persistence into research records — rejected as speculative in this
+milestone's own investigation, no live traceability problem found. The
+Windows `ResourceWarning` test-hygiene debt remains untraced and out of
+scope.
+
+## Historical scope: v0.3.417 (delivered)
 
 | Field | Value |
 | --- | --- |
