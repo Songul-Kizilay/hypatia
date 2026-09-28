@@ -328,6 +328,97 @@ Release gates (2026-09-28, Windows canonical environment, hypatia-lead):
 clean; `git status` confirmed exactly the intended files touched, no
 untracked artifacts.
 
+## Current (independent branch) — v0.3.421
+
+Note on ledger structure: the "## Current" entry above this one (v0.3.420,
+status `release`) describes PR #399, which was still open and pending human
+merge review when this entry was written, per an explicit instruction not
+to add next-milestone code to that PR. This entry is deliberately separate
+and does not supersede it. v0.3.421 was built on its own new branch
+(`feature/research-security-validation-recipe-v0.3.421`, a `git worktree`
+sibling of the PR #399 checkout), forked from v0.3.420's exact commit
+(`32be4e09be2544884efac77e8f4d501ddb83e7aa`), so PR #399's checkout was
+never switched or touched. `feature/structured-learned-memory-extraction-v0.3.118`
+(PR #399) is unaffected by anything below.
+
+| Field | Value |
+| --- | --- |
+| Milestone | Validation recipes, foundation (Bug Bounty Researcher roadmap item 9) |
+| Base SHA | 32be4e0 (v0.3.420, same commit PR #399 carries as HEAD) |
+| Branch | `feature/research-security-validation-recipe-v0.3.421` (new, independent; not part of PR #399) |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer, sole reviewer (single bounded autonomous milestone; no dual-writer risk since the isolated worktree has no concurrent writer) |
+| Blockers | none |
+
+Rationale: continuing this autonomous session's read-only roadmap discovery
+after completing v0.3.420's independent external review (EVREN +
+Abacus/RouteLLM, both completed; no verified defect found in the frozen
+diff — see the repo-external review artifacts referenced in that session's
+handoff, not committed here), the roadmap's own recorded priority order
+names item 9 ("Validation recipes") as the next unstarted step after item 7
+(Finding Lifecycle, hardened through v0.3.420, delivered/hardening-only
+through this point). Item 8 ("Business-logic/state-transition model") was
+considered and rejected for this pass, matching the v0.3.420 entry's own
+finding: "no existing precedent or design in this codebase," a poor fit for
+a bounded milestone. Item 9 has an equally undocumented design (the roadmap
+names it in one line with no elaboration), but — unlike item 8 — it maps
+directly onto an already-four-times-proven structural pattern in this exact
+codebase (append-only record + derived projection + application service +
+JSON store), including a cross-service-reader Protocol precedent
+(`ResearchSecurityFindingApplicationService.SecurityHypothesisReader`) that
+needed no adaptation, only duplication under a new name for the
+finding-reader half. Chosen over continuing further F4 internal hardening
+per this session's explicit instruction not to let "endless internal-hardening
+work... consume the roadmap" and to deliver "tangible Bug Bounty Researcher
+user value" instead.
+
+Scope: four new files under `src/research/`
+(`ResearchSecurityValidationRecipeSubjectKind.py`,
+`ResearchSecurityValidationRecipeRecord.py`,
+`JsonFileResearchSecurityValidationRecipeStore.py`,
+`ResearchSecurityValidationRecipe.py`) and one new file under
+`src/cognition/` (`ResearchSecurityValidationRecipeApplicationService.py`),
+plus four edited files for wiring only
+(`src/brain/BrainResponse.py` — two new optional fields;
+`src/response/ResponseComposer.py` — four new methods;
+`src/cognition/CognitiveEngine.py` — one new constructor parameter, one new
+service field, two new dispatch branches;
+`src/core/Bootstrap.py` — one new store factory method, one new
+constructor argument). No existing store, service, record, or write path
+was modified. `ResearchSecurityValidationRecipeRecord` is purely
+descriptive text (steps + notes), screened by the existing
+`ResearchSensitiveInputPolicy`, bounded (at most 20 steps, 300 characters
+each, single-line; notes bounded, may be empty). The application service's
+`record_validation_recipe` verifies its subject exists for the exact
+`program_id` via `SecurityHypothesisReader.hypothesis_by_id`/
+`SecurityFindingReader.finding_by_id`, structurally satisfied by the real
+`ResearchSecurityHypothesisApplicationService`/
+`ResearchSecurityFindingApplicationService` with no modification to either.
+Two new Brain intents (`research_security_validation_recipe_record`,
+`research_security_validation_recipe_preview`), wired into `CognitiveEngine`
+only when the recipe store *and* both the hypothesis and finding services
+are present — proven by a dedicated test
+(`test_recipe_service_requires_both_hypothesis_and_finding_services`) that a
+half-wired engine (recipe store present, Hypothesis/Finding stores absent)
+still reports "not available" rather than partially accepting an
+unverifiable recipe. No desktop panel this milestone (deliberately deferred
+and named as such in CHANGELOG/PROJECT_STATUS, not silently dropped).
+
+Verification (2026-09-28, Windows canonical environment, hypatia-lead, sole
+author and sole reviewer of this isolated milestone): 51 new tests (27
+record/store validation and persistence, 19 application-service including
+subject-existence/cross-program/restart/Brain-intent coverage, 5
+CognitiveEngine wiring/dispatch including the half-wired proof above) plus
+the full pre-existing suite, all green — 7522 tests total, `OK (skipped=3)`,
+51 net new over v0.3.420's 7471. Black, Ruff, and MyPy (`src`) clean on the
+whole tree. `git diff --check` clean. `git status` on the new branch showed
+exactly the 13 files listed above (9 source, 4 test) touched, no unrelated
+or untracked changes. `Bootstrap().initialize()` smoke-tested directly
+(temporary memory path) to confirm the new store factory and `CognitiveEngine`
+wiring construct without error end-to-end, not merely via unit-level
+mocks — the same category of gap ("Bootstrap wiring was untested") a past
+milestone's independent QA review flagged for a different feature.
+
 ## Historical scope: v0.3.419 (delivered)
 
 | Field | Value |

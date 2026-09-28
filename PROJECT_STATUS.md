@@ -2,10 +2,32 @@
 
 ## Runtime Version
 
-`v0.3.420 (Genesis)`
+`v0.3.421 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.421 delivers the Bug Bounty Researcher roadmap's item 9
+foundation, "Validation recipes": an operator-authored, append-only record
+of the plain-text steps an operator intends to (or did) use to validate an
+already-recorded Security Hypothesis or Finding, exposed through a new
+`ResearchSecurityValidationRecipeApplicationService` and two new Brain
+intents. It is purely descriptive strategy text, exactly like
+`required_followup` — it can never fetch, run, or authorize anything, and
+recording one never mutates its subject. The subject must already exist for
+the given program, verified through two narrow reader Protocols satisfied
+structurally by the existing Hypothesis/Finding services, mirroring the
+cross-service-reader pattern the Finding service already uses for its
+source hypothesis. This was chosen over roadmap item 8
+("Business-logic/state-transition model"), which has no existing precedent
+or design in this codebase, and over further F4 internal hardening, to
+deliver tangible new Bug Bounty Researcher capability rather than continue
+indefinite internal hardening. Built on an isolated worktree/branch forked
+from v0.3.420's exact commit, deliberately kept separate from the
+then-still-open, human-review-pending PR #399 so that PR remained
+untouched. No desktop panel yet (deliberately deferred, not dropped); no
+change to any existing store, service, or write-path behavior. Windows
+canonical environment: 7522 tests, `OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.420 closes part of the F4 lifecycle-replay gap named in every
 ledger entry since v0.3.416, scoped to exactly what is implementable today

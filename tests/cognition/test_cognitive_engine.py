@@ -80,6 +80,9 @@ from research.JsonFileResearchSecurityFindingStore import (
 from research.JsonFileResearchSecurityHypothesisStore import (
     JsonFileResearchSecurityHypothesisStore,
 )
+from research.JsonFileResearchSecurityValidationRecipeStore import (
+    JsonFileResearchSecurityValidationRecipeStore,
+)
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
@@ -108,6 +111,9 @@ from research.ResearchSecurityHypothesisEvidenceRelation import (
 )
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
 from research.ResearchSecurityHypothesisStatus import ResearchSecurityHypothesisStatus
+from research.ResearchSecurityValidationRecipeSubjectKind import (
+    ResearchSecurityValidationRecipeSubjectKind,
+)
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
@@ -9468,3 +9474,233 @@ class SecurityFindingDispatchTests(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertIn("Security findings are not available.", response.message)
+
+
+class SecurityValidationRecipeDispatchTests(unittest.TestCase):
+    """The two new security-validation-recipe Brain intents, wired and unwired."""
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        knowledge_path = Path(self.temporary_directory.name) / "knowledge.md"
+        knowledge_path.write_text("Hypatia\n\nKnowledge\n\nHypatia", encoding="utf-8")
+        self.knowledge_engine = KnowledgeEngine()
+        self.knowledge_engine.load(knowledge_path)
+        self.event_bus = EventBus()
+        self.memory_manager = MemoryManager(self.event_bus)
+        self.planner = Planner()
+        self.response_composer = ResponseComposer()
+        self.session_manager = SessionManager(self.event_bus)
+        self.session_rename_service = SessionRenameTransactionService(
+            session_manager=self.session_manager,
+            memory_manager=self.memory_manager,
+            event_bus=self.event_bus,
+        )
+        http_evidence_path = (
+            Path(self.temporary_directory.name) / "research_http_evidence.json"
+        )
+        self.http_evidence_store = JsonFileResearchHttpEvidenceStore(http_evidence_path)
+        self.http_evidence_store.save(
+            ResearchHttpEvidenceDocument(records=(_security_finding_http_evidence(),))
+        )
+        self.security_hypothesis_store_path = (
+            Path(self.temporary_directory.name) / "research_security_hypotheses.json"
+        )
+        self.security_finding_store_path = (
+            Path(self.temporary_directory.name) / "research_security_findings.json"
+        )
+        self.security_validation_recipe_store_path = (
+            Path(self.temporary_directory.name)
+            / "research_security_validation_recipes.json"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def _wired_engine(self) -> ProductionCognitiveEngine:
+        return ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            http_evidence_store=self.http_evidence_store,
+            security_hypothesis_store=JsonFileResearchSecurityHypothesisStore(
+                self.security_hypothesis_store_path
+            ),
+            security_finding_store=JsonFileResearchSecurityFindingStore(
+                self.security_finding_store_path
+            ),
+            security_validation_recipe_store=(
+                JsonFileResearchSecurityValidationRecipeStore(
+                    self.security_validation_recipe_store_path
+                )
+            ),
+        )
+
+    def _unwired_engine(self) -> ProductionCognitiveEngine:
+        return ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+        )
+
+    def _ready_finding_id(self, engine: ProductionCognitiveEngine) -> str:
+        created = engine.process(
+            BrainRequest(
+                message="Record security hypothesis",
+                metadata={
+                    "intent": "research_security_hypothesis_create",
+                    "program_id": "program-a",
+                    "hypothesis_kind": ResearchSecurityHypothesisKind.AUTHORIZATION,
+                    "subject_kind": ResearchAssetKind.HOSTNAME,
+                    "subject_canonical_value": "example.test",
+                    "statement": "statement",
+                    "rationale": "rationale",
+                    "required_validation": "required validation",
+                    "supporting_evidence_ids": ("a" * 64,),
+                },
+            )
+        )
+        hypothesis = created.research_security_hypothesis
+        assert hypothesis is not None
+        engine.process(
+            BrainRequest(
+                message="Transition security hypothesis status",
+                metadata={
+                    "intent": "research_security_hypothesis_status_transition",
+                    "hypothesis_id": hypothesis.hypothesis_id,
+                    "program_id": "program-a",
+                    "status": ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION,
+                    "reason": "",
+                },
+            )
+        )
+        finding_created = engine.process(
+            BrainRequest(
+                message="Record security finding",
+                metadata={
+                    "intent": "research_security_finding_create",
+                    "program_id": "program-a",
+                    "source_hypothesis_id": hypothesis.hypothesis_id,
+                    "title": "title",
+                    "description": "description",
+                    "required_followup": "required followup",
+                },
+            )
+        )
+        finding = finding_created.research_security_finding
+        assert finding is not None
+        return finding.finding_id
+
+    def _record_request(self, finding_id: str) -> BrainRequest:
+        return BrainRequest(
+            message="Record validation recipe",
+            metadata={
+                "intent": "research_security_validation_recipe_record",
+                "program_id": "program-a",
+                "subject_kind": ResearchSecurityValidationRecipeSubjectKind.FINDING,
+                "subject_id": finding_id,
+                "steps": ("Step one.",),
+                "notes": "",
+            },
+        )
+
+    def test_recipe_record_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+
+        response = engine.process(self._record_request(finding_id))
+
+        self.assertTrue(response.success, response.message)
+        self.assertIsNotNone(response.research_security_validation_recipe)
+
+    def test_recipe_record_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(self._record_request("finding-1"))
+
+        self.assertFalse(response.success)
+        self.assertIn(
+            "Security validation recipes are not available.", response.message
+        )
+
+    def test_recipe_preview_dispatch_succeeds_when_wired(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        engine.process(self._record_request(finding_id))
+
+        response = engine.process(
+            BrainRequest(
+                message="Preview validation recipes",
+                metadata={
+                    "intent": "research_security_validation_recipe_preview",
+                    "program_id": "program-a",
+                    "subject_kind": (
+                        ResearchSecurityValidationRecipeSubjectKind.FINDING
+                    ),
+                    "subject_id": finding_id,
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(len(response.research_security_validation_recipes), 1)
+
+    def test_recipe_preview_dispatch_fails_when_not_wired(self) -> None:
+        engine = self._unwired_engine()
+
+        response = engine.process(
+            BrainRequest(
+                message="Preview validation recipes",
+                metadata={
+                    "intent": "research_security_validation_recipe_preview",
+                    "program_id": "program-a",
+                    "subject_kind": (
+                        ResearchSecurityValidationRecipeSubjectKind.FINDING
+                    ),
+                    "subject_id": "finding-1",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn(
+            "Security validation recipes are not available.", response.message
+        )
+
+    def test_recipe_service_requires_both_hypothesis_and_finding_services(
+        self,
+    ) -> None:
+        """Wiring only the recipe store, without Finding/Hypothesis, stays unwired.
+
+        The recipe service needs both readers to verify a subject; a
+        half-wired engine must fail closed exactly like a fully-unwired one,
+        never partially accept a recipe it cannot verify.
+        """
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            security_validation_recipe_store=(
+                JsonFileResearchSecurityValidationRecipeStore(
+                    self.security_validation_recipe_store_path
+                )
+            ),
+        )
+
+        response = engine.process(self._record_request("finding-1"))
+
+        self.assertFalse(response.success)
+        self.assertIn(
+            "Security validation recipes are not available.", response.message
+        )

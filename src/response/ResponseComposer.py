@@ -131,6 +131,9 @@ from research.ResearchSecurityFinding import ResearchSecurityFinding
 from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
 from research.ResearchSecurityHypothesis import ResearchSecurityHypothesis
 from research.ResearchSecurityHypothesisEntry import ResearchSecurityHypothesisEntry
+from research.ResearchSecurityValidationRecipeRecord import (
+    ResearchSecurityValidationRecipeRecord,
+)
 from research.ResearchSessionContextRecord import ResearchSessionContextRecord
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentWritePreview import (
@@ -2095,6 +2098,77 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_security_finding_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_validation_recipe_record(
+        self,
+        request: BrainRequest,
+        recipe: ResearchSecurityValidationRecipeRecord,
+    ) -> BrainResponse:
+        """Confirm one durable, operator-authored validation recipe."""
+        lines = [
+            "Security validation recipe recorded:",
+            f"Subject: {recipe.subject_kind.value} {recipe.subject_id}",
+            f"Program: {recipe.program_id}",
+            f"Steps: {len(recipe.steps)}",
+            *(f"  {index + 1}. {step}" for index, step in enumerate(recipe.steps)),
+            SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_validation_recipe_record",
+            memory_count=0,
+            research_security_validation_recipe=recipe,
+        )
+
+    def research_security_validation_recipe_record_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid validation recipe write."""
+        return BrainResponse(
+            message="\n".join(
+                ("Security validation recipe rejected:", f"Reason: {message}")
+            ),
+            request_id=request.request_id,
+            intent="research_security_validation_recipe_record",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_security_validation_recipe_preview(
+        self,
+        request: BrainRequest,
+        recipes: tuple[ResearchSecurityValidationRecipeRecord, ...],
+    ) -> BrainResponse:
+        """Report the persisted, read-only validation recipes for one subject."""
+        lines = [f"Security validation recipes: {len(recipes)}"]
+        for recipe in recipes:
+            lines.append(
+                f"- {recipe.created_at.isoformat()}: {len(recipe.steps)} step(s)"
+            )
+        if recipes:
+            lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_security_validation_recipe_preview",
+            memory_count=0,
+            research_security_validation_recipes=recipes,
+        )
+
+    def research_security_validation_recipe_preview_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid validation recipe preview."""
+        return BrainResponse(
+            message="\n".join(
+                ("Security validation recipe preview rejected:", f"Reason: {message}")
+            ),
+            request_id=request.request_id,
+            intent="research_security_validation_recipe_preview",
             memory_count=0,
             success=False,
         )
