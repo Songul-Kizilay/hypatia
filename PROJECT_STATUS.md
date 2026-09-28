@@ -2,10 +2,27 @@
 
 ## Runtime Version
 
-`v0.3.422 (Genesis)`
+`v0.3.423 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.423 adds a "Validation Recipes" desktop tab, making v0.3.421's
+Validation Recipe foundation actually usable: record and list an
+operator-authored, append-only list of plain-text validation steps for an
+already-recorded security hypothesis or finding. Pure UI layer — the
+underlying `ResearchSecurityValidationRecipeApplicationService` is
+unchanged. VALIDATION RECIPE != AUTHORITY TO ACT: no code path added
+fetches, executes, spawns a process, or expands scope; a recipe's steps
+render as plain text, never as something clickable-to-run. Four
+independent specialist reviews (security, epistemics, runtime, QA) and one
+external review (Abacus/route-llm, after an EVREN attempt failed closed
+with no retry) all found the milestone sound; QA and Abacus independently
+converged on the same real test-coverage gap (distinguishing a successful
+empty recipe list from a failed request), closed with a new test before
+release. Built on an isolated worktree/branch forked from refreshed
+`origin/main` (after v0.3.420-422 were delivered this session), touching
+no other milestone's files.
 
 Version v0.3.422 grounds Hypatia's default conversation system prompt in the
 real, code-enforced security-hypothesis/finding lifecycle, fixing an

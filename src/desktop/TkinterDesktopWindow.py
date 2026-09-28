@@ -39,6 +39,9 @@ from desktop.QuestionResearchDraft import QuestionResearchDraft
 from desktop.ResearchAssetInventoryPanel import ResearchAssetInventoryPanel
 from desktop.ResearchSecurityFindingPanel import ResearchSecurityFindingPanel
 from desktop.ResearchSecurityHypothesisPanel import ResearchSecurityHypothesisPanel
+from desktop.ResearchSecurityValidationRecipePanel import (
+    ResearchSecurityValidationRecipePanel,
+)
 from desktop.ResearchSessionContextPanel import ResearchSessionContextPanel
 from desktop.ResearchSourcePreviewPanel import ResearchSourcePreviewPanel
 from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
@@ -1660,6 +1663,16 @@ class TkinterDesktopWindow:
                 security_finding_tab,
                 self._controller,
                 self._start_request,
+            )
+            validation_recipe_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(validation_recipe_tab, text="Validation Recipes")
+            tabs.append(validation_recipe_tab)
+            self._security_validation_recipe_panel = (
+                ResearchSecurityValidationRecipePanel(
+                    validation_recipe_tab,
+                    self._controller,
+                    self._start_request,
+                )
             )
         # The Tools tab appears only when a console was composed. An empty
         # panel offering to run nothing would read as a feature that is broken

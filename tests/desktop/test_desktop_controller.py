@@ -31,6 +31,9 @@ from research.ResearchSecurityHypothesisEvidenceRelation import (
 )
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
 from research.ResearchSecurityHypothesisStatus import ResearchSecurityHypothesisStatus
+from research.ResearchSecurityValidationRecipeSubjectKind import (
+    ResearchSecurityValidationRecipeSubjectKind,
+)
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 
 
@@ -1846,6 +1849,129 @@ class DesktopControllerTests(unittest.TestCase):
     ) -> None:
         with self.assertRaisesRegex(ValueError, "program ID cannot be empty"):
             self.controller.preview_research_security_findings("  ")
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_record_research_security_validation_recipe_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.record_research_security_validation_recipe(
+            "  program-a  ",
+            "finding",
+            "  finding-1  ",
+            ("Step one", "Step two"),
+            "  notes  ",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Record validation recipe")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_validation_recipe_record",
+                "program_id": "program-a",
+                "subject_kind": ResearchSecurityValidationRecipeSubjectKind.FINDING,
+                "subject_id": "finding-1",
+                "steps": ("Step one", "Step two"),
+                "notes": "notes",
+            },
+        )
+
+    def test_record_research_security_validation_recipe_accepts_hypothesis_subject(
+        self,
+    ) -> None:
+        response = self.controller.record_research_security_validation_recipe(
+            "program-a", "hypothesis", "hypothesis-1", ("Step one",), ""
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertIs(
+            request.metadata["subject_kind"],
+            ResearchSecurityValidationRecipeSubjectKind.HYPOTHESIS,
+        )
+
+    def test_record_research_security_validation_recipe_rejects_empty_ids_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.record_research_security_validation_recipe(
+                "", "finding", "finding-1", ("Step one",), ""
+            )
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.record_research_security_validation_recipe(
+                "program-a", "finding", " ", ("Step one",), ""
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_record_research_security_validation_recipe_rejects_invalid_subject_kind(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "subject kind is invalid"):
+            self.controller.record_research_security_validation_recipe(
+                "program-a", "not-a-kind", "finding-1", ("Step one",), ""
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_record_research_security_validation_recipe_rejects_zero_steps_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "requires at least one step"):
+            self.controller.record_research_security_validation_recipe(
+                "program-a", "finding", "finding-1", (), ""
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_preview_research_security_validation_recipes_sends_structured_metadata(
+        self,
+    ) -> None:
+        response = self.controller.preview_research_security_validation_recipes(
+            "  program-a  ", "finding", "  finding-1  "
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Preview validation recipes")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_security_validation_recipe_preview",
+                "program_id": "program-a",
+                "subject_kind": ResearchSecurityValidationRecipeSubjectKind.FINDING,
+                "subject_id": "finding-1",
+            },
+        )
+
+    def test_preview_research_security_validation_recipes_rejects_empty_ids_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.preview_research_security_validation_recipes(
+                " ", "finding", "finding-1"
+            )
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.preview_research_security_validation_recipes(
+                "program-a", "finding", " "
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_preview_research_security_validation_recipes_rejects_invalid_subject_kind(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "subject kind is invalid"):
+            self.controller.preview_research_security_validation_recipes(
+                "program-a", "not-a-kind", "finding-1"
+            )
 
         self.assertEqual(self.brain.requests, [])
 
