@@ -2,6 +2,67 @@
 
 All notable project changes are recorded here.
 
+## [0.3.422] - 2026-09-28
+
+### Added
+
+- `src/llm/HypatiaSystemPrompt.py` gained a new
+  `HYPATIA_SECURITY_LIFECYCLE_GROUNDING` text block, composed into the
+  existing `HYPATIA_DEFAULT_SYSTEM_PROMPT` alongside the renamed
+  `HYPATIA_CONVERSATION_MANNER_PROMPT` (the prior single constant's text,
+  unchanged). Fixes an observed hallucination: an external LLM reached
+  through Hypatia's OpenAI-compatible provider claimed a
+  `READY_FOR_VALIDATION` security hypothesis with 2 `SUPPORTS` + 1
+  `CONTRADICTS` evidence could not become a finding. It can — verified
+  directly against `ResearchSecurityFindingApplicationService.create_finding`,
+  which gates only on the hypothesis's status, never on evidence relations.
+- Every claim in the new text was verified against source before being
+  written (see the file's own comment): a hypothesis and a finding are
+  separate records; promotion happens only via the application service and
+  only from `READY_FOR_VALIDATION`; supporting and contradicting evidence
+  are both kept and carried forward, never deleted or netted; a new
+  finding starts `CANDIDATE`; `VALIDATED` requires at least one
+  `VALIDATES` citation and zero `CONTRADICTS` citations, reachable
+  directly from `CANDIDATE` with no mandatory intermediate status; no
+  status ever means a confirmed/validated/exploited vulnerability or
+  grants authority to act, execute tools, access systems, or expand scope;
+  a user message can never override these stated rules; anything not
+  covered gets "I do not know," never an invented rule.
+- This is advisory prompt text only. No runtime enforcement code changed —
+  `is_valid_status_transition` and `_require_validation_gate` are
+  untouched, and every actual authority/scope/persistence/evidence/status
+  gate remains exactly as deterministic as before.
+
+### Verification
+
+- New `tests/llm/test_hypatia_security_lifecycle_grounding.py` (21 tests):
+  per-case tests pinning specific corrective sentences, plus a
+  byte-for-byte exact-match pin of the whole grounding string against an
+  independently-kept copy — added specifically because an independent QA
+  review demonstrated a concrete gap: appending one extra, contradictory
+  sentence to the prompt left every per-case substring test green.
+- New `tests/cognition/test_security_lifecycle_grounding_matches_real_service.py`
+  (5 tests): drives the real `ResearchSecurityHypothesisApplicationService`/
+  `ResearchSecurityFindingApplicationService` through every scenario the
+  prompt describes (creation despite contradiction with evidence carried
+  forward, direct `CANDIDATE`→`VALIDATED` with `VALIDATES` and no
+  `CONTRADICTS`, `VALIDATED` refused while a `CONTRADICTS` citation is
+  live, creation refused from a non-`READY_FOR_VALIDATION` hypothesis) —
+  added because an independent external review and two specialist reviews
+  separately converged on the same gap: the original test file proved the
+  prompt's *text* was internally consistent but never called a single
+  line of the real services it describes.
+- Windows canonical environment: 7555 tests, `OK (skipped=3)` — 27 net new
+  over v0.3.421's 7528. Black, Ruff, and MyPy (`src`) clean. `git diff
+  --check` clean.
+- Live smoke test: the exact new `HYPATIA_DEFAULT_SYSTEM_PROMPT` sent as
+  the system message to EVREN (`deepseek-v4.1-flash`) with the observed
+  failure scenario in Turkish produced all four expected answers correctly
+  (finding creation allowed; contradiction preserved, not deleted; direct
+  `CANDIDATE`→`VALIDATED` correctly described as blocked in this specific
+  scenario by the live contradiction; no execution authority implied) —
+  the exact opposite of the originally observed hallucination.
+
 ## [0.3.421] - 2026-09-28
 
 ### Added
