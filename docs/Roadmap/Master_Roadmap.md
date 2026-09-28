@@ -914,7 +914,29 @@ credential reference/use, login, or authority. In every case, ingestion can
 only ever reach
 scope resolution through the existing, unchanged, live `resolve_hostname`/
 `resolve_addresses`, and no path lets discovered evidence manufacture
-authority.
+authority. v0.3.415 delivered item 6, the Security Hypothesis model
+foundation (`ResearchSecurityHypothesisRecord`, append-only evidence-link
+and status-transition records, a derived-only `ResearchSecurityHypothesis`
+projection) — reasoning over already-recorded evidence only, never itself
+authority to act. v0.3.416 delivered item 7, the Finding Lifecycle
+foundation on top of it, with the identical append-only/derived-read shape.
+v0.3.417-v0.3.419 hardened both lines' evidence-integrity and
+subject-binding guarantees (evidence cited in support of, contradiction of,
+or — critically — validation of a hypothesis or finding must actually
+describe that hypothesis's/finding's own subject, every citation in one
+call must match, and a finding's carried-forward evidence is independently
+re-verified against the live evidence store at creation), without ever
+widening what a `VALIDATED` status means: it remains evidence-backed
+reasoning, never a confirmed exploit or authority to act. v0.3.420 closed
+part of the F4 lifecycle-replay gap those same milestones had all
+deferred: both stores now replay each entity's status-transition history
+against the closed state-machine table at load time, and the Finding store
+also rejects a dangling or self-referencing duplicate/superseded-by
+reference at load — hardening (Bug Bounty foundation, steps 6/7 made more
+tamper-resistant), not a new numbered item. Full F4 (cross-store checks,
+the `VALIDATED` evidence-gate replay) and item 8 (Business-logic/
+state-transition model, which has no existing precedent or design in this
+codebase) remain not yet started.
 
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a

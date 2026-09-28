@@ -14,9 +14,327 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Security Hypothesis/Finding store load-time replay validation, phase 1 (F4 phase 1; Bug Bounty foundation, hardening the delivered step 6/7 lifecycle) |
+| Base SHA | d1e3b18 (v0.3.419 delivery reconciliation) |
+| Status | release |
+| Specialists | hypatia-security, hypatia-epistemics, hypatia-runtime, hypatia-qa: independent parallel read-only investigation (2026-09-28), converged on F4 as highest-priority real gap; hypatia-lead: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-epistemics: independent review, PASS, empirically re-verified both the fix and its intentional boundary; hypatia-runtime: independent review, PASS, no caveats; hypatia-qa: independent review, PASS-with-caveats (one non-blocking test-strategy-literalness gap, closed by hypatia-lead before release); hypatia-lead: release |
+| Blockers | none |
+
+Rationale: after v0.3.419 delivered (PR #398, merge commit `06c22aa1`, verified
+reachable from `origin/main`), four specialists independently investigated
+the Bug Bounty Researcher pipeline read-only in parallel (2026-09-28) to
+select the next bounded milestone, per the standing "F4 lifecycle replay
+validation on load" deferral recorded in every one of the v0.3.416-419
+ledger entries. All four converged on the same conclusion without being
+told each other's answer: F4 is a real, currently-exploitable-by-tampering
+gap (not speculative), but the *full* F4 (a point-in-time replay of every
+business-rule invariant, including the `VALIDATED` evidence gate and
+cross-store checks) is correctly sized as its own future milestone, not
+this one — because that full scope needs a genuine design/refactor decision
+(duplicate business-rule logic out of `cognition`'s application services
+into a shared `research`-layer pure module, or accept duplication) that
+this session's investigation does not make. Both hypatia-epistemics and
+hypatia-runtime independently proposed narrowing to exactly the slice that
+is *already* cleanly implementable today with zero new coupling: the
+closed status-transition state-machine table (`is_valid_status_transition`)
+is already a pure, dependency-free function living in `research/` on both
+sides, imported (never the reverse) by the two `cognition` application
+services — replaying it at load time duplicates nothing and creates no
+import-cycle risk. Separately, hypatia-security and hypatia-qa
+independently found and precisely reproduced the *same* concrete, narrow,
+already-real defect: `JsonFileResearchSecurityFindingStore`'s own module
+docstring claims "no dangling relation... as defence in depth against a
+hand-edited or partially-written file" but this is literally false for one
+field pair — `duplicate_of_finding_id`/`superseded_by_finding_id` on a
+status transition is never checked against the document's own known
+findings at load time, only at write time by the application service's
+`_require_linked_finding`. hypatia-epistemics independently reproduced the
+lifecycle-tampering gap empirically: a hand-crafted, structurally valid
+finding-store document with one finding, zero evidence links, and a single
+status transition straight to `validated` loads successfully today and the
+derived read model reports `status=validated` with zero validating
+evidence — a state the real application service could never produce.
+hypatia-qa's own recommendation named this exact scope as the next
+milestone, ahead of starting any new functional capability, "since it would
+build on top of a store whose defense-in-depth claim is currently false for
+one field." This is Option A from Phase 5 (a concrete slice of F4), chosen
+over roadmap item 8 ("Business-logic/state-transition model" — confirmed by
+three of four specialists, independently, to have "no existing precedent or
+design in this codebase," and therefore not size-appropriate for a bounded
+milestone) and over any speculative trust-taxonomy/correlation-ID/
+tool-gateway work (all four specialists independently found no live problem
+motivating any of those, matching the same rejections already on record in
+the v0.3.416-419 ledger entries).
+
+Scope: two narrow additions to `ResearchSecurityHypothesisDocument.__post_init__`
+(`src/research/JsonFileResearchSecurityHypothesisStore.py`) and
+`ResearchSecurityFindingDocument.__post_init__`
+(`src/research/JsonFileResearchSecurityFindingStore.py`), using only
+already-imported, already-pure functions and already-persisted fields — no
+new dependency, no new coupling between the two independent store files, no
+import from `cognition` into `research`:
+
+1. **Status-transition sequence legality replay** (both stores). Group
+   `status_transitions` by `(hypothesis_id, program_id)` /
+   `(finding_id, program_id)`, preserving the document's own persisted list
+   order (already guaranteed append-order-causal by `save()`'s
+   prefix-preservation check — never re-derived from `recorded_at`, per the
+   same discipline `_latest_status`/`_current_status` already follow). Walk
+   each entity's own subsequence from the implicit zero-transition default
+   status (`OPEN` for Hypothesis, `CANDIDATE` for Finding, matching
+   `_latest_status`'s own default exactly) and confirm
+   `is_valid_status_transition(current, next)` holds at every step,
+   reusing the existing pure closed-table function
+   (`research.ResearchSecurityHypothesisStatus.is_valid_status_transition`/
+   `research.ResearchSecurityFindingStatus.is_valid_status_transition`) —
+   the identical function the application service already calls on write,
+   never duplicated or reimplemented. Reject the whole document on the
+   first illegal hop found, matching this codebase's existing
+   reject-whole-document precedent for every other document-level
+   invariant in both stores (no quarantine infrastructure of any kind).
+2. **Duplicate/superseded referential integrity** (Finding store only —
+   Hypothesis has no such field). For every status transition whose
+   `duplicate_of_finding_id`/`superseded_by_finding_id` is not `None`,
+   require the referenced finding ID to (a) exist in the document's own
+   `known_findings` under the *same* `program_id` as the transition
+   (mirroring the application service's own `_require_linked_finding`
+   program-scoping exactly), and (b) not equal the transition's own
+   `finding_id` (no self-reference) — the same two rules
+   `_require_linked_finding` already enforces at write time, now also
+   replayed at load time. Reject the whole document on violation.
+3. Correct `JsonFileResearchSecurityFindingStore`'s module docstring (lines
+   13-17), which currently overclaims "no dangling relation... as defence
+   in depth" for every relation when it did not previously cover this one
+   field pair; update both store module docstrings to name the new
+   invariant precisely.
+4. Close the QA-identified store-test-file asymmetry: port the Finding
+   store test file's atomic-write-failure test
+   (`test_a_failed_atomic_write_keeps_the_original_and_leaves_no_temp_file`),
+   its truncated/invalid-content matrix
+   (`test_truncated_or_non_json_content_fails_closed`), and its
+   status-transition-history tamper matrix
+   (`test_save_rejects_removal_or_alteration_of_status_transition_history`)
+   onto the Hypothesis store test file, which currently lacks all three
+   despite both stores sharing byte-for-byte identical code shapes for the
+   paths those tests exercise (`save()`'s prefix-preservation guard,
+   atomic-write failure handling, and content-parsing failure handling).
+
+Non-goals (exhaustive): no cross-store referential checks (a finding's
+`source_hypothesis_id` existence/status-at-creation-time against the
+separate hypothesis-store file, or an evidence link's `evidence_id`
+existence against the separate HTTP-evidence-store file) — hypatia-runtime's
+investigation confirmed these would require new coupling between
+independently-loadable store files, a real design decision not made this
+session; no `VALIDATED`-evidence-gate replay (`_require_validation_gate`'s
+logic lives only in `cognition.ResearchSecurityFindingApplicationService`
+and is not currently expressible as a dependency-free `research`-layer
+function without either accepting duplication or extracting/refactoring the
+application service — a genuine product/design call per hypatia-runtime,
+correctly deferred); no one-finding-per-hypothesis dedup replay (same
+reasoning); no subject-binding replay (already independently enforced at
+the service layer per hypatia-security's investigation, not a load-time
+gap); no schema or version bump in either store (this uses fields and
+positions already on disk today); no change to any application-service
+write-path behavior, business logic, or public method signature — this
+milestone touches only the two documents' `__post_init__` load-time
+validation; no roadmap item 8 ("Business-logic/state-transition model" —
+confirmed by three specialists to have no existing precedent, not
+size-appropriate for a bounded milestone); no generic trust taxonomy,
+correlation-ID/request-ID persistence, Safe Tool Gateway work, autonomous
+agent/model-triggered creation, or any authority/budget/target/credential
+change of any kind (all four specialists independently found no live
+problem motivating any of these).
+
+Security invariants (restated, unchanged by this milestone): MODEL OUTPUT
+!= AUTHORITY; SUBAGENT OUTPUT != AUTHORITY; a `VALIDATED` finding is never
+authority to act. No lifecycle transition, evidence citation, or store
+load/validation path may run a tool, create a process, make a network
+request, or expand/grant scope, credential, budget, or execution authority
+— this milestone adds only pure, in-memory, already-imported validation
+logic to two document dataclasses' own `__post_init__`; it introduces no
+new I/O, no new store coupling, and no new field. Program isolation and
+subject-binding remain fully enforced at the service layer exactly as
+before (untouched by this change); this milestone only makes the stores'
+load-time defense-in-depth match what their own docstrings already claim.
+
+Acceptance criteria:
+- A hand-crafted `security_findings.json`-shaped document whose
+  `status_transitions` includes a `duplicate_of_finding_id`/
+  `superseded_by_finding_id` naming a finding ID absent from that program's
+  `findings` list fails to load with `ResearchError`.
+- The same, but naming the transition's own `finding_id` (self-reference),
+  fails to load.
+- The same, but naming a real finding ID that exists only under a
+  *different* program, fails to load (cross-program linkage rejected at
+  load exactly as the live write path already rejects it).
+- A hand-crafted document whose per-entity status-transition subsequence
+  (grouped by `(id, program_id)`, in persisted append order) is not a legal
+  walk of `is_valid_status_transition`'s closed table fails to load with
+  `ResearchError`, independently proven for both the Hypothesis store and
+  the Finding store.
+- A hand-crafted document whose per-entity subsequence *is* a legal walk —
+  including a realistic multi-hop sequence ending in each terminal status —
+  continues to load successfully, byte-identical to today's behavior.
+- Every existing v0.3.406-419 regression fixture in both store test files
+  and both application-service test files is unaffected: no accept/refuse
+  outcome changes for any document a live application-service write path
+  could actually produce.
+- The Hypothesis store test file gains the same three test shapes already
+  present in the Finding store test file (atomic-write-failure,
+  truncated/invalid-content matrix, status-transition tamper matrix),
+  closing the asymmetry hypatia-qa identified, with no production-code
+  implication.
+
+Affected architectural layers: `research` only (two JSON store files' own
+document-level load validation) — `cognition`, persistence schema/version,
+desktop panels, and Brain intent surface all untouched.
+
+Persistence/schema impact: none. No schema/version bump in either store;
+no new field on any record; this uses only fields and append-order
+positions already persisted by every prior delivered milestone back to
+v0.3.415/v0.3.416.
+
+Migration implications: none for this repository's own test fixtures and
+CI state (all hand-constructed, none contain an illegal sequence or a
+dangling/self-referencing linkage). Documented as a forward compatibility
+note for any real future deployment: a persisted document that already
+contained an illegal transition sequence or a dangling/self-referencing
+duplicate/superseded-by reference before this milestone would newly fail
+to load after it — this is the explicit point of the fix (reject-whole
+matches this codebase's existing fail-closed precedent for every other
+document-level invariant), not an accidental regression, and no such state
+is reachable via the live application-service write path in the first
+place.
+
+Test strategy: hand-tampered document fixtures constructed directly against
+`ResearchSecurityHypothesisDocument`/`ResearchSecurityFindingDocument` (the
+same technique every existing dangling-reference test already uses),
+bypassing the application service entirely, for every negative acceptance
+criterion above; realistic multi-hop legal sequences (including one ending
+in each terminal state, for both Hypothesis and Finding) for the positive
+criteria; the three ported test shapes for the Hypothesis store; a full
+differential run of both store test files and both application-service
+test files to prove zero accept/refuse outcome changes for legitimate
+write-path-producible documents; impacted suites focused first, full
+canonical gates once at release.
+
+Mutation strategy: revert the duplicate/superseded referential-existence
+check; revert the self-reference check; revert the cross-program linkage
+check; revert the transition-sequence-legality replay on the Hypothesis
+store; revert it on the Finding store — five targeted mutants via in-memory
+monkeypatching, never written to disk, each expected to be caught by
+exactly its own new test (not incidentally by an unrelated existing test).
+
+Rollback strategy: pure logic addition inside two documents'
+`__post_init__`, using only already-persisted fields and already-guaranteed
+append-order positions; no schema/version bump; rollback is a plain revert
+of the release commit with zero data-migration concern in either direction.
+
+Deferred findings carried forward: the full F4 scope — cross-store
+referential checks (finding -> hypothesis existence/status-at-creation-time,
+evidence-link -> HTTP-evidence existence) and the `VALIDATED`
+evidence-gate/one-finding-per-hypothesis-dedup replay — remains explicitly
+deferred to its own future dedicated milestone, needing the shared-logic
+extraction/duplication design decision hypatia-runtime's investigation
+identified as a genuine product call, not pure investigation. Roadmap item
+8 ("Business-logic/state-transition model") remains correctly unscoped, no
+existing precedent. Request-ID/correlation-ID persistence, generic trust
+taxonomy, and Safe Tool Gateway generalization remain rejected as
+speculative, no live problem found by any of the four specialists this
+session. The Windows `ResourceWarning` test-hygiene debt remains untraced
+and out of scope. `docs/Roadmap/Master_Roadmap.md`'s "Delivered so far"
+note under the Bug Bounty Researcher section was reconciled at this
+milestone's release to name items 6/7's delivery (v0.3.415-419) and this
+milestone's own hardening, as a documentation-only correction bundled with
+this release commit.
+
+Security review (hypatia-security, 2026-09-28): PASS, no findings. Read the
+full diff of all four changed files plus the mirrored write-path logic in
+`ResearchSecurityFindingApplicationService._require_linked_finding`/
+`_require_linkage`, both closed state-machine tables, and the record-level
+1:1 linkage binding. Confirmed the new checks fail-closed with zero partial
+persistence; confirmed the duplicate/superseded check mirrors
+`_require_linked_finding`'s exact semantics (self-reference check before
+program-scoped existence); confirmed the sequence replay uses persisted
+list order only, never `recorded_at`; confirmed the new checks run strictly
+after every pre-existing check, so no prior early-exit behavior changed;
+confirmed zero `cognition` import, zero new store-to-store coupling, zero
+schema/version change, and exactly the four intended files touched. Ran the
+full impacted suites (228 tests) plus ruff/black/mypy, all clean. One
+informational, non-blocking observation: an error-message f-string is
+built via adjacent-literal concatenation at a Black line-wrap point —
+functionally correct, purely cosmetic.
+
+Epistemics review (hypatia-epistemics, 2026-09-28): PASS. Independently
+re-reproduced its own earlier empirical finding (a hand-crafted, one-hop
+`CANDIDATE -> VALIDATED` finding document with zero evidence still loads
+and reports `status=validated`) against the finished code, confirming this
+milestone correctly does NOT also implement evidence-gate replay (that
+scope boundary held exactly as locked) while confirming the two invariants
+this phase DOES cover work as intended. Verified the per-entity grouping
+preserves relative transition order by construction of Python's
+deterministic iteration, not by assumption. Copied the pre-diff production
+files into a scratch tree and ran the new tests against old code to prove
+non-vacuousness directly rather than reasoning about it. Confirmed the
+ledger's and docstrings' framing of what remains deferred is accurate
+against the finished diff, not just the pre-implementation plan.
+
+Runtime review (hypatia-runtime, 2026-09-28): PASS, no caveats. Confirmed
+zero import from `cognition` anywhere in the diff and zero change to any
+`cognition` file, `CognitiveEngine.py`, `Bootstrap.py`, or store
+constructor/wiring. Traced both the `load()` and `save()` call paths to
+confirm the new checks apply uniformly regardless of which path constructs
+the document. Confirmed rollback safety (pure logic addition, no schema/
+version bump, no new persisted field). Verified the two ported Hypothesis-
+store test shapes (atomic-write-failure, truncated-content matrix)
+line-by-line against their Finding-store counterparts, and independently
+confirmed, against the actual `_VALID_TRANSITIONS` tables, that the
+Finding-side "reordered" tamper case genuinely cannot stay sequence-legal
+(unlike the Hypothesis side, where it can) — the asymmetric test handling
+this required is correct, not an oversight.
+
+QA review (hypatia-qa, 2026-09-28): PASS-with-caveats. Built a byte-
+identical copy of the pre-diff production code and ran the new tests
+against it, confirming exactly the 12 new negative assertions fail on old
+code and nothing else — proving non-vacuousness systematically rather than
+by spot-check. Built a full acceptance-criterion traceability table; every
+criterion maps to a specific test. Verified the pre-existing Finding-store
+test fixture repair (forced by the new sequence check rejecting its
+original same-status-twice fixture) is a legitimate repair preserving the
+test's original append-only-coverage intent, not a weakening, by hand-
+tracing both graphs' `_VALID_TRANSITIONS` tables directly. One non-blocking
+caveat: the new positive multi-hop test only exercised a chain ending in
+`REFUTED`, not `DUPLICATE`/`SUPERSEDED`, against this milestone's own
+stated test-strategy wording — closed by hypatia-lead before release with
+two additional tests (`test_a_legal_multi_hop_sequence_ending_in_duplicate_is_accepted`/
+`..._ending_in_superseded_is_accepted`) and a follow-up wording fix to one
+test's explanatory comment, which QA had also flagged as slightly
+imprecise about the exact mechanism (still correct about the underlying
+claim).
+
+Mutation pass (2026-09-28, hypatia-lead): five targeted mutants applied via
+in-memory monkeypatching in a throwaway scratch script, never written to
+any repository file — (1) remove the whole duplicate/superseded referential
+check, (2) loosen it to ignore program scoping (existence-anywhere instead
+of existence-in-program), (3) remove only the self-reference check, (4)
+disable the Finding store's sequence-legality replay
+(`is_valid_status_transition` forced to always return `True`), (5) same for
+the Hypothesis store. All five caught; all control assertions against the
+real, unmutated code passed both before and after the mutation pass.
+
+Release gates (2026-09-28, Windows canonical environment, hypatia-lead):
+7471 tests, OK (skipped=3) — 18 net new tests over v0.3.419's 7453; Black
+(1019 files), Ruff, and MyPy (601 source files) clean; `git diff --check`
+clean; `git status` confirmed exactly the intended files touched, no
+untracked artifacts.
+
+## Historical scope: v0.3.419 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Security Hypothesis creation-time subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
 | Base SHA | b52c23f (v0.3.418 delivery reconciliation) |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-security: independent review, PASS; hypatia-epistemics: independent review, PASS; hypatia-runtime: independent review, PASS; hypatia-qa: independent review, PASS-with-caveats (one non-blocking test-strength recommendation, applied); hypatia-lead: release |
 | Blockers | none |
 
@@ -3043,6 +3361,68 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.419: security hypothesis creation-time subject-binding symmetry |
+| SHA | a84d4ef78a8e36d27e39e29ca328ec52a9a0f2fe |
+| Linux desktop CI (exact-SHA) | success (run 36391016004) |
+| Windows desktop CI (exact-SHA) | success (run 36391018959) |
+| Linux desktop CI (PR-triggered) | success (run 36391059932) |
+| Windows desktop CI (PR-triggered) | success (run 36391060192) |
+| Status | delivered |
+| PR | #398, MERGED 2026-09-28T09:56:48Z, standard merge commit `06c22aa174ad87a07f9a0c0de3115f9a0b521156` |
+| origin/main reachability | verified: `git merge-base --is-ancestor a84d4ef origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`ef15e43`, `a84d4ef`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-28, hypatia-lead): PR #398 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 2 commits (the v0.3.418 ledger reconciliation `b52c23f` and release
+commit `a84d4ef`) across exactly 7 changed files. It was `MERGEABLE`/
+`CLEAN`, and both PR-triggered `test-build-smoke` checks passed against the
+release SHA on both runners, independently of the two manually dispatched
+exact-SHA `workflow_dispatch` runs above (also confirmed against the exact
+release SHA individually, not assumed from recency). The standard merge
+commit is on `origin/main`; both carried commits are reachable from it;
+author/committer identity is unchanged (Songül Kızılay via GitHub noreply
+email); the working tree was clean except this ledger reconciliation.
+
+Note: this bounded release closes the last named residual gap explicitly
+deferred by the v0.3.418 ledger's own Non-goals.
+`ResearchSecurityHypothesisApplicationService.create_hypothesis` changed
+its subject-matching check from `any(...)` ("at least one cited evidence
+item matches") to a `mismatched_subject` tuple check mirroring
+`attach_evidence`'s exact aggregation shape ("every cited evidence item
+must match, or the whole call is refused"), correcting the v0.3.417
+runtime note's "different call semantics" framing after hypatia-epistemics
+traced `subject_kind`/`subject_canonical_value` as explicit caller-supplied
+parameters never derived from cited evidence. The check runs strictly
+before `self._load()`/`self._save()`, so refusal is fail-closed with zero
+partial persistence. No schema or on-disk document change of any kind; no
+new evidence relation, status, or kind. Security review: PASS. Epistemics
+review: PASS. Runtime review: PASS, no caveats. QA review:
+PASS-with-caveats, one non-blocking test-strength recommendation (assert
+exact linked evidence IDs/relation, not just a count) applied before
+release. Mutation pass: 1/1 targeted mutant caught (revert the
+`mismatched_subject` check back to `any(...)`), with all 11 sibling
+`CreateHypothesisTests` remaining green. Full canonical gates (Windows
+canonical environment): 7453 tests OK (skipped=3) — 1 net new test over
+v0.3.418's 7452; Black, Ruff, MyPy (601 source files), and
+`git diff --check` clean.
+
+Deferred, non-blocking findings carried forward (candidates for a future
+milestone, not fixed in this release): F4 (lifecycle replay validation on
+load) — "reject whole document" on any business-rule-invariant violation
+is the security-consistent, precedent-matching default, but implementation
+needs a point-in-time evidence-gate replay (not a final-state check), an
+import-cycle-safe way to share validation logic between the store and
+application service, and a characterization test proving replay-
+equivalence to the write path; real engineering surface for its own
+dedicated milestone. Request-ID/correlation-ID persistence into research
+records — rejected as speculative, no live traceability problem found.
+The Windows `ResourceWarning` test-hygiene debt remains untraced and out
+of scope.
+
+## Historical scope: v0.3.418 (delivered)
 
 | Field | Value |
 | --- | --- |

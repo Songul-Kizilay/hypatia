@@ -14,7 +14,14 @@ An evidence link or status transition must reference a hypothesis already
 present in the same document — the same "no dangling relation" discipline
 `ResearchAssetInventoryDocument` enforces for `RESOLVES_TO` relations — as
 defence in depth against a hand-edited or partially-written file, on top of
-the application service's own referential checks.
+the application service's own referential checks. Each hypothesis's own
+status-transition subsequence is also replayed, in persisted append order,
+against the closed state-machine table (`is_valid_status_transition`) to
+confirm it is a legal walk from the implicit `OPEN` default — the same
+pure, dependency-free function the application service already calls on
+write, never duplicated. Reject-whole-document on any violation, matching
+this store's existing fail-closed precedent; no quarantine of partial
+content.
 """
 
 from __future__ import annotations
@@ -41,7 +48,10 @@ from research.ResearchSecurityHypothesisEvidenceRelation import (
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
 from research.ResearchSecurityHypothesisOrigin import ResearchSecurityHypothesisOrigin
 from research.ResearchSecurityHypothesisRecord import ResearchSecurityHypothesisRecord
-from research.ResearchSecurityHypothesisStatus import ResearchSecurityHypothesisStatus
+from research.ResearchSecurityHypothesisStatus import (
+    ResearchSecurityHypothesisStatus,
+    is_valid_status_transition,
+)
 from research.ResearchSecurityHypothesisStatusTransitionRecord import (
     ResearchSecurityHypothesisStatusTransitionRecord,
 )
@@ -166,6 +176,21 @@ class ResearchSecurityHypothesisDocument:
                     "A security hypothesis status transition must reference a"
                     " recorded hypothesis in its program."
                 )
+        transitions_by_hypothesis: dict[
+            tuple[str, str], list[ResearchSecurityHypothesisStatus]
+        ] = {}
+        for transition in self.status_transitions:
+            key = (transition.hypothesis_id, transition.program_id)
+            transitions_by_hypothesis.setdefault(key, []).append(transition.status)
+        for statuses in transitions_by_hypothesis.values():
+            current = ResearchSecurityHypothesisStatus.OPEN
+            for status in statuses:
+                if not is_valid_status_transition(current, status):
+                    raise ResearchError(
+                        "A security hypothesis's status transition history is"
+                        " not a legal sequence of transitions."
+                    )
+                current = status
 
 
 class _BinaryWriter(Protocol):

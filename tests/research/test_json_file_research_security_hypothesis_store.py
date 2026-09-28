@@ -189,6 +189,45 @@ class ResearchSecurityHypothesisDocumentTests(unittest.TestCase):
                 status_transitions=(status_transition(),)
             )
 
+    def test_status_transition_sequence_must_be_a_legal_walk_of_transitions(
+        self,
+    ) -> None:
+        record = hypothesis_record()
+        with self.assertRaisesRegex(ResearchError, "not a legal sequence"):
+            ResearchSecurityHypothesisDocument(
+                hypotheses=(record,),
+                status_transitions=(
+                    status_transition(transition_id="t1"),
+                    status_transition(transition_id="t2"),
+                ),
+            )
+
+    def test_a_legal_multi_hop_status_transition_sequence_is_accepted(self) -> None:
+        record = hypothesis_record()
+        document = ResearchSecurityHypothesisDocument(
+            hypotheses=(record,),
+            status_transitions=(
+                status_transition(transition_id="t1"),
+                ResearchSecurityHypothesisStatusTransitionRecord(
+                    transition_id="t2",
+                    hypothesis_id="hypothesis-1",
+                    program_id="program-a",
+                    status=ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION,
+                    reason="",
+                    recorded_at=RECORDED,
+                ),
+                ResearchSecurityHypothesisStatusTransitionRecord(
+                    transition_id="t3",
+                    hypothesis_id="hypothesis-1",
+                    program_id="program-a",
+                    status=ResearchSecurityHypothesisStatus.REFUTED,
+                    reason="",
+                    recorded_at=RECORDED,
+                ),
+            ),
+        )
+        self.assertEqual(len(document.status_transitions), 3)
+
     def test_non_tuple_or_wrong_typed_members_are_rejected(self) -> None:
         with self.assertRaises(ResearchError):
             ResearchSecurityHypothesisDocument(hypotheses=[hypothesis_record()])  # type: ignore[arg-type]
@@ -286,6 +325,84 @@ class JsonFileResearchSecurityHypothesisStoreTests(unittest.TestCase):
 
         self.assertEqual(self.store.load(), original)
 
+    def test_save_rejects_removal_or_alteration_of_status_transition_history(
+        self,
+    ) -> None:
+        # OPEN and NEEDS_EVIDENCE/READY_FOR_VALIDATION reorder cleanly here
+        # (unlike the Finding side's CANDIDATE/VALIDATION_REQUIRED pair):
+        # OPEN -> NEEDS_EVIDENCE -> READY_FOR_VALIDATION and
+        # OPEN -> READY_FOR_VALIDATION -> NEEDS_EVIDENCE are both legal
+        # walks of this table, so "reordered" stays caught by the
+        # append-only guard specifically, with no collision against the
+        # newer sequence-legality replay.
+        original = ResearchSecurityHypothesisDocument(
+            hypotheses=(hypothesis_record(),),
+            status_transitions=(
+                status_transition(transition_id="transition-1"),
+                ResearchSecurityHypothesisStatusTransitionRecord(
+                    transition_id="transition-2",
+                    hypothesis_id="hypothesis-1",
+                    program_id="program-a",
+                    status=ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION,
+                    reason="",
+                    recorded_at=RECORDED,
+                ),
+            ),
+        )
+        self.store.save(original)
+        altered = ResearchSecurityHypothesisStatusTransitionRecord(
+            transition_id="transition-1",
+            hypothesis_id="hypothesis-1",
+            program_id="program-a",
+            status=ResearchSecurityHypothesisStatus.NEEDS_EVIDENCE,
+            reason="rewritten after the fact",
+            recorded_at=RECORDED,
+        )
+        attempts = {
+            "removed": (),
+            "truncated": (original.status_transitions[0],),
+            "reordered": tuple(reversed(original.status_transitions)),
+            "altered": (altered, original.status_transitions[1]),
+            "replaced-then-appended": (
+                altered,
+                original.status_transitions[1],
+                status_transition(transition_id="transition-3"),
+            ),
+        }
+
+        for label, transitions in attempts.items():
+            with self.subTest(attempt=label):
+                with self.assertRaisesRegex(ResearchError, "append-only"):
+                    self.store.save(
+                        ResearchSecurityHypothesisDocument(
+                            hypotheses=original.hypotheses,
+                            status_transitions=transitions,
+                        )
+                    )
+                self.assertEqual(self.store.load(), original)
+
+    def test_a_failed_atomic_write_keeps_the_original_and_leaves_no_temp_file(
+        self,
+    ) -> None:
+        original = ResearchSecurityHypothesisDocument(hypotheses=(hypothesis_record(),))
+        self.store.save(original)
+        original_bytes = self.path.read_bytes()
+        appended = ResearchSecurityHypothesisDocument(
+            hypotheses=original.hypotheses,
+            status_transitions=(status_transition(),),
+        )
+
+        with patch(
+            "research.JsonFileResearchSecurityHypothesisStore.os.replace",
+            side_effect=OSError("simulated rename failure"),
+        ):
+            with self.assertRaisesRegex(ResearchError, "Unable to write"):
+                self.store.save(appended)
+
+        self.assertEqual(self.path.read_bytes(), original_bytes)
+        self.assertEqual(self.store.load(), original)
+        self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
+
     def test_save_rejects_anything_other_than_a_document(self) -> None:
         with self.assertRaises(ResearchError):
             self.store.save({"hypotheses": []})  # type: ignore[arg-type]
@@ -310,6 +427,29 @@ class JsonFileResearchSecurityHypothesisStoreTests(unittest.TestCase):
         }
         payload.update(overrides)
         return payload
+
+    def test_truncated_or_non_json_content_fails_closed(self) -> None:
+        self.store.save(
+            ResearchSecurityHypothesisDocument(
+                hypotheses=(hypothesis_record(),),
+                evidence_links=(evidence_link(),),
+                status_transitions=(status_transition(),),
+            )
+        )
+        complete = self.path.read_bytes()
+        payloads = {
+            "truncated-half": complete[: len(complete) // 2],
+            "truncated-last-byte": complete.rstrip()[:-1],
+            "empty": b"",
+            "not-json": b"this is not json",
+            "invalid-utf8": b"\xff\xfe\x00{",
+        }
+
+        for label, payload in payloads.items():
+            with self.subTest(payload=label):
+                self.path.write_bytes(payload)
+                with self.assertRaises(ResearchError):
+                    self.store.load()
 
     def test_non_dict_document_is_rejected(self) -> None:
         self._write_raw([])
@@ -456,6 +596,23 @@ class JsonFileResearchSecurityHypothesisStoreTests(unittest.TestCase):
             )
         )
         with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_a_hand_tampered_illegal_status_sequence_fails_closed_on_load(
+        self,
+    ) -> None:
+        first = dict(STATUS_TRANSITION_JSON_FIELDS)
+        first["transition_id"] = "transition-1"
+        first["status"] = "needs_evidence"
+        second = dict(STATUS_TRANSITION_JSON_FIELDS)
+        second["transition_id"] = "transition-2"
+        second["status"] = "needs_evidence"
+        self._write_raw(
+            self._empty_payload(
+                hypotheses=[HYPOTHESIS_JSON_FIELDS], status_transitions=[first, second]
+            )
+        )
+        with self.assertRaisesRegex(ResearchError, "not a legal sequence"):
             self.store.load()
 
     def test_the_declared_ceilings_are_the_reviewed_values(self) -> None:
