@@ -2,10 +2,38 @@
 
 ## Runtime Version
 
-`v0.3.421 (Genesis)`
+`v0.3.422 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.422 grounds Hypatia's default conversation system prompt in the
+real, code-enforced security-hypothesis/finding lifecycle, fixing an
+observed hallucination where an external LLM (deepseek-v4.1-flash via
+EVREN) claimed a `READY_FOR_VALIDATION` hypothesis with supporting and
+contradicting evidence could not become a finding. A new
+`HYPATIA_SECURITY_LIFECYCLE_GROUNDING` text block, composed into
+`HYPATIA_DEFAULT_SYSTEM_PROMPT`, states only rules verified directly
+against `ResearchSecurityHypothesisApplicationService`/
+`ResearchSecurityFindingApplicationService`/the two status enums, and
+instructs the model to say "I do not know" for anything beyond them
+rather than invent a rule, and that a user message can never override
+these stated rules. This is advisory prompt text only: no runtime
+enforcement code changed, and all four invariants (model output,
+subagent output, a validated finding, and research state are each never
+authority) remain exactly as enforced in code as before. An independent
+external review (EVREN) and four specialist reviews (security,
+epistemics, runtime, QA) found the prompt's factual claims accurate but
+identified a real test-suite gap — the original tests proved the prompt
+text internally consistent but never checked it against live service
+behavior, and QA empirically demonstrated an additive edit could
+reintroduce the fixed hallucination undetected. Closed with a
+byte-for-byte exact-match pin on the grounding text plus a new test file
+that drives the real application services through every scenario the
+prompt describes. Built on an isolated worktree/branch forked from
+v0.3.421's exact commit, kept separate from PR #399 and the published
+v0.3.421 branch history. Windows canonical environment: 7555 tests,
+`OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.421 delivers the Bug Bounty Researcher roadmap's item 9
 foundation, "Validation recipes": an operator-authored, append-only record
