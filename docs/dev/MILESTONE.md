@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Security Hypothesis/Finding store load-time replay validation, phase 1 (F4 phase 1; Bug Bounty foundation, hardening the delivered step 6/7 lifecycle) |
 | Base SHA | d1e3b18 (v0.3.419 delivery reconciliation) |
-| Status | implementation |
-| Specialists | hypatia-security, hypatia-epistemics, hypatia-runtime, hypatia-qa: independent parallel read-only investigation (2026-09-28), converged on F4 as highest-priority real gap; hypatia-lead: scope decision and sole implementer |
+| Status | release |
+| Specialists | hypatia-security, hypatia-epistemics, hypatia-runtime, hypatia-qa: independent parallel read-only investigation (2026-09-28), converged on F4 as highest-priority real gap; hypatia-lead: sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-epistemics: independent review, PASS, empirically re-verified both the fix and its intentional boundary; hypatia-runtime: independent review, PASS, no caveats; hypatia-qa: independent review, PASS-with-caveats (one non-blocking test-strategy-literalness gap, closed by hypatia-lead before release); hypatia-lead: release |
 | Blockers | none |
 
 Rationale: after v0.3.419 delivered (PR #398, merge commit `06c22aa1`, verified
@@ -243,10 +243,90 @@ taxonomy, and Safe Tool Gateway generalization remain rejected as
 speculative, no live problem found by any of the four specialists this
 session. The Windows `ResourceWarning` test-hygiene debt remains untraced
 and out of scope. `docs/Roadmap/Master_Roadmap.md`'s "Delivered so far"
-note under the Bug Bounty Researcher section still only names item 5
-(v0.3.411) — it lags the actual delivered state (items 6/7 delivered
-v0.3.415-419) and should be reconciled at this milestone's release
-alongside this entry, as a documentation-only correction.
+note under the Bug Bounty Researcher section was reconciled at this
+milestone's release to name items 6/7's delivery (v0.3.415-419) and this
+milestone's own hardening, as a documentation-only correction bundled with
+this release commit.
+
+Security review (hypatia-security, 2026-09-28): PASS, no findings. Read the
+full diff of all four changed files plus the mirrored write-path logic in
+`ResearchSecurityFindingApplicationService._require_linked_finding`/
+`_require_linkage`, both closed state-machine tables, and the record-level
+1:1 linkage binding. Confirmed the new checks fail-closed with zero partial
+persistence; confirmed the duplicate/superseded check mirrors
+`_require_linked_finding`'s exact semantics (self-reference check before
+program-scoped existence); confirmed the sequence replay uses persisted
+list order only, never `recorded_at`; confirmed the new checks run strictly
+after every pre-existing check, so no prior early-exit behavior changed;
+confirmed zero `cognition` import, zero new store-to-store coupling, zero
+schema/version change, and exactly the four intended files touched. Ran the
+full impacted suites (228 tests) plus ruff/black/mypy, all clean. One
+informational, non-blocking observation: an error-message f-string is
+built via adjacent-literal concatenation at a Black line-wrap point —
+functionally correct, purely cosmetic.
+
+Epistemics review (hypatia-epistemics, 2026-09-28): PASS. Independently
+re-reproduced its own earlier empirical finding (a hand-crafted, one-hop
+`CANDIDATE -> VALIDATED` finding document with zero evidence still loads
+and reports `status=validated`) against the finished code, confirming this
+milestone correctly does NOT also implement evidence-gate replay (that
+scope boundary held exactly as locked) while confirming the two invariants
+this phase DOES cover work as intended. Verified the per-entity grouping
+preserves relative transition order by construction of Python's
+deterministic iteration, not by assumption. Copied the pre-diff production
+files into a scratch tree and ran the new tests against old code to prove
+non-vacuousness directly rather than reasoning about it. Confirmed the
+ledger's and docstrings' framing of what remains deferred is accurate
+against the finished diff, not just the pre-implementation plan.
+
+Runtime review (hypatia-runtime, 2026-09-28): PASS, no caveats. Confirmed
+zero import from `cognition` anywhere in the diff and zero change to any
+`cognition` file, `CognitiveEngine.py`, `Bootstrap.py`, or store
+constructor/wiring. Traced both the `load()` and `save()` call paths to
+confirm the new checks apply uniformly regardless of which path constructs
+the document. Confirmed rollback safety (pure logic addition, no schema/
+version bump, no new persisted field). Verified the two ported Hypothesis-
+store test shapes (atomic-write-failure, truncated-content matrix)
+line-by-line against their Finding-store counterparts, and independently
+confirmed, against the actual `_VALID_TRANSITIONS` tables, that the
+Finding-side "reordered" tamper case genuinely cannot stay sequence-legal
+(unlike the Hypothesis side, where it can) — the asymmetric test handling
+this required is correct, not an oversight.
+
+QA review (hypatia-qa, 2026-09-28): PASS-with-caveats. Built a byte-
+identical copy of the pre-diff production code and ran the new tests
+against it, confirming exactly the 12 new negative assertions fail on old
+code and nothing else — proving non-vacuousness systematically rather than
+by spot-check. Built a full acceptance-criterion traceability table; every
+criterion maps to a specific test. Verified the pre-existing Finding-store
+test fixture repair (forced by the new sequence check rejecting its
+original same-status-twice fixture) is a legitimate repair preserving the
+test's original append-only-coverage intent, not a weakening, by hand-
+tracing both graphs' `_VALID_TRANSITIONS` tables directly. One non-blocking
+caveat: the new positive multi-hop test only exercised a chain ending in
+`REFUTED`, not `DUPLICATE`/`SUPERSEDED`, against this milestone's own
+stated test-strategy wording — closed by hypatia-lead before release with
+two additional tests (`test_a_legal_multi_hop_sequence_ending_in_duplicate_is_accepted`/
+`..._ending_in_superseded_is_accepted`) and a follow-up wording fix to one
+test's explanatory comment, which QA had also flagged as slightly
+imprecise about the exact mechanism (still correct about the underlying
+claim).
+
+Mutation pass (2026-09-28, hypatia-lead): five targeted mutants applied via
+in-memory monkeypatching in a throwaway scratch script, never written to
+any repository file — (1) remove the whole duplicate/superseded referential
+check, (2) loosen it to ignore program scoping (existence-anywhere instead
+of existence-in-program), (3) remove only the self-reference check, (4)
+disable the Finding store's sequence-legality replay
+(`is_valid_status_transition` forced to always return `True`), (5) same for
+the Hypothesis store. All five caught; all control assertions against the
+real, unmutated code passed both before and after the mutation pass.
+
+Release gates (2026-09-28, Windows canonical environment, hypatia-lead):
+7471 tests, OK (skipped=3) — 18 net new tests over v0.3.419's 7453; Black
+(1019 files), Ruff, and MyPy (601 source files) clean; `git diff --check`
+clean; `git status` confirmed exactly the intended files touched, no
+untracked artifacts.
 
 ## Historical scope: v0.3.419 (delivered)
 

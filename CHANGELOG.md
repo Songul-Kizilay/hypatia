@@ -2,6 +2,45 @@
 
 All notable project changes are recorded here.
 
+## [0.3.420] - 2026-09-28
+
+### Fixed
+
+- `JsonFileResearchSecurityFindingStore` now rejects, at load time, a
+  status transition whose `duplicate_of_finding_id`/`superseded_by_finding_id`
+  names a finding absent from that program, names a finding under a
+  different program, or names itself — previously enforced only at write
+  time by the application service, so a hand-edited or restored file could
+  carry a dangling or self-referencing linkage and load without error. The
+  module's own docstring had claimed this defence-in-depth already existed
+  for every relation; it now does.
+- Both `JsonFileResearchSecurityHypothesisStore` and
+  `JsonFileResearchSecurityFindingStore` now replay each hypothesis's/
+  finding's own status-transition subsequence, in persisted append order,
+  against the existing closed state-machine table
+  (`is_valid_status_transition`) at load time, confirming it is a legal
+  walk from the implicit default status — closing part of the F4
+  lifecycle-replay gap named in every ledger entry since v0.3.416. A
+  hand-edited or restored file encoding an illegal transition sequence
+  (e.g. a same-state repeat, or a hop the closed table forbids) now fails
+  to load instead of silently rendering a status the real application
+  service could never have produced.
+
+### Security
+
+- Both stores' load-time validation now matches what their own docstrings
+  already claimed: reject-whole-document on any dangling/self-referencing
+  linkage or sequence-illegal history, with zero partial persistence.
+  Program isolation, subject-binding, and every other write-path invariant
+  are unaffected and untouched — this closes a load-time tampering surface,
+  not a live-request authorization gap.
+- Deliberately out of scope (deferred to a future F4 phase 2, needing a
+  real shared-logic design decision): cross-store referential checks (a
+  finding's `source_hypothesis_id` existence/status-at-creation-time, an
+  evidence link's `evidence_id` existence against the HTTP evidence store)
+  and the `VALIDATED` evidence-gate replay. No schema/version bump in
+  either store; no change to any application-service write-path behavior.
+
 ## [0.3.419] - 2026-09-28
 
 ### Fixed

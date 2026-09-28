@@ -14,7 +14,19 @@ An evidence link or status transition must reference a finding already
 present in the same document — the same "no dangling relation" discipline
 `JsonFileResearchSecurityHypothesisStore` enforces — as defence in depth
 against a hand-edited or partially-written file, on top of the application
-service's own referential checks.
+service's own referential checks. A status transition's
+`duplicate_of_finding_id`/`superseded_by_finding_id`, when present, must
+likewise name a different finding recorded in the same program (mirroring
+`ResearchSecurityFindingApplicationService._require_linked_finding` exactly)
+— this was previously enforced only at write time; it is now also replayed
+at load, closing a gap where a hand-edited file could carry a dangling or
+self-referencing linkage. Each finding's own status-transition subsequence
+is also replayed, in persisted append order, against the closed
+state-machine table (`is_valid_status_transition`) to confirm it is a legal
+walk from the implicit `CANDIDATE` default — the same pure, dependency-free
+function the application service already calls on write, never duplicated.
+Reject-whole-document on any violation, matching this store's existing
+fail-closed precedent; no quarantine of partial content.
 """
 
 from __future__ import annotations
@@ -40,7 +52,10 @@ from research.ResearchSecurityFindingEvidenceRelation import (
 )
 from research.ResearchSecurityFindingOrigin import ResearchSecurityFindingOrigin
 from research.ResearchSecurityFindingRecord import ResearchSecurityFindingRecord
-from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
+from research.ResearchSecurityFindingStatus import (
+    ResearchSecurityFindingStatus,
+    is_valid_status_transition,
+)
 from research.ResearchSecurityFindingStatusTransitionRecord import (
     ResearchSecurityFindingStatusTransitionRecord,
 )
@@ -163,6 +178,37 @@ class ResearchSecurityFindingDocument:
                     "A security finding status transition must reference a"
                     " recorded finding in its program."
                 )
+        for transition in self.status_transitions:
+            for linked_finding_id, label in (
+                (transition.duplicate_of_finding_id, "duplicate-of"),
+                (transition.superseded_by_finding_id, "superseded-by"),
+            ):
+                if linked_finding_id is None:
+                    continue
+                if linked_finding_id == transition.finding_id:
+                    raise ResearchError(
+                        f"A security finding {label} reference cannot name" " itself."
+                    )
+                if (linked_finding_id, transition.program_id) not in known_findings:
+                    raise ResearchError(
+                        f"A security finding {label} reference must name a"
+                        " recorded finding in its program."
+                    )
+        transitions_by_finding: dict[
+            tuple[str, str], list[ResearchSecurityFindingStatus]
+        ] = {}
+        for transition in self.status_transitions:
+            key = (transition.finding_id, transition.program_id)
+            transitions_by_finding.setdefault(key, []).append(transition.status)
+        for statuses in transitions_by_finding.values():
+            current = ResearchSecurityFindingStatus.CANDIDATE
+            for status in statuses:
+                if not is_valid_status_transition(current, status):
+                    raise ResearchError(
+                        "A security finding's status transition history is"
+                        " not a legal sequence of transitions."
+                    )
+                current = status
 
 
 class _BinaryWriter(Protocol):

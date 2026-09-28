@@ -183,6 +183,195 @@ class ResearchSecurityFindingDocumentTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "must reference a recorded finding"):
             ResearchSecurityFindingDocument(status_transitions=(status_transition(),))
 
+    def _duplicate_transition(
+        self,
+        duplicate_of_finding_id: str | None,
+        finding_id: str = "finding-1",
+        program_id: str = "program-a",
+    ) -> ResearchSecurityFindingStatusTransitionRecord:
+        return ResearchSecurityFindingStatusTransitionRecord(
+            transition_id="transition-1",
+            finding_id=finding_id,
+            program_id=program_id,
+            status=ResearchSecurityFindingStatus.DUPLICATE,
+            reason="",
+            duplicate_of_finding_id=duplicate_of_finding_id,
+            superseded_by_finding_id=None,
+            recorded_at=RECORDED,
+        )
+
+    def _superseded_transition(
+        self,
+        superseded_by_finding_id: str | None,
+        finding_id: str = "finding-1",
+        program_id: str = "program-a",
+    ) -> ResearchSecurityFindingStatusTransitionRecord:
+        return ResearchSecurityFindingStatusTransitionRecord(
+            transition_id="transition-1",
+            finding_id=finding_id,
+            program_id=program_id,
+            status=ResearchSecurityFindingStatus.SUPERSEDED,
+            reason="",
+            duplicate_of_finding_id=None,
+            superseded_by_finding_id=superseded_by_finding_id,
+            recorded_at=RECORDED,
+        )
+
+    def test_duplicate_of_reference_must_reference_a_recorded_finding(self) -> None:
+        record = finding_record(finding_id="finding-1")
+        with self.assertRaisesRegex(
+            ResearchError, "duplicate-of reference must name a recorded finding"
+        ):
+            ResearchSecurityFindingDocument(
+                findings=(record,),
+                status_transitions=(self._duplicate_transition("ghost-finding"),),
+            )
+
+    def test_duplicate_of_reference_cannot_reference_a_finding_in_another_program(
+        self,
+    ) -> None:
+        record_one = finding_record(finding_id="finding-1", program_id="program-a")
+        record_two = finding_record(
+            finding_id="finding-2", program_id="program-b", subject_value="other.test"
+        )
+        with self.assertRaisesRegex(
+            ResearchError, "duplicate-of reference must name a recorded finding"
+        ):
+            ResearchSecurityFindingDocument(
+                findings=(record_one, record_two),
+                status_transitions=(self._duplicate_transition("finding-2"),),
+            )
+
+    def test_duplicate_of_reference_cannot_name_itself(self) -> None:
+        record = finding_record(finding_id="finding-1")
+        with self.assertRaisesRegex(
+            ResearchError, "duplicate-of reference cannot name itself"
+        ):
+            ResearchSecurityFindingDocument(
+                findings=(record,),
+                status_transitions=(self._duplicate_transition("finding-1"),),
+            )
+
+    def test_superseded_by_reference_must_reference_a_recorded_finding(self) -> None:
+        record = finding_record(finding_id="finding-1")
+        with self.assertRaisesRegex(
+            ResearchError, "superseded-by reference must name a recorded finding"
+        ):
+            ResearchSecurityFindingDocument(
+                findings=(record,),
+                status_transitions=(self._superseded_transition("ghost-finding"),),
+            )
+
+    def test_superseded_by_reference_cannot_reference_a_finding_in_another_program(
+        self,
+    ) -> None:
+        record_one = finding_record(finding_id="finding-1", program_id="program-a")
+        record_two = finding_record(
+            finding_id="finding-2", program_id="program-b", subject_value="other.test"
+        )
+        with self.assertRaisesRegex(
+            ResearchError, "superseded-by reference must name a recorded finding"
+        ):
+            ResearchSecurityFindingDocument(
+                findings=(record_one, record_two),
+                status_transitions=(self._superseded_transition("finding-2"),),
+            )
+
+    def test_superseded_by_reference_cannot_name_itself(self) -> None:
+        record = finding_record(finding_id="finding-1")
+        with self.assertRaisesRegex(
+            ResearchError, "superseded-by reference cannot name itself"
+        ):
+            ResearchSecurityFindingDocument(
+                findings=(record,),
+                status_transitions=(self._superseded_transition("finding-1"),),
+            )
+
+    def test_status_transition_sequence_must_be_a_legal_walk_of_transitions(
+        self,
+    ) -> None:
+        record = finding_record()
+        with self.assertRaisesRegex(ResearchError, "not a legal sequence"):
+            ResearchSecurityFindingDocument(
+                findings=(record,),
+                status_transitions=(
+                    status_transition(transition_id="t1"),
+                    status_transition(transition_id="t2"),
+                ),
+            )
+
+    def test_a_legal_multi_hop_status_transition_sequence_is_accepted(self) -> None:
+        record = finding_record()
+        document = ResearchSecurityFindingDocument(
+            findings=(record,),
+            status_transitions=(
+                status_transition(transition_id="t1"),
+                ResearchSecurityFindingStatusTransitionRecord(
+                    transition_id="t2",
+                    finding_id="finding-1",
+                    program_id="program-a",
+                    status=ResearchSecurityFindingStatus.VALIDATED,
+                    reason="",
+                    duplicate_of_finding_id=None,
+                    superseded_by_finding_id=None,
+                    recorded_at=RECORDED,
+                ),
+                ResearchSecurityFindingStatusTransitionRecord(
+                    transition_id="t3",
+                    finding_id="finding-1",
+                    program_id="program-a",
+                    status=ResearchSecurityFindingStatus.REFUTED,
+                    reason="",
+                    duplicate_of_finding_id=None,
+                    superseded_by_finding_id=None,
+                    recorded_at=RECORDED,
+                ),
+            ),
+        )
+        self.assertEqual(len(document.status_transitions), 3)
+
+    def test_a_legal_multi_hop_sequence_ending_in_duplicate_is_accepted(self) -> None:
+        record = finding_record(finding_id="finding-1")
+        other = finding_record(finding_id="finding-2", subject_value="other.test")
+        document = ResearchSecurityFindingDocument(
+            findings=(record, other),
+            status_transitions=(
+                status_transition(transition_id="t1"),
+                ResearchSecurityFindingStatusTransitionRecord(
+                    transition_id="t2",
+                    finding_id="finding-1",
+                    program_id="program-a",
+                    status=ResearchSecurityFindingStatus.DUPLICATE,
+                    reason="",
+                    duplicate_of_finding_id="finding-2",
+                    superseded_by_finding_id=None,
+                    recorded_at=RECORDED,
+                ),
+            ),
+        )
+        self.assertEqual(len(document.status_transitions), 2)
+
+    def test_a_legal_multi_hop_sequence_ending_in_superseded_is_accepted(self) -> None:
+        record = finding_record(finding_id="finding-1")
+        other = finding_record(finding_id="finding-2", subject_value="other.test")
+        document = ResearchSecurityFindingDocument(
+            findings=(record, other),
+            status_transitions=(
+                status_transition(transition_id="t1"),
+                ResearchSecurityFindingStatusTransitionRecord(
+                    transition_id="t2",
+                    finding_id="finding-1",
+                    program_id="program-a",
+                    status=ResearchSecurityFindingStatus.SUPERSEDED,
+                    reason="",
+                    duplicate_of_finding_id=None,
+                    superseded_by_finding_id="finding-2",
+                    recorded_at=RECORDED,
+                ),
+            ),
+        )
+        self.assertEqual(len(document.status_transitions), 2)
+
     def test_non_tuple_or_wrong_typed_members_are_rejected(self) -> None:
         with self.assertRaises(ResearchError):
             ResearchSecurityFindingDocument(findings=[finding_record()])  # type: ignore[arg-type]
@@ -305,11 +494,36 @@ class JsonFileResearchSecurityFindingStoreTests(unittest.TestCase):
     def test_save_rejects_removal_or_alteration_of_status_transition_history(
         self,
     ) -> None:
+        # Uses two distinct, sequence-legal statuses (CANDIDATE ->
+        # VALIDATION_REQUIRED -> VALIDATED) rather than repeating one status
+        # twice: a real append-only violation must be caught even when the
+        # tampered history would otherwise still be a legal walk of the
+        # closed state-machine table, so this test deliberately keeps every
+        # attempt's *content* legal wherever that is achievable and asserts
+        # on the append-only guard specifically. Reordering these two
+        # transitions is the one attempt that cannot stay sequence-legal by
+        # construction: CANDIDATE and VALIDATION_REQUIRED are this graph's
+        # only mutually-reachable pair, but VALIDATED is not reachable from
+        # VALIDATION_REQUIRED's own successor set going backward — reversed,
+        # the walk is CANDIDATE -> VALIDATED (legal) -> VALIDATION_REQUIRED,
+        # and VALIDATION_REQUIRED is not in VALIDATED's allowed set (only
+        # REFUTED/DUPLICATE/SUPERSEDED are) — so it is independently, and
+        # correctly, caught by the newer sequence-legality replay instead,
+        # asserted on its own message below.
         original = ResearchSecurityFindingDocument(
             findings=(finding_record(),),
             status_transitions=(
                 status_transition(transition_id="transition-1"),
-                status_transition(transition_id="transition-2"),
+                ResearchSecurityFindingStatusTransitionRecord(
+                    transition_id="transition-2",
+                    finding_id="finding-1",
+                    program_id="program-a",
+                    status=ResearchSecurityFindingStatus.VALIDATED,
+                    reason="",
+                    duplicate_of_finding_id=None,
+                    superseded_by_finding_id=None,
+                    recorded_at=RECORDED,
+                ),
             ),
         )
         self.store.save(original)
@@ -317,25 +531,34 @@ class JsonFileResearchSecurityFindingStoreTests(unittest.TestCase):
             transition_id="transition-1",
             finding_id="finding-1",
             program_id="program-a",
-            status=ResearchSecurityFindingStatus.REFUTED,
+            status=ResearchSecurityFindingStatus.VALIDATION_REQUIRED,
             reason="rewritten after the fact",
             duplicate_of_finding_id=None,
             superseded_by_finding_id=None,
             recorded_at=RECORDED,
         )
-        attempts = {
+        third = ResearchSecurityFindingStatusTransitionRecord(
+            transition_id="transition-3",
+            finding_id="finding-1",
+            program_id="program-a",
+            status=ResearchSecurityFindingStatus.REFUTED,
+            reason="",
+            duplicate_of_finding_id=None,
+            superseded_by_finding_id=None,
+            recorded_at=RECORDED,
+        )
+        append_only_attempts = {
             "removed": (),
             "truncated": (original.status_transitions[0],),
-            "reordered": tuple(reversed(original.status_transitions)),
             "altered": (altered, original.status_transitions[1]),
             "replaced-then-appended": (
                 altered,
                 original.status_transitions[1],
-                status_transition(transition_id="transition-3"),
+                third,
             ),
         }
 
-        for label, transitions in attempts.items():
+        for label, transitions in append_only_attempts.items():
             with self.subTest(attempt=label):
                 with self.assertRaisesRegex(ResearchError, "append-only"):
                     self.store.save(
@@ -345,6 +568,15 @@ class JsonFileResearchSecurityFindingStoreTests(unittest.TestCase):
                         )
                     )
                 self.assertEqual(self.store.load(), original)
+
+        with self.assertRaisesRegex(ResearchError, "not a legal sequence"):
+            self.store.save(
+                ResearchSecurityFindingDocument(
+                    findings=original.findings,
+                    status_transitions=tuple(reversed(original.status_transitions)),
+                )
+            )
+        self.assertEqual(self.store.load(), original)
 
     def test_a_failed_atomic_write_keeps_the_original_and_leaves_no_temp_file(
         self,
@@ -564,6 +796,39 @@ class JsonFileResearchSecurityFindingStoreTests(unittest.TestCase):
             )
         )
         with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_a_hand_tampered_dangling_duplicate_of_reference_fails_closed_on_load(
+        self,
+    ) -> None:
+        broken = dict(STATUS_TRANSITION_JSON_FIELDS)
+        broken["status"] = "duplicate"
+        broken["duplicate_of_finding_id"] = "ghost-finding-999"
+        self._write_raw(
+            self._empty_payload(
+                findings=[FINDING_JSON_FIELDS], status_transitions=[broken]
+            )
+        )
+        with self.assertRaisesRegex(
+            ResearchError, "duplicate-of reference must name a recorded finding"
+        ):
+            self.store.load()
+
+    def test_a_hand_tampered_illegal_status_sequence_fails_closed_on_load(
+        self,
+    ) -> None:
+        first = dict(STATUS_TRANSITION_JSON_FIELDS)
+        first["transition_id"] = "transition-1"
+        first["status"] = "validation_required"
+        second = dict(STATUS_TRANSITION_JSON_FIELDS)
+        second["transition_id"] = "transition-2"
+        second["status"] = "validation_required"
+        self._write_raw(
+            self._empty_payload(
+                findings=[FINDING_JSON_FIELDS], status_transitions=[first, second]
+            )
+        )
+        with self.assertRaisesRegex(ResearchError, "not a legal sequence"):
             self.store.load()
 
     def test_the_declared_ceilings_are_the_reviewed_values(self) -> None:

@@ -2,10 +2,36 @@
 
 ## Runtime Version
 
-`v0.3.419 (Genesis)`
+`v0.3.420 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.420 closes part of the F4 lifecycle-replay gap named in every
+ledger entry since v0.3.416, scoped to exactly what is implementable today
+with zero new coupling. Both the Hypothesis and Finding JSON stores now
+replay each entity's own status-transition subsequence, in persisted append
+order, against the already-existing pure `is_valid_status_transition`
+closed-table function at load time — confirmed with four independent
+specialists' read-only investigation to be the correct next bounded step
+after v0.3.419, then implemented and independently re-reviewed clean by all
+four. Separately, the Finding store now also rejects a dangling or
+self-referencing `duplicate_of_finding_id`/`superseded_by_finding_id` at
+load time, closing a gap where the store's own docstring claimed a
+defence-in-depth that did not actually cover this field pair. A
+hand-crafted, structurally valid finding document containing an illegal
+transition sequence, or a dangling/self-referencing linkage, now fails to
+load instead of silently rendering a state the real application service
+could never have produced — reproduced empirically by this session's
+epistemics review both before and after the fix. Deliberately deferred to a
+future "F4 phase 2" milestone: cross-store referential checks (finding ->
+hypothesis existence/status-at-creation-time, evidence-link -> HTTP-evidence
+existence) and the `VALIDATED` evidence-gate replay, both of which need a
+genuine design decision (duplicate business-rule logic out of `cognition`'s
+application services into a shared `research`-layer pure module, or accept
+duplication) that this milestone's investigation did not make. No schema or
+version bump in either store; no change to any application-service
+write-path behavior.
 
 Version v0.3.419 closes the last residual subject-binding gap deferred by
 v0.3.418: `ResearchSecurityHypothesisApplicationService.create_hypothesis`
