@@ -16,7 +16,7 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Security Hypothesis creation-time subject-binding symmetry (Bug Bounty foundation, step 6 continued) |
 | Base SHA | b52c23f (v0.3.418 delivery reconciliation) |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-security: independent review, PASS; hypatia-epistemics: independent review, PASS; hypatia-runtime: independent review, PASS; hypatia-qa: independent review, PASS-with-caveats (one non-blocking test-strength recommendation, applied); hypatia-lead: release |
 | Blockers | none |
 
@@ -3043,6 +3043,68 @@ no authority, no budget, no target, no credential and no inferred
 provenance.
 
 ## Last delivered product milestone
+
+| Field | Value |
+| --- | --- |
+| Milestone | v0.3.419: security hypothesis creation-time subject-binding symmetry |
+| SHA | a84d4ef78a8e36d27e39e29ca328ec52a9a0f2fe |
+| Linux desktop CI (exact-SHA) | success (run 36391016004) |
+| Windows desktop CI (exact-SHA) | success (run 36391018959) |
+| Linux desktop CI (PR-triggered) | success (run 36391059932) |
+| Windows desktop CI (PR-triggered) | success (run 36391060192) |
+| Status | delivered |
+| PR | #398, MERGED 2026-09-28T09:56:48Z, standard merge commit `06c22aa174ad87a07f9a0c0de3115f9a0b521156` |
+| origin/main reachability | verified: `git merge-base --is-ancestor a84d4ef origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`ef15e43`, `a84d4ef`) prove a true merge rather than a squash or rebase |
+
+Post-merge verification (2026-09-28, hypatia-lead): PR #398 base `main`,
+head `feature/structured-learned-memory-extraction-v0.3.118`, carried
+exactly 2 commits (the v0.3.418 ledger reconciliation `b52c23f` and release
+commit `a84d4ef`) across exactly 7 changed files. It was `MERGEABLE`/
+`CLEAN`, and both PR-triggered `test-build-smoke` checks passed against the
+release SHA on both runners, independently of the two manually dispatched
+exact-SHA `workflow_dispatch` runs above (also confirmed against the exact
+release SHA individually, not assumed from recency). The standard merge
+commit is on `origin/main`; both carried commits are reachable from it;
+author/committer identity is unchanged (Songül Kızılay via GitHub noreply
+email); the working tree was clean except this ledger reconciliation.
+
+Note: this bounded release closes the last named residual gap explicitly
+deferred by the v0.3.418 ledger's own Non-goals.
+`ResearchSecurityHypothesisApplicationService.create_hypothesis` changed
+its subject-matching check from `any(...)` ("at least one cited evidence
+item matches") to a `mismatched_subject` tuple check mirroring
+`attach_evidence`'s exact aggregation shape ("every cited evidence item
+must match, or the whole call is refused"), correcting the v0.3.417
+runtime note's "different call semantics" framing after hypatia-epistemics
+traced `subject_kind`/`subject_canonical_value` as explicit caller-supplied
+parameters never derived from cited evidence. The check runs strictly
+before `self._load()`/`self._save()`, so refusal is fail-closed with zero
+partial persistence. No schema or on-disk document change of any kind; no
+new evidence relation, status, or kind. Security review: PASS. Epistemics
+review: PASS. Runtime review: PASS, no caveats. QA review:
+PASS-with-caveats, one non-blocking test-strength recommendation (assert
+exact linked evidence IDs/relation, not just a count) applied before
+release. Mutation pass: 1/1 targeted mutant caught (revert the
+`mismatched_subject` check back to `any(...)`), with all 11 sibling
+`CreateHypothesisTests` remaining green. Full canonical gates (Windows
+canonical environment): 7453 tests OK (skipped=3) — 1 net new test over
+v0.3.418's 7452; Black, Ruff, MyPy (601 source files), and
+`git diff --check` clean.
+
+Deferred, non-blocking findings carried forward (candidates for a future
+milestone, not fixed in this release): F4 (lifecycle replay validation on
+load) — "reject whole document" on any business-rule-invariant violation
+is the security-consistent, precedent-matching default, but implementation
+needs a point-in-time evidence-gate replay (not a final-state check), an
+import-cycle-safe way to share validation logic between the store and
+application service, and a characterization test proving replay-
+equivalence to the write path; real engineering surface for its own
+dedicated milestone. Request-ID/correlation-ID persistence into research
+records — rejected as speculative, no live traceability problem found.
+The Windows `ResourceWarning` test-hygiene debt remains untraced and out
+of scope.
+
+## Historical scope: v0.3.418 (delivered)
 
 | Field | Value |
 | --- | --- |
