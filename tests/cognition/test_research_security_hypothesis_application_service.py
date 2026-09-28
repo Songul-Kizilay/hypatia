@@ -1,8 +1,10 @@
 """The Bug Bounty security hypothesis service: evidence-first, never a finding.
 
-`create_hypothesis` requires at least one supporting HTTP evidence citation
-that exists for the same program and whose target matches the hypothesis's
-own subject; `attach_evidence` and `transition_status` both fail closed on a
+`create_hypothesis` requires at least one supporting HTTP evidence citation,
+and every cited evidence record must exist for the same program and match
+the hypothesis's own subject (v0.3.419: "all must match", not merely "at
+least one" — mirrors `attach_evidence`'s identical aggregation from
+v0.3.418); `attach_evidence` and `transition_status` both fail closed on a
 cross-program reference. No status this service can produce ever asserts a
 validated vulnerability, and this service itself never fetches, spawns a
 process, or touches scope/authorization state — it only ever reads a
@@ -228,9 +230,7 @@ class CreateHypothesisTests(unittest.TestCase):
                 ("a" * 64,),
             )
 
-    def test_subject_matching_at_least_one_cited_evidence_target_is_enforced(
-        self,
-    ) -> None:
+    def test_subject_matching_is_enforced_for_a_single_citation(self) -> None:
         evidence_store = InMemoryHttpEvidenceStore(
             (http_evidence(target_value="other.test"),)
         )
@@ -247,10 +247,36 @@ class CreateHypothesisTests(unittest.TestCase):
                 ("a" * 64,),
             )
 
-    def test_subject_matching_at_least_one_of_several_citations_succeeds(self) -> None:
+    def test_a_mixed_citation_set_is_rejected_in_full(self) -> None:
+        """One matching, one mismatched citation in the same creation call
+        must refuse the whole call - proving "all must match," not "at
+        least one" (v0.3.419; mirrors attach_evidence's identical
+        aggregation from v0.3.418). Nothing is persisted on refusal: the
+        subject/evidence checks run before any store write."""
         evidence_store = InMemoryHttpEvidenceStore(
             (
                 http_evidence(evidence_id="a" * 64, target_value="other.test"),
+                http_evidence(evidence_id="b" * 64, target_value="example.test"),
+            )
+        )
+        service = make_service(http_evidence_store=evidence_store)
+        with self.assertRaisesRegex(ResearchError, "does not match"):
+            service.create_hypothesis(
+                "program-a",
+                ResearchSecurityHypothesisKind.AUTHORIZATION,
+                ResearchAssetKind.HOSTNAME,
+                "example.test",
+                "statement",
+                "rationale",
+                "required validation",
+                ("a" * 64, "b" * 64),
+            )
+        self.assertEqual(service.hypotheses_for_program("program-a"), ())
+
+    def test_all_matching_citations_in_one_call_succeed(self) -> None:
+        evidence_store = InMemoryHttpEvidenceStore(
+            (
+                http_evidence(evidence_id="a" * 64, target_value="example.test"),
                 http_evidence(evidence_id="b" * 64, target_value="example.test"),
             )
         )
@@ -266,6 +292,17 @@ class CreateHypothesisTests(unittest.TestCase):
             ("a" * 64, "b" * 64),
         )
         self.assertEqual(record.subject_canonical_value, "example.test")
+        (derived,) = service.hypotheses_for_program("program-a")
+        self.assertEqual(
+            {link.evidence_id for link in derived.supporting_evidence},
+            {"a" * 64, "b" * 64},
+        )
+        self.assertTrue(
+            all(
+                link.relation == ResearchSecurityHypothesisEvidenceRelation.SUPPORTS
+                for link in derived.supporting_evidence
+            )
+        )
 
     def test_exact_identity_duplicate_is_refused(self) -> None:
         evidence_store = InMemoryHttpEvidenceStore((http_evidence(),))
@@ -544,8 +581,9 @@ class AttachEvidenceTests(unittest.TestCase):
     def test_a_mixed_citation_set_is_rejected_in_full(self) -> None:
         """One matching, one mismatched citation in the same call must
         refuse the whole call - proving "all must match," not "at least
-        one" (the aggregation `create_hypothesis` uses for a different
-        reason)."""
+        one" (v0.3.419 made `create_hypothesis` use the identical
+        aggregation for the same reason; see its own test of the same
+        name in `CreateHypothesisTests`)."""
         evidence_store = InMemoryHttpEvidenceStore(
             (
                 http_evidence(evidence_id="a" * 64),
