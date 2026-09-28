@@ -285,6 +285,18 @@ class RecordValidationRecipeTests(unittest.TestCase):
                 "",
             )
 
+    def test_a_cross_program_hypothesis_reference_fails_closed(self) -> None:
+        rig = _Rig()
+
+        with self.assertRaisesRegex(ResearchError, "was not found for this program"):
+            rig.recipe_service.record_validation_recipe(
+                "program-b",
+                ResearchSecurityValidationRecipeSubjectKind.HYPOTHESIS,
+                rig.hypothesis.hypothesis_id,
+                ("Step one",),
+                "",
+            )
+
     def test_an_invalid_subject_kind_fails_closed(self) -> None:
         rig = _Rig()
 
@@ -504,6 +516,11 @@ class BrainIntentTests(unittest.TestCase):
 
         self.assertTrue(response.success, response.message)
         self.assertIsNotNone(response.research_security_validation_recipe)
+        # Not the Finding-specific notice: a recipe has no "status" of its
+        # own, so that wording ("This status does not grant authority...")
+        # would misdescribe what is being shown here.
+        self.assertIn("Recording or reading this does not grant", response.message)
+        self.assertNotIn("This status does not grant authority", response.message)
 
     def test_process_validation_recipe_record_fails_closed_on_bad_input(self) -> None:
         rig = _Rig()

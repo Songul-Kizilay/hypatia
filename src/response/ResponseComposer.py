@@ -198,6 +198,16 @@ SECURITY_FINDING_NOT_AUTHORITY_NOTICE = (
     " execute tools, access systems, or expand scope."
 )
 
+#: Deliberately separate text from `SECURITY_FINDING_NOT_AUTHORITY_NOTICE`:
+#: a validation recipe has no status of its own, so that notice's "This
+#: status does not grant authority" wording would misdescribe what is being
+#: shown here.
+SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE = (
+    "Validation recipe only. Recording or reading this does not grant"
+    " authority to act, execute tools, access systems, expand scope, or"
+    " validate the underlying hypothesis or finding."
+)
+
 #: One bounded note per verdict, for a person rather than for a parser. Nothing
 #: reads these back; the verdict itself is the structured value.
 _AUTHORIZATION_VERDICT_NOTES: dict[ResearchPlanAuthorizationVerdict, str] = {
@@ -2114,7 +2124,7 @@ class ResponseComposer:
             f"Program: {recipe.program_id}",
             f"Steps: {len(recipe.steps)}",
             *(f"  {index + 1}. {step}" for index, step in enumerate(recipe.steps)),
-            SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
+            SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE,
         ]
         return BrainResponse(
             message="\n".join(lines),
@@ -2150,7 +2160,7 @@ class ResponseComposer:
                 f"- {recipe.created_at.isoformat()}: {len(recipe.steps)} step(s)"
             )
         if recipes:
-            lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+            lines.append(SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE)
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,

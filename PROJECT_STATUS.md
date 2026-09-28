@@ -26,8 +26,12 @@ indefinite internal hardening. Built on an isolated worktree/branch forked
 from v0.3.420's exact commit, deliberately kept separate from the
 then-still-open, human-review-pending PR #399 so that PR remained
 untouched. No desktop panel yet (deliberately deferred, not dropped); no
-change to any existing store, service, or write-path behavior. Windows
-canonical environment: 7522 tests, `OK (skipped=3)`; Black/Ruff/MyPy clean.
+change to any existing store, service, or write-path behavior. A self-review
+pass before handoff replaced a reused, wrong-wording not-authority notice
+(recipes have no status, so the Finding-specific "this status does not
+grant authority" text misdescribed them) with a dedicated one, and closed a
+cross-program test-coverage gap on the hypothesis-subject path. Windows
+canonical environment: 7528 tests, `OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.420 closes part of the F4 lifecycle-replay gap named in every
 ledger entry since v0.3.416, scoped to exactly what is implementable today

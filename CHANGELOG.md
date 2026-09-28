@@ -54,10 +54,21 @@ All notable project changes are recorded here.
   Brain intents this release. Deliberately deferred, not silently dropped —
   the existing "Findings"/"Hypotheses" panels' listing/detail pattern
   applies directly when a panel is added.
+- Self-review before handoff found the record/preview responses had reused
+  `SECURITY_FINDING_NOT_AUTHORITY_NOTICE` verbatim, whose "...this *status*
+  does not grant authority..." wording misdescribes a recipe (which has no
+  status of its own). Replaced with a dedicated
+  `SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE`, with a regression test
+  asserting the correct text and the absence of the finding-specific text.
+  Also closed a real test-coverage gap: cross-program isolation was proven
+  for a finding-kind subject but not a hypothesis-kind one, despite both
+  reading through an identically-shaped "fails closed by construction"
+  guarantee (verified directly against
+  `ResearchSecurityHypothesisApplicationService.hypothesis_by_id`).
 
 ### Verification
 
-- Windows canonical environment: 7522 tests, `OK (skipped=3)`. Black,
+- Windows canonical environment: 7528 tests, `OK (skipped=3)`. Black,
   Ruff, and MyPy (0 issues) clean on the full `src` tree. `git diff --check`
   clean.
 - Built on an isolated worktree/branch

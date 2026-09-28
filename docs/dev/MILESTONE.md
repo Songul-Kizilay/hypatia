@@ -378,13 +378,15 @@ Scope: four new files under `src/research/`
 `JsonFileResearchSecurityValidationRecipeStore.py`,
 `ResearchSecurityValidationRecipe.py`) and one new file under
 `src/cognition/` (`ResearchSecurityValidationRecipeApplicationService.py`),
-plus four edited files for wiring only
+plus five edited files for wiring/version only
 (`src/brain/BrainResponse.py` — two new optional fields;
-`src/response/ResponseComposer.py` — four new methods;
+`src/response/ResponseComposer.py` — four new methods and a dedicated
+not-authority notice constant, see the self-review note below;
 `src/cognition/CognitiveEngine.py` — one new constructor parameter, one new
 service field, two new dispatch branches;
 `src/core/Bootstrap.py` — one new store factory method, one new
-constructor argument). No existing store, service, record, or write path
+constructor argument; `src/core/Version.py` — patch bump). No existing
+store, service, record, or write path
 was modified. `ResearchSecurityValidationRecipeRecord` is purely
 descriptive text (steps + notes), screened by the existing
 `ResearchSensitiveInputPolicy`, bounded (at most 20 steps, 300 characters
@@ -405,19 +407,45 @@ unverifiable recipe. No desktop panel this milestone (deliberately deferred
 and named as such in CHANGELOG/PROJECT_STATUS, not silently dropped).
 
 Verification (2026-09-28, Windows canonical environment, hypatia-lead, sole
-author and sole reviewer of this isolated milestone): 51 new tests (27
-record/store validation and persistence, 19 application-service including
-subject-existence/cross-program/restart/Brain-intent coverage, 5
-CognitiveEngine wiring/dispatch including the half-wired proof above) plus
-the full pre-existing suite, all green — 7522 tests total, `OK (skipped=3)`,
-51 net new over v0.3.420's 7471. Black, Ruff, and MyPy (`src`) clean on the
-whole tree. `git diff --check` clean. `git status` on the new branch showed
-exactly the 13 files listed above (9 source, 4 test) touched, no unrelated
-or untracked changes. `Bootstrap().initialize()` smoke-tested directly
-(temporary memory path) to confirm the new store factory and `CognitiveEngine`
-wiring construct without error end-to-end, not merely via unit-level
-mocks — the same category of gap ("Bootstrap wiring was untested") a past
-milestone's independent QA review flagged for a different feature.
+author and sole reviewer of this isolated milestone): 57 new tests (28
+record/store validation, persistence, and pure-derivation coverage, 24
+application-service including subject-existence/cross-program (both
+hypothesis- and finding-subject directions)/restart/Brain-intent coverage,
+5 CognitiveEngine wiring/dispatch including the half-wired proof above)
+plus the full pre-existing suite, all green — 7528 tests total,
+`OK (skipped=3)`, 57 net new over v0.3.420's 7471. Black, Ruff, and MyPy
+(`src`) clean on the whole tree. `git diff --check` clean. `git status` on
+the new branch showed exactly the files listed above (10 source, 5 test;
+`git diff --stat` against v0.3.420's exact commit confirms 14 files under
+`src`/`tests`, plus `pyproject.toml` and the four doc files this paragraph
+lives in) touched, no unrelated or untracked changes. `Bootstrap().initialize()`
+smoke-tested directly (temporary memory path) to confirm the new store
+factory and `CognitiveEngine` wiring construct without error end-to-end,
+not merely via unit-level mocks — the same category of gap ("Bootstrap
+wiring was untested") a past milestone's independent QA review flagged for
+a different feature.
+
+Self-review pass (2026-09-28, hypatia-lead, before final handoff): found and
+closed one real gap and one real defect before either was ever externally
+reviewed. Gap: cross-program isolation was tested for a finding-kind subject
+but not a hypothesis-kind subject, despite both reading through the
+identically-shaped "fails closed by construction" `hypotheses_for_program`/
+`findings_for_program` scoping — added
+`test_a_cross_program_hypothesis_reference_fails_closed`, confirmed the
+underlying mechanism (verified by reading
+`ResearchSecurityHypothesisApplicationService.hypothesis_by_id`'s docstring
+and body) was already sound; the test closes a coverage gap, not a
+production defect. Also added a direct pure-function test file for
+`ResearchSecurityValidationRecipe.py` (`validation_recipes_for`/
+`current_validation_recipe_for`), matching the existing
+`test_research_security_finding.py`/`test_research_security_hypothesis.py`
+convention this milestone's original pass had skipped. Defect: the record/
+preview response messages reused `SECURITY_FINDING_NOT_AUTHORITY_NOTICE`
+verbatim ("...This *status* does not grant authority..."), which
+misdescribes a validation recipe — recipes have no status of their own.
+Replaced with a new, dedicated `SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE`
+constant and added a regression test asserting the correct wording appears
+and the finding-specific wording does not.
 
 ## Historical scope: v0.3.419 (delivered)
 
