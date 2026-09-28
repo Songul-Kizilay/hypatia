@@ -933,10 +933,17 @@ deferred: both stores now replay each entity's status-transition history
 against the closed state-machine table at load time, and the Finding store
 also rejects a dangling or self-referencing duplicate/superseded-by
 reference at load — hardening (Bug Bounty foundation, steps 6/7 made more
-tamper-resistant), not a new numbered item. Full F4 (cross-store checks,
-the `VALIDATED` evidence-gate replay) and item 8 (Business-logic/
-state-transition model, which has no existing precedent or design in this
-codebase) remain not yet started.
+tamper-resistant), not a new numbered item. v0.3.421 delivered item 9's
+foundation, Validation recipes: an operator-authored, append-only, purely
+descriptive `ResearchSecurityValidationRecipeRecord` — an ordered list of
+plain-text steps plus notes — attached to an already-recorded hypothesis or
+finding for the same program, verified through the same cross-service-reader
+pattern the Finding service already uses for its source hypothesis.
+Recording a recipe never fetches, runs, authorizes anything, or mutates its
+subject. No desktop panel yet. Full F4 (cross-store checks, the `VALIDATED`
+evidence-gate replay) and item 8 (Business-logic/state-transition model,
+which has no existing precedent or design in this codebase) remain not yet
+started.
 
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a

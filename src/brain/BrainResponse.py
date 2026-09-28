@@ -127,6 +127,9 @@ from research.ResearchSecurityHypothesisEvidenceLinkRecord import (
 from research.ResearchSecurityHypothesisStatusTransitionRecord import (
     ResearchSecurityHypothesisStatusTransitionRecord,
 )
+from research.ResearchSecurityValidationRecipeRecord import (
+    ResearchSecurityValidationRecipeRecord,
+)
 from research.ResearchSessionContextRecord import ResearchSessionContextRecord
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentWritePreview import (
@@ -308,3 +311,9 @@ class BrainResponse:
         ResearchSecurityFindingStatusTransitionRecord | None
     ) = None
     research_security_findings: tuple[ResearchSecurityFindingEntry, ...] = ()
+    research_security_validation_recipe: (
+        ResearchSecurityValidationRecipeRecord | None
+    ) = None
+    research_security_validation_recipes: tuple[
+        ResearchSecurityValidationRecipeRecord, ...
+    ] = ()

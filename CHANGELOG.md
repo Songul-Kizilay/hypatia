@@ -2,6 +2,81 @@
 
 All notable project changes are recorded here.
 
+## [0.3.421] - 2026-09-28
+
+### Added
+
+- Bug Bounty Researcher roadmap item 9 foundation, "Validation recipes": a
+  new, `program_id`-scoped, operator-authored `ResearchSecurityValidationRecipeRecord`
+  — an ordered list of short, plain-text steps plus free-text notes
+  describing how an operator intends to (or did) validate an
+  already-recorded Security Hypothesis or Finding. Purely descriptive
+  strategy text, exactly like `required_followup`: recording a recipe never
+  fetches, runs, or authorizes anything, and never mutates its subject. The
+  next unstarted step after item 7 (Finding Lifecycle, hardened through
+  v0.3.420) in the roadmap's recorded priority order; item 8
+  ("Business-logic/state-transition model") was confirmed to have no
+  existing precedent or design in this codebase and was not selected.
+- A new `JsonFileResearchSecurityValidationRecipeStore` (schema version 1,
+  modeled directly on `JsonFileResearchSessionContextStore`'s single-flat-list
+  shape), a new `ResearchSecurityValidationRecipeApplicationService`, and two
+  new Brain intents (`research_security_validation_recipe_record`,
+  `research_security_validation_recipe_preview`), wired into
+  `CognitiveEngine`/`Bootstrap` behind a new store parameter that defaults to
+  unwired.
+- The subject (a hypothesis or a finding) must already exist for the exact
+  `program_id` given, verified through two narrow reader Protocols
+  (`SecurityHypothesisReader`/`SecurityFindingReader`) satisfied structurally
+  by the existing `ResearchSecurityHypothesisApplicationService`/
+  `ResearchSecurityFindingApplicationService` — the identical
+  cross-service-reader pattern `ResearchSecurityFindingApplicationService`
+  already uses for `source_hypothesis_id`. No modification to either
+  existing service; no import cycle.
+- "Current" recipe is derived purely from persisted append order (the most
+  recently appended one for a subject), never from `created_at` — the same
+  no-timestamp-as-authority-ordering discipline every other append-only
+  record in this codebase already follows.
+
+### Security
+
+- A recipe's steps and notes are screened through the existing
+  `ResearchSensitiveInputPolicy` and refused if secret-shaped; each step
+  must be bounded, single-line, non-empty text (at most 20 steps per
+  recipe). The store rejects unknown fields, unsupported schema versions,
+  a malformed subject kind, and any non-append-only write, matching every
+  other store's reject-whole-document precedent.
+- This service performs no network request, no process, and no Git
+  operation of any kind — there is no execution surface in this file at
+  all, not merely an unused one. `record_validation_recipe` reads the
+  subject once (to verify existence) and never touches it again; it cannot
+  transition a hypothesis's or finding's status.
+- No desktop panel yet: recipes are reachable only through the two new
+  Brain intents this release. Deliberately deferred, not silently dropped —
+  the existing "Findings"/"Hypotheses" panels' listing/detail pattern
+  applies directly when a panel is added.
+- Self-review before handoff found the record/preview responses had reused
+  `SECURITY_FINDING_NOT_AUTHORITY_NOTICE` verbatim, whose "...this *status*
+  does not grant authority..." wording misdescribes a recipe (which has no
+  status of its own). Replaced with a dedicated
+  `SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE`, with a regression test
+  asserting the correct text and the absence of the finding-specific text.
+  Also closed a real test-coverage gap: cross-program isolation was proven
+  for a finding-kind subject but not a hypothesis-kind one, despite both
+  reading through an identically-shaped "fails closed by construction"
+  guarantee (verified directly against
+  `ResearchSecurityHypothesisApplicationService.hypothesis_by_id`).
+
+### Verification
+
+- Windows canonical environment: 7528 tests, `OK (skipped=3)`. Black,
+  Ruff, and MyPy (0 issues) clean on the full `src` tree. `git diff --check`
+  clean.
+- Built on an isolated worktree/branch
+  (`feature/research-security-validation-recipe-v0.3.421`) forked from
+  v0.3.420's exact commit, deliberately kept off
+  `feature/structured-learned-memory-extraction-v0.3.118` (PR #399) so that
+  still-open, human-review-pending PR stays untouched.
+
 ## [0.3.420] - 2026-09-28
 
 ### Fixed
