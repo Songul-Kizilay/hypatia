@@ -2098,6 +2098,13 @@ class ResponseComposer:
 
         Every scope column is explicitly labelled recomputed-live; this
         listing itself performs no fetch, scan, or authorization.
+
+        Each finding's currently-associated reproduction history
+        (`entry.reproductions`, joined via the recipe(s) that currently name
+        this finding as their subject) is listed underneath it -- purely
+        descriptive visibility, never itself validation: `REPRODUCED != a
+        confirmed vulnerability`, `NOT_REPRODUCED != refuted`, and this
+        listing never changes `finding.status`/`needs_attention`.
         """
         lines = [f"Security findings: {len(entries)}"]
         for entry in entries:
@@ -2123,6 +2130,14 @@ class ResponseComposer:
                 f"{len(finding.validation_evidence)} validating, "
                 f"scope: {scope_text}{attention_suffix})"
             )
+            for reproduction in entry.reproductions:
+                lines.append(
+                    f"    - reproduction {reproduction.recorded_at.isoformat()}:"
+                    f" {reproduction.outcome.value} (recipe"
+                    f" {reproduction.recipe_id})"
+                )
+        if any(entry.reproductions for entry in entries):
+            lines.append(REPRODUCTION_NOT_AUTHORITY_NOTICE)
         if any(entry.finding.needs_attention for entry in entries):
             lines.append(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE)
         if any(not entry.finding.status.terminal for entry in entries):

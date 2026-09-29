@@ -27,6 +27,7 @@ if source_response_dir not in response.__path__:
     response.__path__.append(source_response_dir)
 
 from brain.BrainRequest import BrainRequest
+from brain.BrainResponse import BrainResponse
 from cognition.CognitiveEngine import CognitiveEngine as ProductionCognitiveEngine
 from core.CancellationSignal import CancellationSignal
 from core.Exceptions import (
@@ -106,6 +107,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
 from research.ResearchSecurityFindingEvidenceRelation import (
     ResearchSecurityFindingEvidenceRelation,
 )
@@ -9945,3 +9947,491 @@ class ReproductionDispatchTests(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertIn("Reproduction records are not available.", response.message)
+
+
+class FindingReproductionVisibilityDispatchTests(unittest.TestCase):
+    """v0.3.427: a finding preview's `entry.reproductions` is the live join
+
+    `finding -> recipe(subject_kind=FINDING, subject_id=finding_id) ->
+    reproductions(recipe_id)`, wired end-to-end through the real
+    `ProductionCognitiveEngine`/`ResponseComposer`. Read-only visibility
+    only: no test here ever asserts a status change, a confidence value, or
+    any new authority.
+    """
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        knowledge_path = Path(self.temporary_directory.name) / "knowledge.md"
+        knowledge_path.write_text("Hypatia\n\nKnowledge\n\nHypatia", encoding="utf-8")
+        self.knowledge_engine = KnowledgeEngine()
+        self.knowledge_engine.load(knowledge_path)
+        self.event_bus = EventBus()
+        self.memory_manager = MemoryManager(self.event_bus)
+        self.planner = Planner()
+        self.response_composer = ResponseComposer()
+        self.session_manager = SessionManager(self.event_bus)
+        self.session_rename_service = SessionRenameTransactionService(
+            session_manager=self.session_manager,
+            memory_manager=self.memory_manager,
+            event_bus=self.event_bus,
+        )
+        self.http_evidence_path = (
+            Path(self.temporary_directory.name) / "research_http_evidence.json"
+        )
+        JsonFileResearchHttpEvidenceStore(self.http_evidence_path).save(
+            ResearchHttpEvidenceDocument(records=(_security_finding_http_evidence(),))
+        )
+        self.security_hypothesis_store_path = (
+            Path(self.temporary_directory.name) / "research_security_hypotheses.json"
+        )
+        self.security_finding_store_path = (
+            Path(self.temporary_directory.name) / "research_security_findings.json"
+        )
+        self.security_validation_recipe_store_path = (
+            Path(self.temporary_directory.name)
+            / "research_security_validation_recipes.json"
+        )
+        self.reproduction_store_path = (
+            Path(self.temporary_directory.name) / "research_reproductions.json"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def _wired_engine(self) -> ProductionCognitiveEngine:
+        """A fresh engine over the same on-disk stores -- restart, not reuse."""
+        return ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            http_evidence_store=JsonFileResearchHttpEvidenceStore(
+                self.http_evidence_path
+            ),
+            security_hypothesis_store=JsonFileResearchSecurityHypothesisStore(
+                self.security_hypothesis_store_path
+            ),
+            security_finding_store=JsonFileResearchSecurityFindingStore(
+                self.security_finding_store_path
+            ),
+            security_validation_recipe_store=(
+                JsonFileResearchSecurityValidationRecipeStore(
+                    self.security_validation_recipe_store_path
+                )
+            ),
+            reproduction_store=JsonFileResearchReproductionStore(
+                self.reproduction_store_path
+            ),
+        )
+
+    def _ready_finding_id(
+        self, engine: ProductionCognitiveEngine, statement: str = "statement"
+    ) -> str:
+        created = engine.process(
+            BrainRequest(
+                message="Record security hypothesis",
+                metadata={
+                    "intent": "research_security_hypothesis_create",
+                    "program_id": "program-a",
+                    "hypothesis_kind": ResearchSecurityHypothesisKind.AUTHORIZATION,
+                    "subject_kind": ResearchAssetKind.HOSTNAME,
+                    "subject_canonical_value": "example.test",
+                    "statement": statement,
+                    "rationale": "rationale",
+                    "required_validation": "required validation",
+                    "supporting_evidence_ids": ("a" * 64,),
+                },
+            )
+        )
+        hypothesis = created.research_security_hypothesis
+        assert hypothesis is not None, created.message
+        engine.process(
+            BrainRequest(
+                message="Transition security hypothesis status",
+                metadata={
+                    "intent": "research_security_hypothesis_status_transition",
+                    "hypothesis_id": hypothesis.hypothesis_id,
+                    "program_id": "program-a",
+                    "status": ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION,
+                    "reason": "",
+                },
+            )
+        )
+        finding_created = engine.process(
+            BrainRequest(
+                message="Record security finding",
+                metadata={
+                    "intent": "research_security_finding_create",
+                    "program_id": "program-a",
+                    "source_hypothesis_id": hypothesis.hypothesis_id,
+                    "title": "title",
+                    "description": "description",
+                    "required_followup": "required followup",
+                },
+            )
+        )
+        finding = finding_created.research_security_finding
+        assert finding is not None
+        return finding.finding_id
+
+    def _recipe_id_for(
+        self,
+        engine: ProductionCognitiveEngine,
+        subject_kind: ResearchSecurityValidationRecipeSubjectKind,
+        subject_id: str,
+    ) -> str:
+        recipe_created = engine.process(
+            BrainRequest(
+                message="Record validation recipe",
+                metadata={
+                    "intent": "research_security_validation_recipe_record",
+                    "program_id": "program-a",
+                    "subject_kind": subject_kind,
+                    "subject_id": subject_id,
+                    "steps": ("Step one.",),
+                    "notes": "",
+                },
+            )
+        )
+        recipe = recipe_created.research_security_validation_recipe
+        assert recipe is not None
+        return recipe.recipe_id
+
+    def _record_reproduction(
+        self,
+        engine: ProductionCognitiveEngine,
+        recipe_id: str,
+        outcome: ResearchReproductionOutcome = ResearchReproductionOutcome.REPRODUCED,
+    ) -> None:
+        response = engine.process(
+            BrainRequest(
+                message="Record reproduction",
+                metadata={
+                    "intent": "research_reproduction_record",
+                    "program_id": "program-a",
+                    "recipe_id": recipe_id,
+                    "outcome": outcome,
+                    "notes": "",
+                    "evidence_ids": (),
+                },
+            )
+        )
+        assert response.success, response.message
+
+    def _preview(self, engine: ProductionCognitiveEngine) -> BrainResponse:
+        response = engine.process(
+            BrainRequest(
+                message="Preview security findings",
+                metadata={
+                    "intent": "research_security_finding_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+        assert response.success, response.message
+        return response
+
+    def _entry_for(
+        self, response: BrainResponse, finding_id: str
+    ) -> ResearchSecurityFindingEntry:
+        (entry,) = (
+            entry
+            for entry in response.research_security_findings
+            if entry.finding.finding_id == finding_id
+        )
+        return entry
+
+    # -- scenarios 1-2: no recipe / recipe with no reproductions -------------
+
+    def test_zero_recipes_yields_zero_reproductions(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+
+        entry = self._entry_for(self._preview(engine), finding_id)
+
+        self.assertEqual(entry.reproductions, ())
+
+    def test_one_finding_recipe_with_no_reproductions_yields_zero(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+
+        entry = self._entry_for(self._preview(engine), finding_id)
+
+        self.assertEqual(entry.reproductions, ())
+
+    # -- scenario 3: one recipe, one reproduction -----------------------------
+
+    def test_one_recipe_one_reproduction_yields_exactly_one_record(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_id = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        self._record_reproduction(engine, recipe_id)
+
+        entry = self._entry_for(self._preview(engine), finding_id)
+
+        self.assertEqual(len(entry.reproductions), 1)
+        self.assertEqual(entry.reproductions[0].recipe_id, recipe_id)
+
+    # -- scenario 4: one recipe, multiple reproductions, append order --------
+
+    def test_multiple_reproductions_on_one_recipe_are_returned_in_append_order(
+        self,
+    ) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_id = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        self._record_reproduction(
+            engine, recipe_id, ResearchReproductionOutcome.NOT_REPRODUCED
+        )
+        self._record_reproduction(
+            engine, recipe_id, ResearchReproductionOutcome.REPRODUCED
+        )
+        self._record_reproduction(
+            engine, recipe_id, ResearchReproductionOutcome.INCONCLUSIVE
+        )
+
+        entry = self._entry_for(self._preview(engine), finding_id)
+
+        self.assertEqual(
+            [reproduction.outcome for reproduction in entry.reproductions],
+            [
+                ResearchReproductionOutcome.NOT_REPRODUCED,
+                ResearchReproductionOutcome.REPRODUCED,
+                ResearchReproductionOutcome.INCONCLUSIVE,
+            ],
+        )
+
+    # -- scenario 5: multiple recipes for the same finding --------------------
+
+    def test_reproductions_from_every_finding_recipe_are_surfaced(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_one = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        recipe_two = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        self.assertNotEqual(recipe_one, recipe_two)
+        self._record_reproduction(engine, recipe_one)
+        self._record_reproduction(
+            engine, recipe_two, ResearchReproductionOutcome.NOT_REPRODUCED
+        )
+
+        entry = self._entry_for(self._preview(engine), finding_id)
+
+        self.assertEqual(
+            {reproduction.recipe_id for reproduction in entry.reproductions},
+            {recipe_one, recipe_two},
+        )
+        self.assertEqual(len(entry.reproductions), 2)
+
+    # -- scenarios 6 & 8: another finding's recipe/reproduction excluded -----
+
+    def test_another_findings_recipe_and_reproduction_are_excluded(self) -> None:
+        engine = self._wired_engine()
+        finding_a = self._ready_finding_id(engine, statement="statement A")
+        finding_b = self._ready_finding_id(engine, statement="statement B")
+        self.assertNotEqual(finding_a, finding_b)
+        other_recipe = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_b
+        )
+        self._record_reproduction(engine, other_recipe)
+
+        entry_a = self._entry_for(self._preview(engine), finding_a)
+        entry_b = self._entry_for(self._preview(engine), finding_b)
+
+        self.assertEqual(entry_a.reproductions, ())
+        self.assertEqual(len(entry_b.reproductions), 1)
+
+    # -- scenario 7: a recipe for the source hypothesis is excluded ----------
+
+    def test_a_recipe_for_the_source_hypothesis_is_excluded_from_the_finding(
+        self,
+    ) -> None:
+        engine = self._wired_engine()
+        created = engine.process(
+            BrainRequest(
+                message="Record security hypothesis",
+                metadata={
+                    "intent": "research_security_hypothesis_create",
+                    "program_id": "program-a",
+                    "hypothesis_kind": ResearchSecurityHypothesisKind.AUTHORIZATION,
+                    "subject_kind": ResearchAssetKind.HOSTNAME,
+                    "subject_canonical_value": "example.test",
+                    "statement": "statement",
+                    "rationale": "rationale",
+                    "required_validation": "required validation",
+                    "supporting_evidence_ids": ("a" * 64,),
+                },
+            )
+        )
+        hypothesis = created.research_security_hypothesis
+        assert hypothesis is not None
+        engine.process(
+            BrainRequest(
+                message="Transition security hypothesis status",
+                metadata={
+                    "intent": "research_security_hypothesis_status_transition",
+                    "hypothesis_id": hypothesis.hypothesis_id,
+                    "program_id": "program-a",
+                    "status": ResearchSecurityHypothesisStatus.READY_FOR_VALIDATION,
+                    "reason": "",
+                },
+            )
+        )
+        finding_created = engine.process(
+            BrainRequest(
+                message="Record security finding",
+                metadata={
+                    "intent": "research_security_finding_create",
+                    "program_id": "program-a",
+                    "source_hypothesis_id": hypothesis.hypothesis_id,
+                    "title": "title",
+                    "description": "description",
+                    "required_followup": "required followup",
+                },
+            )
+        )
+        finding = finding_created.research_security_finding
+        assert finding is not None
+        hypothesis_recipe = self._recipe_id_for(
+            engine,
+            ResearchSecurityValidationRecipeSubjectKind.HYPOTHESIS,
+            hypothesis.hypothesis_id,
+        )
+        self._record_reproduction(engine, hypothesis_recipe)
+
+        entry = self._entry_for(self._preview(engine), finding.finding_id)
+
+        self.assertEqual(entry.reproductions, ())
+
+    # -- scenario 10: restart/reload consistency ------------------------------
+
+    def test_reproduction_history_survives_a_full_engine_restart(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_id = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        self._record_reproduction(engine, recipe_id)
+
+        restarted_engine = self._wired_engine()
+        entry = self._entry_for(self._preview(restarted_engine), finding_id)
+
+        self.assertEqual(len(entry.reproductions), 1)
+        self.assertEqual(entry.reproductions[0].recipe_id, recipe_id)
+
+    # -- scenario 11: reading is read-only ------------------------------------
+
+    def test_previewing_reproduction_history_changes_no_store_file(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_id = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        self._record_reproduction(engine, recipe_id)
+        paths = (
+            self.http_evidence_path,
+            self.security_hypothesis_store_path,
+            self.security_finding_store_path,
+            self.security_validation_recipe_store_path,
+            self.reproduction_store_path,
+        )
+        before = {path: path.read_bytes() for path in paths}
+
+        self._preview(engine)
+        self._preview(engine)
+
+        after = {path: path.read_bytes() for path in paths}
+        self.assertEqual(before, after)
+
+    # -- scenarios 14-16: outcome never influences status/authority ----------
+
+    def test_reproduced_outcome_never_changes_finding_status_or_attention(
+        self,
+    ) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_id = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        before = self._entry_for(self._preview(engine), finding_id).finding
+
+        self._record_reproduction(
+            engine, recipe_id, ResearchReproductionOutcome.REPRODUCED
+        )
+
+        after = self._entry_for(self._preview(engine), finding_id).finding
+        self.assertIs(after.status, before.status)
+        self.assertFalse(after.needs_attention)
+
+    def test_not_reproduced_outcome_never_refutes_the_finding(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_id = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        before = self._entry_for(self._preview(engine), finding_id).finding
+
+        self._record_reproduction(
+            engine, recipe_id, ResearchReproductionOutcome.NOT_REPRODUCED
+        )
+
+        after = self._entry_for(self._preview(engine), finding_id).finding
+        self.assertIs(after.status, before.status)
+        self.assertNotEqual(after.status, ResearchSecurityFindingStatus.REFUTED)
+
+    def test_inconclusive_outcome_mutates_nothing(self) -> None:
+        engine = self._wired_engine()
+        finding_id = self._ready_finding_id(engine)
+        recipe_id = self._recipe_id_for(
+            engine, ResearchSecurityValidationRecipeSubjectKind.FINDING, finding_id
+        )
+        before = self._entry_for(self._preview(engine), finding_id).finding
+
+        self._record_reproduction(
+            engine, recipe_id, ResearchReproductionOutcome.INCONCLUSIVE
+        )
+
+        after = self._entry_for(self._preview(engine), finding_id).finding
+        self.assertEqual(after, before)
+
+    # -- no reproduction service wired: preview still succeeds, unenriched ---
+
+    def test_preview_still_succeeds_when_reproduction_service_is_not_wired(
+        self,
+    ) -> None:
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            http_evidence_store=JsonFileResearchHttpEvidenceStore(
+                self.http_evidence_path
+            ),
+            security_hypothesis_store=JsonFileResearchSecurityHypothesisStore(
+                self.security_hypothesis_store_path
+            ),
+            security_finding_store=JsonFileResearchSecurityFindingStore(
+                self.security_finding_store_path
+            ),
+        )
+        finding_id = self._ready_finding_id(engine)
+
+        entry = self._entry_for(self._preview(engine), finding_id)
+
+        self.assertEqual(entry.reproductions, ())

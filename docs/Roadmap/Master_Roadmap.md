@@ -972,13 +972,22 @@ confidence field of any kind (the general-research `ResearchClaimConfidence`/
 `ResearchClaimCalibrator` machinery was investigated and found not
 mechanically reusable here: findings have no authored-confidence field to
 calibrate, and finding evidence links carry no trust/independence
-dimension, unlike `ResearchSourceAssessmentRecord`). `ResearchReproductionRecord`
-remains fully disconnected from the Finding lifecycle — confirmed still
-true, and still deliberately out of scope; a join is structurally
-possible (`reproduction.recipe_id` -> recipe -> `subject_kind == FINDING`)
-but not yet built. Item 8 (Business-logic/state-transition model, which
-has no existing precedent or design in this codebase) remains not yet
-started.
+dimension, unlike `ResearchSourceAssessmentRecord`). v0.3.427 built the
+join `ResearchReproductionRecord` was missing: a finding's preview now
+also shows its currently-associated reproduction history, joined live via
+`finding_id -> recipe(subject_kind=FINDING, subject_id=finding_id) ->
+reproductions(recipe_id)`, reusing an already-existing, already-tested
+read (`ResearchReproductionApplicationService.reproductions_for_subject`)
+rather than new business logic. Composed one layer up in `CognitiveEngine`
+specifically to avoid giving `ResearchSecurityFindingApplicationService` a
+reverse dependency on the Reproduction service (which already depends on
+it, the opposite direction) — `ResearchSecurityFindingApplicationService`
+itself has zero diff. `REPRODUCTION RECORD != EXECUTION AUTHORITY` and
+`REPRODUCED != CONFIRMED VULNERABILITY` both hold exactly as before:
+`finding.status`/`needs_attention` are read, never written, by this
+visibility. Findings still have no confidence field of any kind. Item 8
+(Business-logic/state-transition model, which has no existing precedent
+or design in this codebase) remains not yet started.
 
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a

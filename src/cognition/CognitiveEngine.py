@@ -250,6 +250,10 @@ from research.ResearchRunCompletionStepOperation import (
 )
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
+from research.ResearchSecurityValidationRecipeSubjectKind import (
+    ResearchSecurityValidationRecipeSubjectKind,
+)
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
@@ -1180,7 +1184,10 @@ class CognitiveEngine:
                 fail = composer.research_security_finding_preview_failure
                 return fail(request, "Security findings are not available.")
             finding_service = self._research_security_finding_service
-            return finding_service.process_finding_preview(request)
+            response = finding_service.process_finding_preview(request)
+            if response.success and self._research_reproduction_service is not None:
+                response = self._with_finding_reproduction_history(request, response)
+            return response
 
         recipe_application_service = ResearchSecurityValidationRecipeApplicationService
         if recipe_application_service.is_validation_recipe_record_request(request):
@@ -1564,6 +1571,46 @@ class CognitiveEngine:
             return self._process_recent_conversations(request)
 
         return self._process_conversation(request)
+
+    def _with_finding_reproduction_history(
+        self, request: BrainRequest, response: BrainResponse
+    ) -> BrainResponse:
+        """Attach each finding's reproduction history to a preview response.
+
+        Purely additive composition at the one layer that already holds both
+        already-constructed services -- `ResearchSecurityFindingApplicationService`
+        is never given a reverse dependency on
+        `ResearchReproductionApplicationService` (it is constructed first,
+        before the reproduction service exists at all; see this class's
+        `__init__`), and `ResearchReproductionApplicationService` is never
+        given a second, redundant way to read findings. Calls only the
+        already-existing, already-tested `reproductions_for_subject` read,
+        once per finding, then rebuilds the same response through the
+        identical `ResponseComposer.research_security_finding_preview` call
+        the finding service itself uses. No new persistence, no store
+        write, no mutation of any finding, recipe, or reproduction, and no
+        change to any finding's `status`/`needs_attention` -- visibility
+        only.
+        """
+        reproduction_service = self._research_reproduction_service
+        if reproduction_service is None:
+            return response
+        entries: tuple[ResearchSecurityFindingEntry, ...] = (
+            response.research_security_findings
+        )
+        enriched_entries = tuple(
+            entry.with_reproductions(
+                reproduction_service.reproductions_for_subject(
+                    entry.finding.program_id,
+                    ResearchSecurityValidationRecipeSubjectKind.FINDING,
+                    entry.finding.finding_id,
+                )
+            )
+            for entry in entries
+        )
+        return self._response_composer.research_security_finding_preview(
+            request, enriched_entries
+        )
 
     def _is_undeclared_live_information_request(self, request: BrainRequest) -> bool:
         """Return whether plain chat asked for information only research provides.
