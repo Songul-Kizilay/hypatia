@@ -2,10 +2,29 @@
 
 ## Runtime Version
 
-`v0.3.424 (Genesis)`
+`v0.3.425 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.425 closes the "full F4 scope" cross-store Finding lifecycle
+gaps v0.3.420 explicitly deferred: a new pure function,
+`research.ResearchSecurityFindingLifecycleIntegrity.verify_finding_lifecycle_integrity`,
+replays four invariants the live application services already guarantee —
+a finding's source hypothesis exists in the same program with a matching
+kind/subject, its evidence links exist in the same program with a matching
+subject, no two findings share one source hypothesis, and a `VALIDATED`
+finding has at least one `VALIDATES` evidence link ever recorded — called
+once eagerly by `core.Bootstrap.initialize()` so a tampered cross-store
+state fails startup closed. Two related checks were deliberately not
+added (hypothesis status at the exact moment of finding creation, and
+whether a `CONTRADICTS` link predates a `VALIDATED` transition) because
+neither is provable from the persisted, non-interleaved append-only logs
+without inventing information never recorded. Independent
+hypatia-epistemics, hypatia-security, and hypatia-qa reviews all PASS;
+hypatia-qa closed one real coverage gap with a mutation-verified
+regression test. Windows canonical environment: 7666 tests, `OK
+(skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.424 adds the Bug Bounty Researcher roadmap's next lifecycle
 step, "Reproduction record": an operator's own observation of what

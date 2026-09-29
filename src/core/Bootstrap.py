@@ -149,6 +149,9 @@ from research.ResearchClaimContradictionProposalProvider import (
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchSecurityFindingLifecycleIntegrity import (
+    verify_finding_lifecycle_integrity,
+)
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
@@ -604,6 +607,21 @@ class Bootstrap:
         session_context_store = self._session_context_store()
         security_hypothesis_store = self._security_hypothesis_store()
         security_finding_store = self._security_finding_store()
+        # Fail closed at startup, once, before any service is wired: the
+        # finding store's own load-time checks (F4 phase 1) can only replay
+        # invariants expressible from its own single document. These three
+        # documents can each load individually valid, yet still be mutually
+        # inconsistent in a way the live application services could never
+        # have produced (a dangling/mismatched source hypothesis, a
+        # dangling/mismatched evidence citation, a duplicate finding per
+        # hypothesis, or a `VALIDATED` finding with no validating evidence
+        # ever recorded). See `research.ResearchSecurityFindingLifecycleIntegrity`
+        # for exactly what is and is not provable from persisted history.
+        verify_finding_lifecycle_integrity(
+            security_finding_store.load(),
+            security_hypothesis_store.load(),
+            http_evidence_store.load(),
+        )
         security_validation_recipe_store = self._security_validation_recipe_store()
         reproduction_store = self._reproduction_store()
         research_source_content_store = JsonFileResearchSourceContentStore(

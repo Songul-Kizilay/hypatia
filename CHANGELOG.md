@@ -2,6 +2,60 @@
 
 All notable project changes are recorded here.
 
+## [0.3.425] - 2026-09-29
+
+### Added
+
+- Cross-store security finding lifecycle replay integrity: closes the
+  "full F4 scope" gaps v0.3.420 explicitly deferred. A new pure function,
+  `research.ResearchSecurityFindingLifecycleIntegrity.verify_finding_lifecycle_integrity`,
+  takes the already-loaded Finding, Hypothesis, and HTTP-evidence
+  documents and raises if they are mutually inconsistent in a way the live
+  application services could never have produced. Called once eagerly by
+  `core.Bootstrap.initialize()` right after all three stores are
+  constructed, so a tampered cross-store state fails startup closed.
+- Four invariants now replayed at startup: (1) every finding's
+  `source_hypothesis_id` resolves to a real, same-program hypothesis whose
+  `hypothesis_kind`/`subject_kind`/`subject_canonical_value` match the
+  finding's own; (2) every finding evidence link's `evidence_id` resolves
+  to real, same-program HTTP evidence whose target matches the finding's
+  subject; (3) no two findings share one `(source_hypothesis_id,
+  program_id)`; (4) a finding with any `VALIDATED` transition has at least
+  one `VALIDATES` evidence link somewhere in its history.
+
+### Security
+
+- No new I/O, fetch, process, network, or credential capability: the new
+  function is pure, over three already-loaded in-memory documents. A
+  `VALIDATED` finding remains never itself authority to act.
+- Two related checks were deliberately investigated and NOT added, to
+  avoid inventing unprovable provenance during replay: the source
+  hypothesis's derived status *at the exact moment* of finding creation
+  (only its *current* status is ever persisted, and legal later hops exist
+  off `READY_FOR_VALIDATION`), and whether a `CONTRADICTS` evidence link
+  existed *before* a `VALIDATED` transition (`attach_evidence` has no gate
+  of its own, so a legitimate history can attach `CONTRADICTS` evidence
+  after an already-recorded `VALIDATED` transition, and the finding
+  document's two lists carry no interleaving order between them).
+
+### Verification
+
+- 26 new tests (22 in a new `tests/research/test_research_security_finding_lifecycle_integrity.py`,
+  including a `MutationTests` class proving each of the four checks is
+  load-bearing; 4 in a new `BootstrapFindingLifecycleIntegrityTests` class
+  in `tests/test_bootstrap.py`). Windows canonical environment: 7666
+  tests, `OK (skipped=3)` — 26 net new over v0.3.424's 7640. Black, Ruff,
+  MyPy (`src`) clean. `git diff --check` clean.
+- Independent hypatia-epistemics review: PASS, no residual epistemic risk
+  — traced both write paths line-by-line and independently verified the
+  two deliberately-deferred checks against the hypothesis status
+  transition table and `attach_evidence`'s full body.
+- Independent hypatia-security review: PASS, no findings — attempted to
+  hand-craft bypasses for all four checks, all correctly rejected.
+- Independent hypatia-qa review: PASS — closed one real coverage gap
+  (evidence matching a *different* finding's subject in a multi-finding
+  document) with a mutation-verified regression test.
+
 ## [0.3.424] - 2026-09-29
 
 ### Added
