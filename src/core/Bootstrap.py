@@ -117,6 +117,9 @@ from research.JsonFileResearchPlanAuthorizationStore import (
 from research.JsonFileResearchProgramScopeRevisionStore import (
     JsonFileResearchProgramScopeRevisionStore,
 )
+from research.JsonFileResearchReproductionStore import (
+    JsonFileResearchReproductionStore,
+)
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSecurityFindingStore import (
     JsonFileResearchSecurityFindingStore,
@@ -602,6 +605,7 @@ class Bootstrap:
         security_hypothesis_store = self._security_hypothesis_store()
         security_finding_store = self._security_finding_store()
         security_validation_recipe_store = self._security_validation_recipe_store()
+        reproduction_store = self._reproduction_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -709,6 +713,7 @@ class Bootstrap:
             security_hypothesis_store=security_hypothesis_store,
             security_finding_store=security_finding_store,
             security_validation_recipe_store=security_validation_recipe_store,
+            reproduction_store=reproduction_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -1058,6 +1063,15 @@ class Bootstrap:
         )
         return JsonFileResearchSecurityValidationRecipeStore(
             run_path.with_name("research_security_validation_recipes.json")
+        )
+
+    def _reproduction_store(self) -> JsonFileResearchReproductionStore:
+        """Create the operator-authored Bug Bounty reproduction record store."""
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchReproductionStore(
+            run_path.with_name("research_reproductions.json")
         )
 
     def _kali_operation_authorization_store(

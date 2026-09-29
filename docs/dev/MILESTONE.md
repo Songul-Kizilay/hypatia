@@ -10,6 +10,94 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
+## Current — v0.3.424
+
+| Field | Value |
+| --- | --- |
+| Milestone | Reproduction record foundation (Bug Bounty Researcher roadmap, next step after item 9's Validation Recipe) |
+| Base SHA | 3b138d3 (origin/main tip, v0.3.423 delivered) |
+| Branch | `feature/reproduction-record-v0.3.424`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | implementation (domain type, outcome enum, derived reads, store, application service, `CognitiveEngine`/`Bootstrap`/`ResponseComposer` wiring) found already complete but untested in this worktree at session start; hypatia-lead wrote the missing test coverage (mirroring the sibling Validation Recipe feature's test structure exactly) and completed the milestone; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS-with-caveats, closed one real gap with two mutation-verified regression tests |
+| Blockers | none |
+
+Rationale: at session start, `D:\hypatia-worktrees\reproduction-record`
+already held a complete, uncommitted implementation of the next Bug Bounty
+Researcher lifecycle step — an operator-authored "reproduction record" of
+what happened when they manually followed an already-recorded Validation
+Recipe's steps — forked from `origin/main`'s v0.3.423 tip with zero
+commits ahead of it. Per standing instruction not to abandon or duplicate
+in-progress work, hypatia-lead inspected it file-by-file rather than
+starting fresh: the domain type
+(`ResearchReproductionRecord`/`ResearchReproductionOutcome`), the pure
+derived-reads module (`ResearchReproduction.py`), the append-only store
+(`JsonFileResearchReproductionStore.py`), the application service
+(`ResearchReproductionApplicationService.py`), and all `CognitiveEngine`/
+`Bootstrap`/`ResponseComposer`/`BrainResponse` wiring were already present
+and followed the sibling Validation Recipe feature's established patterns
+exactly (evidence-subject matching reusing the same F1 target/subject
+comparison, subject fields copied from the recipe never caller-supplied,
+append-only enforcement, `ResearchSensitiveInputPolicy` reuse). Only test
+coverage was incomplete: the original session had written tests for the
+domain record/enum layer only (15 tests), leaving the derived-reads
+module, the store, the application service, and the `CognitiveEngine`
+wiring entirely untested — a genuine, material completion gap, not a
+stylistic one.
+
+Scope: no production-code changes beyond what was already present at
+session start except `ResearchSecurityValidationRecipeApplicationService
+.recipe_by_id` (also already present, added by the same prior session).
+hypatia-lead added five test files/additions:
+`tests/research/test_research_reproduction.py`,
+`tests/research/test_json_file_research_reproduction_store.py`,
+`tests/cognition/test_research_reproduction_application_service.py`, and
+a new `ReproductionDispatchTests` class appended to
+`tests/cognition/test_cognitive_engine.py`, mirroring
+`test_research_security_validation_recipe.py`/
+`test_json_file_research_security_validation_recipe_store.py`/
+`test_research_security_validation_recipe_application_service.py`/
+`SecurityValidationRecipeDispatchTests` structurally. hypatia-qa
+independently added two further regression tests to the store test file
+(see Review findings below).
+
+REPRODUCTION RECORD != EXECUTION AUTHORITY, verified structurally by
+hypatia-security: no code path added or already present in this diff
+calls `transition_status` on any hypothesis/finding service (confirmed by
+grep — the identifier appears only in docstrings), `means_confirmed_
+vulnerability` is hard-coded `False` for every `ResearchReproductionOutcome`
+member including `REPRODUCED`, and `subject_kind`/`subject_id` are copied
+only from the looked-up recipe object, never read from caller/request
+metadata.
+
+Review findings and how each was resolved:
+- **hypatia-security** (independent, read-only): PASS, no findings across
+  all six reviewed axes (authority, fail-closed correctness, program/
+  subject isolation, store integrity, secret handling, `CognitiveEngine`
+  wiring). Full reasoning recorded in this session's transcript.
+- **hypatia-qa** (independent): PASS-with-caveats. Found one real,
+  concrete gap — the store's `MAX_REPRODUCTIONS`/
+  `MAX_REPRODUCTION_STORE_BYTES` ceilings were pinned as constants by
+  `test_the_declared_ceilings_are_the_reviewed_values` but never proven
+  actually enforced. **Closed**: added
+  `test_bounded_record_count_is_enforced`/
+  `test_oversized_store_is_rejected_on_load`, each mutation-verified by
+  temporarily neutralizing the corresponding guard in
+  `JsonFileResearchReproductionStore.py`, confirming the new test failed,
+  then restoring the source unmodified. Two further gaps were noted but
+  explicitly left open as pre-existing, codebase-wide patterns shared
+  with the sibling hypothesis/finding/recipe evidence-matching tests, not
+  regressions this milestone introduced: (1) no fixture anywhere in the
+  codebase exercises an evidence-target-*kind* mismatch (only canonical-
+  value mismatches are covered); (2) the preview response's not-authority
+  notice text is asserted for the record path but not the preview path.
+
+Verification (2026-09-29, Windows canonical environment, hypatia-lead):
+7640 tests, `OK (skipped=3)` — 61 net new over v0.3.423's 7579 (59 from
+hypatia-lead, 2 from hypatia-qa). Black, Ruff, MyPy (`src`, 612 source
+files) all clean. `git diff --check` clean. Desktop UI deliberately out
+of scope, mirroring the v0.3.421-then-v0.3.423 foundation-then-UI
+precedent — confirmed no `src/desktop` file is touched.
+
 ## Historical scope: v0.3.420 (delivered)
 
 | Field | Value |

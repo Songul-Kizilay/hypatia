@@ -114,6 +114,7 @@ from research.ResearchProviderQualityReport import (
     ResearchProviderQualityReport,
 )
 from research.ResearchReflectionReport import ResearchReflectionReport
+from research.ResearchReproductionRecord import ResearchReproductionRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -206,6 +207,17 @@ SECURITY_VALIDATION_RECIPE_NOT_AUTHORITY_NOTICE = (
     "Validation recipe only. Recording or reading this does not grant"
     " authority to act, execute tools, access systems, expand scope, or"
     " validate the underlying hypothesis or finding."
+)
+
+#: Deliberately separate text again: a reproduction record names an
+#: operator-observed outcome (including REPRODUCED), which is exactly the
+#: wording most likely to be misread as a confirmed result if it reused
+#: either notice above.
+REPRODUCTION_NOT_AUTHORITY_NOTICE = (
+    "Reproduction record only: an operator's own observation. It does not"
+    " grant authority to act, execute tools, access systems, expand scope,"
+    " or transition any finding's status -- including when the recorded"
+    " outcome is REPRODUCED."
 )
 
 #: One bounded note per verdict, for a person rather than for a parser. Nothing
@@ -2179,6 +2191,71 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="research_security_validation_recipe_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_reproduction_record(
+        self,
+        request: BrainRequest,
+        reproduction: ResearchReproductionRecord,
+    ) -> BrainResponse:
+        """Confirm one durable, operator-authored reproduction record."""
+        lines = [
+            "Reproduction recorded:",
+            f"Recipe: {reproduction.recipe_id}",
+            f"Subject: {reproduction.subject_kind.value} {reproduction.subject_id}",
+            f"Outcome: {reproduction.outcome.value}",
+            REPRODUCTION_NOT_AUTHORITY_NOTICE,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_reproduction_record",
+            memory_count=0,
+            research_reproduction=reproduction,
+        )
+
+    def research_reproduction_record_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid reproduction write."""
+        return BrainResponse(
+            message="\n".join(("Reproduction rejected:", f"Reason: {message}")),
+            request_id=request.request_id,
+            intent="research_reproduction_record",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_reproduction_preview(
+        self,
+        request: BrainRequest,
+        reproductions: tuple[ResearchReproductionRecord, ...],
+    ) -> BrainResponse:
+        """Report the persisted, read-only reproductions for one recipe."""
+        lines = [f"Reproductions: {len(reproductions)}"]
+        for reproduction in reproductions:
+            recorded_at = reproduction.recorded_at.isoformat()
+            lines.append(f"- {recorded_at}: {reproduction.outcome.value}")
+        if reproductions:
+            lines.append(REPRODUCTION_NOT_AUTHORITY_NOTICE)
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_reproduction_preview",
+            memory_count=0,
+            research_reproductions=reproductions,
+        )
+
+    def research_reproduction_preview_failure(
+        self, request: BrainRequest, message: str
+    ) -> BrainResponse:
+        """Render a bounded refusal for an invalid reproduction preview."""
+        return BrainResponse(
+            message="\n".join(("Reproduction preview rejected:", f"Reason: {message}")),
+            request_id=request.request_id,
+            intent="research_reproduction_preview",
             memory_count=0,
             success=False,
         )

@@ -100,6 +100,10 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from cognition.ResearchPlanPreviewApplicationService import (
     ResearchPlanPreviewApplicationService,
 )
+from cognition.ResearchReproductionApplicationService import (
+    ResearchReproductionApplicationService,
+    ResearchReproductionStore,
+)
 from cognition.ResearchSecurityFindingApplicationService import (
     ResearchSecurityFindingApplicationService,
     ResearchSecurityFindingStore,
@@ -365,6 +369,7 @@ class CognitiveEngine:
         security_validation_recipe_store: (
             ResearchSecurityValidationRecipeStore | None
         ) = None,
+        reproduction_store: ResearchReproductionStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -825,6 +830,26 @@ class CognitiveEngine:
                     response_composer,
                 )
             )
+        self._research_reproduction_service: (
+            ResearchReproductionApplicationService | None
+        ) = None
+        if (
+            reproduction_store is not None
+            and self._research_security_validation_recipe_service is not None
+            and self._research_security_hypothesis_service is not None
+            and self._research_security_finding_service is not None
+            and http_evidence_store is not None
+        ):
+            self._research_reproduction_service = (
+                ResearchReproductionApplicationService(
+                    reproduction_store,
+                    self._research_security_validation_recipe_service,
+                    self._research_security_hypothesis_service,
+                    self._research_security_finding_service,
+                    http_evidence_store,
+                    response_composer,
+                )
+            )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
@@ -1173,6 +1198,26 @@ class CognitiveEngine:
                 return fail(request, "Security validation recipes are not available.")
             recipe_service = self._research_security_validation_recipe_service
             return recipe_service.process_validation_recipe_preview(request)
+
+        if ResearchReproductionApplicationService.is_reproduction_record_request(
+            request
+        ):
+            if self._research_reproduction_service is None:
+                composer = self._response_composer
+                fail = composer.research_reproduction_record_failure
+                return fail(request, "Reproduction records are not available.")
+            reproduction_service = self._research_reproduction_service
+            return reproduction_service.process_reproduction_record(request)
+
+        if ResearchReproductionApplicationService.is_reproduction_preview_request(
+            request
+        ):
+            if self._research_reproduction_service is None:
+                composer = self._response_composer
+                fail = composer.research_reproduction_preview_failure
+                return fail(request, "Reproduction records are not available.")
+            reproduction_service = self._research_reproduction_service
+            return reproduction_service.process_reproduction_preview(request)
 
         if KaliOperationPreviewApplicationService.is_preview_request(request):
             if self._kali_operation_preview_service is None:
