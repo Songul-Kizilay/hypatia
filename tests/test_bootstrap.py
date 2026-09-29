@@ -25,12 +25,18 @@ from llm.LLMConversationMessage import LLMConversationMessage
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
+from research.JsonFileResearchHttpEvidenceStore import (
+    JsonFileResearchHttpEvidenceStore,
+    ResearchHttpEvidenceDocument,
+)
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSecurityFindingStore import (
     JsonFileResearchSecurityFindingStore,
+    ResearchSecurityFindingDocument,
 )
 from research.JsonFileResearchSecurityHypothesisStore import (
     JsonFileResearchSecurityHypothesisStore,
+    ResearchSecurityHypothesisDocument,
 )
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
@@ -38,8 +44,31 @@ from research.JsonFileResearchSourceContentStore import (
 from research.LLMResearchClaimContradictionProposalProvider import (
     LLMResearchClaimContradictionProposalProvider,
 )
+from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchHttpEvidenceProvenanceKind import (
+    ResearchHttpEvidenceProvenanceKind,
+)
+from research.ResearchHttpEvidenceRecord import ResearchHttpEvidenceRecord
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchSecurityFindingEvidenceKind import (
+    ResearchSecurityFindingEvidenceKind,
+)
+from research.ResearchSecurityFindingEvidenceLinkRecord import (
+    ResearchSecurityFindingEvidenceLinkRecord,
+)
+from research.ResearchSecurityFindingEvidenceRelation import (
+    ResearchSecurityFindingEvidenceRelation,
+)
+from research.ResearchSecurityFindingOrigin import ResearchSecurityFindingOrigin
+from research.ResearchSecurityFindingRecord import ResearchSecurityFindingRecord
+from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
+from research.ResearchSecurityFindingStatusTransitionRecord import (
+    ResearchSecurityFindingStatusTransitionRecord,
+)
+from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
+from research.ResearchSecurityHypothesisOrigin import ResearchSecurityHypothesisOrigin
+from research.ResearchSecurityHypothesisRecord import ResearchSecurityHypothesisRecord
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
@@ -2061,6 +2090,231 @@ class BootstrapTests(unittest.TestCase):
         renamed = brain.process("rename session work -- archive")
         self.assertTrue(renamed.success)
         self.assertEqual(events, ["session.renamed"])
+
+
+_LIFECYCLE_RECORDED = datetime(2026, 9, 29, 12, tzinfo=UTC)
+
+
+def _lifecycle_hypothesis(
+    hypothesis_id: str = "hypothesis-1",
+    program_id: str = "program-a",
+) -> ResearchSecurityHypothesisRecord:
+    return ResearchSecurityHypothesisRecord(
+        hypothesis_id=hypothesis_id,
+        program_id=program_id,
+        hypothesis_kind=ResearchSecurityHypothesisKind.AUTHORIZATION,
+        subject_kind=ResearchAssetKind.HOSTNAME,
+        subject_canonical_value="example.test",
+        statement="statement",
+        rationale="rationale",
+        required_validation="required validation",
+        origin=ResearchSecurityHypothesisOrigin.OPERATOR_AUTHORED,
+        created_at=_LIFECYCLE_RECORDED,
+    )
+
+
+def _lifecycle_finding(
+    finding_id: str = "finding-1",
+    program_id: str = "program-a",
+    source_hypothesis_id: str = "hypothesis-1",
+) -> ResearchSecurityFindingRecord:
+    return ResearchSecurityFindingRecord(
+        finding_id=finding_id,
+        program_id=program_id,
+        source_hypothesis_id=source_hypothesis_id,
+        finding_kind=ResearchSecurityHypothesisKind.AUTHORIZATION,
+        subject_kind=ResearchAssetKind.HOSTNAME,
+        subject_canonical_value="example.test",
+        title="title",
+        description="description",
+        required_followup="required followup",
+        origin=ResearchSecurityFindingOrigin.OPERATOR_AUTHORED,
+        created_at=_LIFECYCLE_RECORDED,
+    )
+
+
+def _lifecycle_http_evidence(
+    evidence_id: str = "a" * 64,
+    program_id: str = "program-a",
+) -> ResearchHttpEvidenceRecord:
+    return ResearchHttpEvidenceRecord(
+        evidence_id=evidence_id,
+        program_id=program_id,
+        target_kind=ResearchAssetKind.HOSTNAME,
+        target_canonical_value="example.test",
+        scheme="https",
+        port=443,
+        path="/",
+        request_method="HEAD",
+        request_headers_observed=False,
+        response_status_code=200,
+        response_headers=(),
+        response_body_observed=False,
+        provenance=ResearchHttpEvidenceProvenanceKind.KALI_OPERATION_RESULT,
+        source_operation_digest="f" * 64,
+        recorded_at=_LIFECYCLE_RECORDED,
+    )
+
+
+class BootstrapFindingLifecycleIntegrityTests(unittest.TestCase):
+    """`Bootstrap.initialize()` replays cross-store finding lifecycle
+    integrity once at startup.
+    """
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.memory_path = Path(self.temporary_directory.name) / "memory.json"
+        self.session_path = Path(self.temporary_directory.name) / "sessions.json"
+        self.knowledge_relation_path = (
+            Path(self.temporary_directory.name) / "knowledge_relations.json"
+        )
+        self.research_run_path = (
+            Path(self.temporary_directory.name) / "research_runs.json"
+        )
+        self.research_source_content_path = (
+            Path(self.temporary_directory.name) / "research_content.json"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def _bootstrap(self) -> Bootstrap:
+        return Bootstrap(
+            memory_path=self.memory_path,
+            session_path=self.session_path,
+            knowledge_relation_path=self.knowledge_relation_path,
+            research_run_path=self.research_run_path,
+            research_source_content_path=self.research_source_content_path,
+        )
+
+    def _hypothesis_store_path(self) -> Path:
+        return self.research_run_path.with_name("research_security_hypotheses.json")
+
+    def _finding_store_path(self) -> Path:
+        return self.research_run_path.with_name("research_security_findings.json")
+
+    def _http_evidence_store_path(self) -> Path:
+        return self.research_run_path.with_name("research_http_evidence.json")
+
+    def test_initialize_succeeds_over_a_consistent_cross_store_history(self) -> None:
+        JsonFileResearchSecurityHypothesisStore(self._hypothesis_store_path()).save(
+            ResearchSecurityHypothesisDocument(hypotheses=(_lifecycle_hypothesis(),))
+        )
+        JsonFileResearchHttpEvidenceStore(self._http_evidence_store_path()).save(
+            ResearchHttpEvidenceDocument(records=(_lifecycle_http_evidence(),))
+        )
+        JsonFileResearchSecurityFindingStore(self._finding_store_path()).save(
+            ResearchSecurityFindingDocument(
+                findings=(_lifecycle_finding(),),
+                evidence_links=(
+                    ResearchSecurityFindingEvidenceLinkRecord(
+                        link_id="link-1",
+                        finding_id="finding-1",
+                        program_id="program-a",
+                        evidence_kind=ResearchSecurityFindingEvidenceKind.HTTP_EVIDENCE,
+                        evidence_id="a" * 64,
+                        relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+                        recorded_at=_LIFECYCLE_RECORDED,
+                    ),
+                ),
+                status_transitions=(
+                    ResearchSecurityFindingStatusTransitionRecord(
+                        transition_id="transition-1",
+                        finding_id="finding-1",
+                        program_id="program-a",
+                        status=ResearchSecurityFindingStatus.VALIDATED,
+                        reason="",
+                        duplicate_of_finding_id=None,
+                        superseded_by_finding_id=None,
+                        recorded_at=_LIFECYCLE_RECORDED,
+                    ),
+                ),
+            )
+        )
+
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+
+        response = bootstrap.container.resolve(Brain).process(
+            BrainRequest(
+                message="Preview security findings",
+                metadata={
+                    "intent": "research_security_finding_preview",
+                    "program_id": "program-a",
+                },
+            )
+        )
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(len(response.research_security_findings), 1)
+
+        # Restart over the same files: still consistent, still starts.
+        restarted = self._bootstrap()
+        restarted.initialize()
+
+    def test_initialize_fails_closed_on_a_dangling_source_hypothesis(self) -> None:
+        JsonFileResearchSecurityFindingStore(self._finding_store_path()).save(
+            ResearchSecurityFindingDocument(findings=(_lifecycle_finding(),))
+        )
+        # No hypothesis, no HTTP evidence saved at all: the finding's own
+        # `source_hypothesis_id` is dangling across the store boundary.
+
+        bootstrap = self._bootstrap()
+
+        with self.assertRaisesRegex(ResearchError, "source hypothesis was not found"):
+            bootstrap.initialize()
+
+    def test_initialize_fails_closed_on_a_duplicate_finding_per_hypothesis(
+        self,
+    ) -> None:
+        JsonFileResearchSecurityHypothesisStore(self._hypothesis_store_path()).save(
+            ResearchSecurityHypothesisDocument(hypotheses=(_lifecycle_hypothesis(),))
+        )
+        JsonFileResearchSecurityFindingStore(self._finding_store_path()).save(
+            ResearchSecurityFindingDocument(
+                findings=(
+                    _lifecycle_finding(finding_id="finding-1"),
+                    _lifecycle_finding(finding_id="finding-2"),
+                )
+            )
+        )
+
+        bootstrap = self._bootstrap()
+
+        with self.assertRaisesRegex(
+            ResearchError, "More than one security finding exists"
+        ):
+            bootstrap.initialize()
+
+    def test_initialize_fails_closed_on_validated_with_no_validating_evidence(
+        self,
+    ) -> None:
+        JsonFileResearchSecurityHypothesisStore(self._hypothesis_store_path()).save(
+            ResearchSecurityHypothesisDocument(hypotheses=(_lifecycle_hypothesis(),))
+        )
+        JsonFileResearchSecurityFindingStore(self._finding_store_path()).save(
+            ResearchSecurityFindingDocument(
+                findings=(_lifecycle_finding(),),
+                status_transitions=(
+                    ResearchSecurityFindingStatusTransitionRecord(
+                        transition_id="transition-1",
+                        finding_id="finding-1",
+                        program_id="program-a",
+                        status=ResearchSecurityFindingStatus.VALIDATED,
+                        reason="",
+                        duplicate_of_finding_id=None,
+                        superseded_by_finding_id=None,
+                        recorded_at=_LIFECYCLE_RECORDED,
+                    ),
+                ),
+            )
+        )
+
+        bootstrap = self._bootstrap()
+
+        with self.assertRaisesRegex(
+            ResearchError, "without ever recording validating evidence"
+        ):
+            bootstrap.initialize()
 
 
 if __name__ == "__main__":

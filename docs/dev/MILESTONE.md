@@ -10,16 +10,163 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.424
+## Current — v0.3.425
+
+| Field | Value |
+| --- | --- |
+| Milestone | Cross-store security finding lifecycle replay integrity (closes the "full F4 scope" gaps deferred by v0.3.420's F4 phase 1) |
+| Base SHA | 3cd6bfe (origin/main tip, v0.3.424 delivered) |
+| Branch | `feature/finding-lifecycle-integrity-v0.3.425`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS, no residual epistemic risk found; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, closed one real coverage gap with a mutation-verified regression test |
+| Blockers | none |
+
+Rationale: v0.3.420's own ledger entry ("Historical scope: v0.3.420")
+explicitly deferred "the full F4 scope" as needing "a genuine
+design/refactor decision (duplicate business-rule logic out of
+`cognition`'s application services into a shared `research`-layer pure
+module, or accept duplication)" — specifically: cross-store referential
+checks (a finding's `source_hypothesis_id` against the separate hypothesis
+store, an evidence link's `evidence_id` against the separate HTTP-evidence
+store), the `VALIDATED`-evidence-gate replay, and the
+one-finding-per-hypothesis-dedup replay. This milestone makes that design
+decision: a new pure, dependency-free function,
+`research.ResearchSecurityFindingLifecycleIntegrity.verify_finding_lifecycle_integrity`,
+takes the three already-loaded documents (finding, hypothesis, HTTP
+evidence) and raises `ResearchError` if they are mutually inconsistent in a
+way the live application services could never have produced — reusing no
+duplicated business-rule logic (it re-derives each invariant fresh from the
+persisted records themselves, the same technique the existing single-store
+F4 phase 1 checks already use for `is_valid_status_transition`), and adding
+no coupling between the three independently-owned store files (none of them
+import each other; the new module is the reconciliation boundary, called
+once eagerly by `core.Bootstrap.initialize()` right after all three stores
+are constructed, mirroring the existing eager
+`ResearchSourceContentRestorer.restore(...)` precedent already in that same
+method).
+
+Four invariants are now replayed at startup, each a fact the live write
+path already guarantees:
+1. Every finding's `source_hypothesis_id` resolves to a real hypothesis in
+   the same program, and the finding's `finding_kind`/`subject_kind`/
+   `subject_canonical_value` exactly match that hypothesis's own fields
+   (`create_finding` copies these three fields directly from the
+   hypothesis and never accepts them as independent arguments).
+2. Every finding evidence link's `evidence_id` resolves to a real HTTP
+   evidence record in the same program, whose `target_kind`/
+   `target_canonical_value` match the citing finding's own subject (the
+   identical comparison `attach_evidence`'s F1 check already proves;
+   evidence carried forward from a hypothesis is transitively safe because
+   the hypothesis service's own `create_hypothesis`/`attach_evidence`
+   enforce the same match against the hypothesis's subject).
+3. No two findings share one `(source_hypothesis_id, program_id)`
+   (`create_finding`'s dedup check refuses a second finding unconditionally,
+   regardless of the first finding's current status).
+4. A finding with any `VALIDATED` transition in its history has at least
+   one `VALIDATES` evidence link somewhere in the final document (evidence
+   links are append-only and never removed, so a link present at the real
+   `_require_validation_gate` call is still present in the final document).
+
+Two related checks were deliberately investigated and NOT added, per this
+session's explicit instruction not to invent unprovable provenance during
+replay:
+- The source hypothesis's derived status *at the exact moment*
+  `create_finding` was called. Only the hypothesis's *current* status is
+  ever computed; no snapshot of "status when finding X was created" is
+  persisted, and `READY_FOR_VALIDATION -> NEEDS_EVIDENCE`/`REFUTED` are
+  both legal later hops (hypatia-epistemics independently verified this
+  against `ResearchSecurityHypothesisStatus`'s own closed transition
+  table), so a hypothesis can legitimately move off `READY_FOR_VALIDATION`
+  after spawning its finding. Checking "current status" would reject real
+  histories.
+- Whether a `CONTRADICTS` evidence link existed *before* a `VALIDATED`
+  transition. `attach_evidence` has no gate of its own (confirmed by
+  reading its full body), so a legitimate history can attach `CONTRADICTS`
+  evidence *after* an already-recorded `VALIDATED` transition. The finding
+  document persists `evidence_links` and `status_transitions` as two
+  independently-append-ordered lists with no interleaving field between
+  them, so replay cannot distinguish a legitimate post-validation
+  contradiction from a tampering artifact. Asserting "no `CONTRADICTS` link
+  may ever coexist with a `VALIDATED` transition" would reject real,
+  legitimately-producible histories.
+
+Scope: one new file
+(`src/research/ResearchSecurityFindingLifecycleIntegrity.py`), a ~15-line
+addition to `core/Bootstrap.py`'s `initialize()` (three eager `.load()`
+calls plus the new function call, no new store, no schema/version bump,
+no change to any application-service write-path behavior or public method
+signature), one new test file
+(`tests/research/test_research_security_finding_lifecycle_integrity.py`,
+22 tests including a `MutationTests` class proving each of the four checks
+is load-bearing by monkeypatching it to a no-op), and a new
+`BootstrapFindingLifecycleIntegrityTests` class appended to
+`tests/test_bootstrap.py` (4 tests: one consistent-history-plus-restart
+success case, three fail-closed tampering cases). Desktop panels, Brain
+intent surface, and every existing store's schema/version are untouched.
+
+Security invariants (restated, unchanged by this milestone): MODEL OUTPUT
+!= AUTHORITY; a `VALIDATED` finding is never authority to act. The new
+function performs no I/O of its own (pure, over three already-loaded
+in-memory documents), no fetch, no process, no network request, and
+touches no credential. A cross-store violation now fails `Bootstrap
+.initialize()` closed for the *entire* application — a necessary
+consequence of the invariant spanning multiple independently-owned store
+files (there is no single document to "reject whole" on), matching this
+codebase's existing reject-whole-document precedent, not a new class of
+capability (session/memory/research-run stores are already loaded eagerly
+and fail closed in that same method).
+
+Review findings and how each was resolved:
+- **hypatia-epistemics** (independent, read-only): PASS. Traced both
+  write paths line-by-line and confirmed none of the four checks can
+  reject a legitimately-producible history; independently verified the
+  two deliberately-deferred checks against `ResearchSecurityHypothesisStatus`'s
+  closed transition table and `attach_evidence`'s full body.
+- **hypatia-security** (independent, read-only): PASS, no findings.
+  Attempted to hand-craft bypasses for all four checks; all correctly
+  rejected. Confirmed every cross-referencing dict key is `(id,
+  program_id)`, never a bare ID. Confirmed the new eager-startup blast
+  radius is a generalization of an already-established pattern, not a new
+  capability.
+- **hypatia-qa** (independent): PASS. Found one real, concrete
+  test-coverage gap — nothing distinguished "evidence link cites evidence
+  with a mismatched subject" from a hypothetical, more permissive
+  implementation that treats "subject exists somewhere in the document" as
+  satisfying the match, since every existing fixture used only a single
+  finding. **Closed**: added
+  `test_evidence_matching_a_different_findings_subject_still_fails_closed`
+  (two findings with different subjects; evidence matching finding-1's
+  subject cited by a link on finding-2), verified load-bearing against a
+  deliberately-broken doc-wide-membership variant, then the source was
+  restored unmodified (no source change was in fact needed).
+
+Verification (2026-09-29, Windows canonical environment, hypatia-lead):
+7666 tests, `OK (skipped=3)` — 26 net new over v0.3.424's 7640 (25 from
+hypatia-lead, 1 from hypatia-qa). Black, Ruff, MyPy (`src`, 613 source
+files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.424 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Reproduction record foundation (Bug Bounty Researcher roadmap, next step after item 9's Validation Recipe) |
 | Base SHA | 3b138d3 (origin/main tip, v0.3.423 delivered) |
 | Branch | `feature/reproduction-record-v0.3.424`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| Status | delivered |
 | Specialists | implementation (domain type, outcome enum, derived reads, store, application service, `CognitiveEngine`/`Bootstrap`/`ResponseComposer` wiring) found already complete but untested in this worktree at session start; hypatia-lead wrote the missing test coverage (mirroring the sibling Validation Recipe feature's test structure exactly) and completed the milestone; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS-with-caveats, closed one real gap with two mutation-verified regression tests |
+| PR | #403, MERGED 2026-09-29T09:08:54Z, standard merge commit `3cd6bfefd70be02a2eb1b1aaca48c8f6ee1a05de` |
+| origin/main reachability | verified: merge commit `3cd6bfef` has parents `3b138d38feb92d03aabf49a3fdbc9f833ead96d4` (prior `origin/main`) and `8f2eec0dbdc5776f2bbedc9c4c750d537288cf0f` (this release); `git merge-base --is-ancestor 8f2eec0d origin/main` succeeds |
 | Blockers | none |
+
+Post-merge verification (2026-09-29, hypatia-lead): PR #403 base `main`,
+head `feature/reproduction-record-v0.3.424`, carried 2 commits (a docs-only
+ledger reconciliation for v0.3.423 and this release commit) across 20
+changed files, matching this milestone's own stated scope exactly. Both
+PR-triggered `test-build-smoke` checks passed against the release SHA,
+independently of the exact-SHA `workflow_dispatch` runs (Linux `36546347086`,
+Windows `36546351357`) dispatched before the PR was opened. Author/committer
+identity unchanged (Songül Kızılay via GitHub noreply email, Claude Sonnet 5
+co-author trailer preserved).
 
 Rationale: at session start, `D:\hypatia-worktrees\reproduction-record`
 already held a complete, uncommitted implementation of the next Bug Bounty
@@ -3822,24 +3969,26 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.423: Security Validation Recipe desktop workflow |
-| SHA | 9e28c7b9cf31fbcfd48f91e1d12197572db181e5 |
-| Linux desktop CI (exact-SHA) | success (run 36467190195) |
-| Windows desktop CI (exact-SHA) | success (run 36467193736) |
-| Linux desktop CI (PR-triggered) | success (run 36469985546) |
-| Windows desktop CI (PR-triggered) | success (run 36469985557) |
+| Milestone | v0.3.424: reproduction record foundation |
+| SHA | 8f2eec0dbdc5776f2bbedc9c4c750d537288cf0f |
+| Linux desktop CI (exact-SHA) | success (run 36546347086) |
+| Windows desktop CI (exact-SHA) | success (run 36546351357) |
+| Linux desktop CI (PR-triggered) | success (run 36546878414) |
+| Windows desktop CI (PR-triggered) | success (run 36546878485) |
 | Status | delivered |
-| PR | #402, MERGED 2026-09-28T19:12:11Z, standard merge commit `3b138d38feb92d03aabf49a3fdbc9f833ead96d4` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 9e28c7b9 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`9f06388`, `9e28c7b`) prove a true merge rather than a squash or rebase |
+| PR | #403, MERGED 2026-09-29T09:08:54Z, standard merge commit `3cd6bfefd70be02a2eb1b1aaca48c8f6ee1a05de` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 8f2eec0d origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`3b138d3`, `8f2eec0`) prove a true merge rather than a squash or rebase |
 
 Post-merge verification (2026-09-29, hypatia-lead): see the "Historical
-scope: v0.3.423 (delivered)" entry above for the full PR-diff and CI
+scope: v0.3.424 (delivered)" entry above for the full PR-diff and CI
 verification this pointer summarizes.
 
 Deferred, non-blocking findings carried forward (candidates for a future
-milestone, not fixed in this release): F4 full-scope replay (the
-point-in-time evidence-gate replay beyond phase 1's closed status-
-transition slice) remains its own future milestone. Request-ID/
+milestone, not fixed in this release): the CONTRADICTS-side of the
+`VALIDATED` evidence gate is deliberately not replayable at load time (no
+persisted interleaving between `evidence_links` and `status_transitions`
+proves whether a `CONTRADICTS` link was attached before or after a
+`VALIDATED` transition; see v0.3.425's own ledger entry). Request-ID/
 correlation-ID persistence into research records — rejected as
 speculative, no live traceability problem found. The Windows
 `ResourceWarning` test-hygiene debt remains untraced and out of scope.

@@ -940,10 +940,23 @@ plain-text steps plus notes — attached to an already-recorded hypothesis or
 finding for the same program, verified through the same cross-service-reader
 pattern the Finding service already uses for its source hypothesis.
 Recording a recipe never fetches, runs, authorizes anything, or mutates its
-subject. No desktop panel yet. Full F4 (cross-store checks, the `VALIDATED`
-evidence-gate replay) and item 8 (Business-logic/state-transition model,
-which has no existing precedent or design in this codebase) remain not yet
-started.
+subject. v0.3.423 added the Validation Recipe desktop tab (pure UI layer,
+no service change). v0.3.424 delivered "Reproduction record": an
+operator's own observation of manually following a recorded recipe —
+REPRODUCTION RECORD != EXECUTION AUTHORITY, and no outcome (including
+`REPRODUCED`) asserts a confirmed vulnerability; no desktop panel yet.
+v0.3.425 closed the remaining "full F4" cross-store gaps: a finding's
+source hypothesis and evidence citations are now verified to exist (and
+match subject) in their own separately-loadable stores at startup, no two
+findings may share one source hypothesis, and a `VALIDATED` finding must
+have at least one `VALIDATES` evidence link ever recorded — all replayed
+by one pure `research`-layer function called once eagerly at `Bootstrap`
+startup, not duplicated write-path logic. Deliberately not replayed,
+because it is not provable from persisted, non-interleaved append-only
+history: a hypothesis's status *at the exact moment* its finding was
+created, and whether a `CONTRADICTS` link predates a `VALIDATED`
+transition. Item 8 (Business-logic/state-transition model, which has no
+existing precedent or design in this codebase) remains not yet started.
 
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a
