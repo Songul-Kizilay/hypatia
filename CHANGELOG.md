@@ -2,6 +2,90 @@
 
 All notable project changes are recorded here.
 
+## [0.3.424] - 2026-09-29
+
+### Added
+
+- Bug Bounty Researcher roadmap item: "Reproduction record" — an
+  operator's own observation of what happened when they manually followed
+  an already-recorded Security Validation Recipe's steps. The next step
+  in the lifecycle after recipe recording, exposed through a new
+  `ResearchReproductionApplicationService` and two new Brain intents
+  (`research_reproduction_record`, `research_reproduction_preview`).
+- `research/ResearchReproductionOutcome.py` (new): a bounded enum
+  (`NOT_RUN`, `REPRODUCED`, `NOT_REPRODUCED`, `INCONCLUSIVE`). No member,
+  including `REPRODUCED`, asserts a confirmed vulnerability —
+  `means_confirmed_vulnerability` is `False` for every value.
+- `research/ResearchReproductionRecord.py` (new): one immutable,
+  operator-authored reproduction attempt, with `subject_kind`/`subject_id`
+  always copied from the referenced recipe, never caller-supplied.
+  `notes` reuses the existing `ResearchSensitiveInputPolicy` refusal.
+- `research/ResearchReproduction.py` (new): pure, dependency-free derived
+  reads (`reproductions_for_recipe`, `reproductions_for_subject`,
+  `current_reproduction_for_recipe`), ordered by persisted append order
+  only, matching `ResearchSecurityValidationRecipe`'s own discipline.
+- `research/JsonFileResearchReproductionStore.py` (new): an atomic,
+  append-only JSON store modeled directly on
+  `JsonFileResearchSecurityValidationRecipeStore` — strict schema
+  validation, a 5,000-record/2 MiB ceiling, globally-unique ID rejection.
+- `cognition/ResearchReproductionApplicationService.py` (new): records
+  and reads reproductions. `record_reproduction` fails closed if
+  `recipe_id` does not name a real recipe for the exact same program, or
+  if any cited evidence ID is not recorded for that program or does not
+  describe the recipe's own subject — reusing the same target/subject
+  comparison `ResearchSecurityFindingApplicationService.attach_evidence`'s
+  F1 check already proved.
+- `ResearchSecurityValidationRecipeApplicationService.recipe_by_id` (new
+  method): a program-scoped recipe lookup, mirroring
+  `hypothesis_by_id`/`finding_by_id`, added for the new service to
+  consume.
+- `CognitiveEngine`/`Bootstrap` wiring: the reproduction service is
+  constructed only when the recipe, hypothesis, and finding services and
+  the HTTP evidence store are all present; a partially-wired engine fails
+  closed on both new intents exactly like a fully-unwired one.
+
+### Security
+
+- **REPRODUCTION RECORD != EXECUTION AUTHORITY.** No code path added by
+  this milestone fetches, executes a tool, spawns a process, or expands
+  scope. Recording a reproduction never calls
+  `ResearchSecurityFindingApplicationService.transition_status` or
+  mutates the recipe, hypothesis, or finding it references — including
+  when the recorded outcome is `REPRODUCED`. A dedicated
+  `REPRODUCTION_NOT_AUTHORITY_NOTICE` is shown on every record/preview
+  response.
+- The append-only store refuses any save whose new document is not a
+  strict superset-by-prefix of what is already persisted — no in-place
+  mutation, reordering, or truncation of a previously saved record.
+
+### Verification
+
+- 61 new tests (`test_research_reproduction_record.py`,
+  `test_research_reproduction.py`,
+  `test_json_file_research_reproduction_store.py`,
+  `test_research_reproduction_application_service.py`, and a new
+  `ReproductionDispatchTests` class in `test_cognitive_engine.py`).
+  Windows canonical environment: 7640 tests, `OK (skipped=3)` — 61 net
+  new over v0.3.423's 7579. Black, Ruff, MyPy (`src`) clean.
+  `git diff --check` clean.
+- Independent hypatia-security review: PASS, no findings — traced every
+  call site and confirmed no path reaches a status-transition mutator,
+  confirmed fail-closed behavior on an unknown/cross-program recipe, an
+  unknown/mismatched evidence ID, and a malformed outcome, and confirmed
+  the half-wired `CognitiveEngine` case fails closed.
+- Independent hypatia-qa review: PASS-with-caveats. Added two
+  mutation-verified regression tests closing a real gap (the store's
+  declared `MAX_REPRODUCTIONS`/`MAX_REPRODUCTION_STORE_BYTES` ceilings
+  were pinned as constants but never proven enforced). Two low-severity,
+  pre-existing gaps shared with the sibling recipe/hypothesis/finding
+  features were noted but not closed in this milestone: an
+  evidence-target-kind mismatch branch has no dedicated fixture anywhere
+  in the codebase, and the preview response's not-authority notice text
+  is asserted for the record path but not the preview path.
+- Desktop UI is deliberately out of scope for this milestone, mirroring
+  the v0.3.421/v0.3.423 precedent (foundation first, UI as its own
+  follow-up milestone).
+
 ## [0.3.423] - 2026-09-28
 
 ### Added

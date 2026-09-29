@@ -196,6 +196,33 @@ class ResearchSecurityValidationRecipeApplicationService:
             document.recipes,
         )
 
+    def recipe_by_id(
+        self, recipe_id: str, program_id: str
+    ) -> ResearchSecurityValidationRecipeRecord | None:
+        """Return one program's recipe by ID, or `None` if not found.
+
+        Fails closed on a wrong `program_id` by construction: only a
+        `(recipe_id, program_id)` pair that both match a persisted record
+        can ever be returned. Added for
+        `cognition.ResearchReproductionApplicationService`, which needs to
+        verify a cited recipe exists in the exact same program before
+        recording a reproduction — mirroring
+        `ResearchSecurityHypothesisApplicationService.hypothesis_by_id`/
+        `ResearchSecurityFindingApplicationService.finding_by_id` exactly.
+        """
+        normalized_recipe_id = self._normalize_id(
+            recipe_id, "Security validation recipe ID"
+        )
+        normalized_program_id = self._normalize_program_id(program_id)
+        document = self._load()
+        for recipe in document.recipes:
+            if (
+                recipe.recipe_id == normalized_recipe_id
+                and recipe.program_id == normalized_program_id
+            ):
+                return recipe
+        return None
+
     # -- Brain intents ---------------------------------------------------------
 
     @staticmethod

@@ -98,6 +98,7 @@ from research.ResearchProviderComparisonReport import (
 )
 from research.ResearchProviderQualityReport import ResearchProviderQualityReport
 from research.ResearchReflectionReport import ResearchReflectionReport
+from research.ResearchReproductionRecord import ResearchReproductionRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -317,3 +318,5 @@ class BrainResponse:
     research_security_validation_recipes: tuple[
         ResearchSecurityValidationRecipeRecord, ...
     ] = ()
+    research_reproduction: ResearchReproductionRecord | None = None
+    research_reproductions: tuple[ResearchReproductionRecord, ...] = ()

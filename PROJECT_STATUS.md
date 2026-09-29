@@ -2,10 +2,28 @@
 
 ## Runtime Version
 
-`v0.3.423 (Genesis)`
+`v0.3.424 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.424 adds the Bug Bounty Researcher roadmap's next lifecycle
+step, "Reproduction record": an operator's own observation of what
+happened when they manually followed an already-recorded Security
+Validation Recipe's steps, via a new `ResearchReproductionApplicationService`
+and two new Brain intents. REPRODUCTION RECORD != EXECUTION AUTHORITY: no
+outcome, including `REPRODUCED`, asserts a confirmed vulnerability; no code
+path fetches, executes, spawns a process, or transitions any finding's
+status. `subject_kind`/`subject_id` are always copied from the referenced
+recipe, never caller-supplied, and any cited evidence must match the
+recipe's own subject or the write is refused. Independent hypatia-security
+review: PASS, no findings. Independent hypatia-qa review:
+PASS-with-caveats — added two mutation-verified regression tests closing a
+real ceiling-enforcement gap; two low-severity, pre-existing gaps shared
+with sibling features were noted but not closed. Desktop UI is
+deliberately out of scope, mirroring the v0.3.421 foundation-then-UI
+precedent. Windows canonical environment: 7640 tests, `OK (skipped=3)`;
+Black/Ruff/MyPy clean.
 
 Version v0.3.423 adds a "Validation Recipes" desktop tab, making v0.3.421's
 Validation Recipe foundation actually usable: record and list an
