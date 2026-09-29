@@ -985,9 +985,36 @@ it, the opposite direction) — `ResearchSecurityFindingApplicationService`
 itself has zero diff. `REPRODUCTION RECORD != EXECUTION AUTHORITY` and
 `REPRODUCED != CONFIRMED VULNERABILITY` both hold exactly as before:
 `finding.status`/`needs_attention` are read, never written, by this
-visibility. Findings still have no confidence field of any kind. Item 8
-(Business-logic/state-transition model, which has no existing precedent
-or design in this codebase) remains not yet started.
+visibility. v0.3.428 closed the remaining M1 gap: `ResearchSecurityFinding
+.evidence_ceiling`, a pure, read-only `ResearchSecurityFindingEvidenceCeiling`
+(`UNASSESSED`/`LOW`/`MEDIUM`/`HIGH`) naming what the recorded evidence
+*structure* can defensibly support — presence/absence of `SUPPORTS`/
+`VALIDATES`/`CONTRADICTS` links plus `REFUTED` status, never a probability.
+Deliberately a separate type from `ResearchClaimConfidence` (only the
+*pattern* — contradiction collapses confidence — is reused, never the
+code), because finding evidence links carry no `ResearchInformationTrust`/
+`ResearchSourceIndependence`-equivalent dimension. `HIGH` is declared but
+permanently unreachable today: reaching it would require an independence/
+trust judgement over cited evidence that this record does not carry — a
+future, separate milestone's concern (richer per-citation evidence
+quality), not something this one could honestly invent. `MODEL CONFIDENCE
+!= EVIDENCE` throughout: the ceiling reads no free-text field and no
+Reproduction Record outcome.
+
+With this, every leg of M1's target lifecycle (Finding -> Evidence ->
+Validation -> Confidence -> Contradiction -> Final State) now has a
+repository-grounded, defensible treatment: Evidence (v0.3.416-419),
+Validation (the `_require_validation_gate`/cross-store replay chain,
+v0.3.416-425), Confidence (v0.3.428, capped at what current evidence can
+honestly support), Contradiction (v0.3.417-420/425/426), and Final State
+(the closed status transition table and terminal-state set, unchanged
+since v0.3.416). **M1 — Finding Lifecycle Closure is considered complete**
+as of v0.3.428, with the explicit, permanent caveat that `evidence_ceiling`
+stays capped below `HIGH` until a later, separate milestone gives finding
+evidence its own trust/independence dimension — that is new scope, not an
+M1 shortfall. Item 8 (Business-logic/state-transition model, which has no
+existing precedent or design in this codebase) remains not yet started and
+is the natural next candidate, belonging to M2 rather than M1.
 
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a

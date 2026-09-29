@@ -20,6 +20,9 @@ from research.JsonFileResearchSecurityFindingStore import (
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetObservationRecord import canonicalize_asset_value
 from research.ResearchSecurityFinding import findings_for_program
+from research.ResearchSecurityFindingEvidenceCeiling import (
+    ResearchSecurityFindingEvidenceCeiling,
+)
 from research.ResearchSecurityFindingEvidenceKind import (
     ResearchSecurityFindingEvidenceKind,
 )
@@ -492,6 +495,42 @@ class JsonFileResearchSecurityFindingStoreTests(unittest.TestCase):
         )
         self.assertIs(derived.status, ResearchSecurityFindingStatus.VALIDATED)
         self.assertTrue(derived.needs_attention)
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.UNASSESSED
+        )
+
+    def test_evidence_ceiling_survives_a_store_reload(self) -> None:
+        """v0.3.428: `evidence_ceiling` is derived fresh from persisted facts
+        on every read, never stored as its own field -- so restart must
+        reproduce the identical answer from the reloaded flat logs alone."""
+        record = finding_record()
+        validates = ResearchSecurityFindingEvidenceLinkRecord(
+            link_id="link-1",
+            finding_id="finding-1",
+            program_id="program-a",
+            evidence_kind=ResearchSecurityFindingEvidenceKind.HTTP_EVIDENCE,
+            evidence_id="a" * 64,
+            relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+            recorded_at=RECORDED,
+        )
+        document = ResearchSecurityFindingDocument(
+            findings=(record,),
+            evidence_links=(validates,),
+            status_transitions=(),
+        )
+
+        self.store.save(document)
+        reloaded = self.store.load()
+
+        (derived,) = findings_for_program(
+            "program-a",
+            reloaded.findings,
+            reloaded.evidence_links,
+            reloaded.status_transitions,
+        )
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.MEDIUM
+        )
 
     def test_round_trip_preserves_duplicate_and_superseded_linkage(self) -> None:
         record_one = finding_record(finding_id="f1")
