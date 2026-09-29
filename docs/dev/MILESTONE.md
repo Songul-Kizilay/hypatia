@@ -582,16 +582,28 @@ change, given the claims were independently proven against live service
 behavior in the same pass — judged sufficient convergent verification
 without spending a second external call pointlessly.
 
-## Current — v0.3.423
+## Historical scope: v0.3.423 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Security Validation Recipe desktop workflow (Bug Bounty Researcher roadmap item 9, desktop UI) |
 | Base SHA | 9f06388 (origin/main tip, after v0.3.420-422 all delivered) |
 | Branch | `feature/validation-recipe-desktop-v0.3.423`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-security/hypatia-epistemics/hypatia-runtime: independent parallel review, each PASS with zero findings; hypatia-qa: independent review, PASS with one real test-coverage gap, closed before release; Abacus (route-llm): independent external review, NEEDS_LOCAL_VERIFICATION, independently converged on the same gap QA found plus resolved one NEEDS_VERIFICATION question against source; EVREN attempted and failed closed (no retry, per policy) |
+| PR | #402, MERGED 2026-09-28T19:12:11Z, standard merge commit `3b138d38feb92d03aabf49a3fdbc9f833ead96d4` |
+| origin/main reachability | verified: merge commit `3b138d38` has parents `9f06388a9bb8c624af5df7f567d100be041d33d9` (prior `origin/main`) and `9e28c7b9cf31fbcfd48f91e1d12197572db181e5` (this release); `git merge-base --is-ancestor 9e28c7b9 origin/main` succeeds |
 | Blockers | none |
+
+Post-merge verification (2026-09-29, hypatia-lead): PR #402 base `main`,
+head `feature/validation-recipe-desktop-v0.3.423`, carried 10 changed files
+(3 source, 2 test, 5 doc/version), matching this milestone's own stated
+scope exactly. Both PR-triggered checks (`Linux desktop` run `36469985546`,
+`Windows desktop` run `36469985557`) passed against the release SHA,
+independently of the exact-SHA `workflow_dispatch` runs (`Linux desktop`
+run `36467190195`, `Windows desktop` run `36467193736`) dispatched before
+the PR was opened. Author/committer identity unchanged (Songül Kızılay via
+GitHub noreply email, Claude Sonnet 5 co-author trailer preserved).
 
 Rationale: with v0.3.420, v0.3.421, and v0.3.422 all delivered to
 `origin/main` this session (verified below, Phase 5 main-health check
@@ -3722,63 +3734,27 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.419: security hypothesis creation-time subject-binding symmetry |
-| SHA | a84d4ef78a8e36d27e39e29ca328ec52a9a0f2fe |
-| Linux desktop CI (exact-SHA) | success (run 36391016004) |
-| Windows desktop CI (exact-SHA) | success (run 36391018959) |
-| Linux desktop CI (PR-triggered) | success (run 36391059932) |
-| Windows desktop CI (PR-triggered) | success (run 36391060192) |
+| Milestone | v0.3.423: Security Validation Recipe desktop workflow |
+| SHA | 9e28c7b9cf31fbcfd48f91e1d12197572db181e5 |
+| Linux desktop CI (exact-SHA) | success (run 36467190195) |
+| Windows desktop CI (exact-SHA) | success (run 36467193736) |
+| Linux desktop CI (PR-triggered) | success (run 36469985546) |
+| Windows desktop CI (PR-triggered) | success (run 36469985557) |
 | Status | delivered |
-| PR | #398, MERGED 2026-09-28T09:56:48Z, standard merge commit `06c22aa174ad87a07f9a0c0de3115f9a0b521156` |
-| origin/main reachability | verified: `git merge-base --is-ancestor a84d4ef origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`ef15e43`, `a84d4ef`) prove a true merge rather than a squash or rebase |
+| PR | #402, MERGED 2026-09-28T19:12:11Z, standard merge commit `3b138d38feb92d03aabf49a3fdbc9f833ead96d4` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 9e28c7b9 origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`9f06388`, `9e28c7b`) prove a true merge rather than a squash or rebase |
 
-Post-merge verification (2026-09-28, hypatia-lead): PR #398 base `main`,
-head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 2 commits (the v0.3.418 ledger reconciliation `b52c23f` and release
-commit `a84d4ef`) across exactly 7 changed files. It was `MERGEABLE`/
-`CLEAN`, and both PR-triggered `test-build-smoke` checks passed against the
-release SHA on both runners, independently of the two manually dispatched
-exact-SHA `workflow_dispatch` runs above (also confirmed against the exact
-release SHA individually, not assumed from recency). The standard merge
-commit is on `origin/main`; both carried commits are reachable from it;
-author/committer identity is unchanged (Songül Kızılay via GitHub noreply
-email); the working tree was clean except this ledger reconciliation.
-
-Note: this bounded release closes the last named residual gap explicitly
-deferred by the v0.3.418 ledger's own Non-goals.
-`ResearchSecurityHypothesisApplicationService.create_hypothesis` changed
-its subject-matching check from `any(...)` ("at least one cited evidence
-item matches") to a `mismatched_subject` tuple check mirroring
-`attach_evidence`'s exact aggregation shape ("every cited evidence item
-must match, or the whole call is refused"), correcting the v0.3.417
-runtime note's "different call semantics" framing after hypatia-epistemics
-traced `subject_kind`/`subject_canonical_value` as explicit caller-supplied
-parameters never derived from cited evidence. The check runs strictly
-before `self._load()`/`self._save()`, so refusal is fail-closed with zero
-partial persistence. No schema or on-disk document change of any kind; no
-new evidence relation, status, or kind. Security review: PASS. Epistemics
-review: PASS. Runtime review: PASS, no caveats. QA review:
-PASS-with-caveats, one non-blocking test-strength recommendation (assert
-exact linked evidence IDs/relation, not just a count) applied before
-release. Mutation pass: 1/1 targeted mutant caught (revert the
-`mismatched_subject` check back to `any(...)`), with all 11 sibling
-`CreateHypothesisTests` remaining green. Full canonical gates (Windows
-canonical environment): 7453 tests OK (skipped=3) — 1 net new test over
-v0.3.418's 7452; Black, Ruff, MyPy (601 source files), and
-`git diff --check` clean.
+Post-merge verification (2026-09-29, hypatia-lead): see the "Historical
+scope: v0.3.423 (delivered)" entry above for the full PR-diff and CI
+verification this pointer summarizes.
 
 Deferred, non-blocking findings carried forward (candidates for a future
-milestone, not fixed in this release): F4 (lifecycle replay validation on
-load) — "reject whole document" on any business-rule-invariant violation
-is the security-consistent, precedent-matching default, but implementation
-needs a point-in-time evidence-gate replay (not a final-state check), an
-import-cycle-safe way to share validation logic between the store and
-application service, and a characterization test proving replay-
-equivalence to the write path; real engineering surface for its own
-dedicated milestone. Request-ID/correlation-ID persistence into research
-records — rejected as speculative, no live traceability problem found.
-The Windows `ResourceWarning` test-hygiene debt remains untraced and out
-of scope.
+milestone, not fixed in this release): F4 full-scope replay (the
+point-in-time evidence-gate replay beyond phase 1's closed status-
+transition slice) remains its own future milestone. Request-ID/
+correlation-ID persistence into research records — rejected as
+speculative, no live traceability problem found. The Windows
+`ResourceWarning` test-hygiene debt remains untraced and out of scope.
 
 ## Historical scope: v0.3.418 (delivered)
 
