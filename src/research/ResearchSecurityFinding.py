@@ -25,6 +25,21 @@ three disjoint tuples, never netted against each other, mirroring
 `ResearchSecurityHypothesis`'s own supporting/contradicting discipline plus
 one addition: `validation_evidence` is the one and only real gate for the
 `VALIDATED` status.
+
+`needs_attention` is a second derived-read property, purely a function of
+the two facts above (current `status`, current `contradicting_evidence`).
+It is a current-state observation only: `attach_evidence` has no gate of
+its own (see `cognition.ResearchSecurityFindingApplicationService`), so a
+legitimate history can record `CONTRADICTS` evidence after an
+already-recorded `VALIDATED` transition, and `evidence_links`/
+`status_transitions` are two independently-append-ordered lists with no
+interleaving field between them — replay cannot and does not attempt to
+say which came first (the identical limitation
+`research.ResearchSecurityFindingLifecycleIntegrity` already documents and
+deliberately declines to check). `needs_attention` therefore never claims
+the contradiction predates the validation, that the validation was
+historically invalid, or that the finding is refuted — it names only that
+a human should look again. CONTRADICTING EVIDENCE != AUTOMATIC REFUTATION.
 """
 
 from __future__ import annotations
@@ -142,6 +157,22 @@ class ResearchSecurityFinding:
             raise ResearchError(
                 "Security finding status history does not belong to this finding."
             )
+
+    @property
+    def needs_attention(self) -> bool:
+        """Return whether this finding's *current* state needs a human look.
+
+        `True` only when `status` is currently `VALIDATED` and one or more
+        `CONTRADICTS` evidence links currently exist for this finding.
+        Current state only: makes no claim about when the contradiction was
+        recorded relative to the `VALIDATED` transition, whether validation
+        was historically invalid, or that the finding is refuted. See the
+        class docstring's `needs_attention` paragraph.
+        """
+        return (
+            self.status is ResearchSecurityFindingStatus.VALIDATED
+            and len(self.contradicting_evidence) > 0
+        )
 
 
 def _latest_status(

@@ -37,7 +37,10 @@ from research.ResearchSecurityFindingStatusTransitionRecord import (
 )
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
-from response.ResponseComposer import SECURITY_FINDING_NOT_AUTHORITY_NOTICE
+from response.ResponseComposer import (
+    SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
+    SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
+)
 from tests.desktop.test_research_command_bindings import (
     RecordingVariable,
     RecordingWidget,
@@ -95,6 +98,7 @@ def finding(
     program_id: str = "program-a",
     status: ResearchSecurityFindingStatus = ResearchSecurityFindingStatus.CANDIDATE,
     status_history: tuple[ResearchSecurityFindingStatusTransitionRecord, ...] = (),
+    contradicting_evidence: tuple[ResearchSecurityFindingEvidenceLinkRecord, ...] = (),
 ) -> ResearchSecurityFinding:
     link = ResearchSecurityFindingEvidenceLinkRecord(
         link_id="link-1",
@@ -120,7 +124,7 @@ def finding(
         origin=ResearchSecurityFindingOrigin.OPERATOR_AUTHORED,
         created_at=RECORDED,
         supporting_evidence=(link,),
-        contradicting_evidence=(),
+        contradicting_evidence=contradicting_evidence,
         validation_evidence=(),
         status=status,
         status_history=status_history,
@@ -269,6 +273,64 @@ class ResearchSecurityFindingPanelBehaviorTests(unittest.TestCase):
         detail = value._details["row-1"]
         self.assertIn("Status: validated", detail)
         self.assertIn(SECURITY_FINDING_NOT_AUTHORITY_NOTICE, detail)
+
+    def test_render_shows_the_attention_notice_for_a_validated_contradicted_finding(
+        self,
+    ) -> None:
+        value, _dispatched = panel()
+        value.tree.insert.return_value = "row-1"
+        contradicting = ResearchSecurityFindingEvidenceLinkRecord(
+            link_id="link-2",
+            finding_id="finding-1",
+            program_id="program-a",
+            evidence_kind=ResearchSecurityFindingEvidenceKind.HTTP_EVIDENCE,
+            evidence_id="b" * 64,
+            relation=ResearchSecurityFindingEvidenceRelation.CONTRADICTS,
+            recorded_at=RECORDED,
+        )
+
+        value._render(
+            BrainResponse(
+                message="ok",
+                request_id="request-1",
+                intent="research_security_finding_preview",
+                memory_count=0,
+                research_security_findings=(
+                    entry(
+                        finding(
+                            status=ResearchSecurityFindingStatus.VALIDATED,
+                            contradicting_evidence=(contradicting,),
+                        )
+                    ),
+                ),
+            )
+        )
+
+        detail_lines = value._details["row-1"].splitlines()
+        self.assertIn(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE, detail_lines)
+        # The not-authority notice stays the canonical final line regardless.
+        self.assertEqual(detail_lines[-1], SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+
+    def test_render_omits_the_attention_notice_when_validated_without_contradiction(
+        self,
+    ) -> None:
+        value, _dispatched = panel()
+        value.tree.insert.return_value = "row-1"
+
+        value._render(
+            BrainResponse(
+                message="ok",
+                request_id="request-1",
+                intent="research_security_finding_preview",
+                memory_count=0,
+                research_security_findings=(
+                    entry(finding(status=ResearchSecurityFindingStatus.VALIDATED)),
+                ),
+            )
+        )
+
+        detail = value._details["row-1"]
+        self.assertNotIn(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE, detail)
 
     def test_render_reports_scope_recomputed_live(self) -> None:
         value, _dispatched = panel()

@@ -19,6 +19,7 @@ from research.JsonFileResearchSecurityFindingStore import (
 )
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetObservationRecord import canonicalize_asset_value
+from research.ResearchSecurityFinding import findings_for_program
 from research.ResearchSecurityFindingEvidenceKind import (
     ResearchSecurityFindingEvidenceKind,
 )
@@ -440,6 +441,57 @@ class JsonFileResearchSecurityFindingStoreTests(unittest.TestCase):
         reloaded = self.store.load()
 
         self.assertEqual(reloaded, document)
+
+    def test_needs_attention_survives_a_store_reload(self) -> None:
+        """v0.3.426: `needs_attention` is derived fresh from persisted facts
+        on every read, never stored as its own field -- so restart must
+        reproduce the identical answer from the reloaded flat logs alone."""
+        record = finding_record()
+        validates = ResearchSecurityFindingEvidenceLinkRecord(
+            link_id="link-1",
+            finding_id="finding-1",
+            program_id="program-a",
+            evidence_kind=ResearchSecurityFindingEvidenceKind.HTTP_EVIDENCE,
+            evidence_id="a" * 64,
+            relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+            recorded_at=RECORDED,
+        )
+        contradicts = ResearchSecurityFindingEvidenceLinkRecord(
+            link_id="link-2",
+            finding_id="finding-1",
+            program_id="program-a",
+            evidence_kind=ResearchSecurityFindingEvidenceKind.HTTP_EVIDENCE,
+            evidence_id="b" * 64,
+            relation=ResearchSecurityFindingEvidenceRelation.CONTRADICTS,
+            recorded_at=RECORDED,
+        )
+        transition = ResearchSecurityFindingStatusTransitionRecord(
+            transition_id="t1",
+            finding_id="finding-1",
+            program_id="program-a",
+            status=ResearchSecurityFindingStatus.VALIDATED,
+            reason="",
+            duplicate_of_finding_id=None,
+            superseded_by_finding_id=None,
+            recorded_at=RECORDED,
+        )
+        document = ResearchSecurityFindingDocument(
+            findings=(record,),
+            evidence_links=(validates, contradicts),
+            status_transitions=(transition,),
+        )
+
+        self.store.save(document)
+        reloaded = self.store.load()
+
+        (derived,) = findings_for_program(
+            "program-a",
+            reloaded.findings,
+            reloaded.evidence_links,
+            reloaded.status_transitions,
+        )
+        self.assertIs(derived.status, ResearchSecurityFindingStatus.VALIDATED)
+        self.assertTrue(derived.needs_attention)
 
     def test_round_trip_preserves_duplicate_and_superseded_linkage(self) -> None:
         record_one = finding_record(finding_id="f1")

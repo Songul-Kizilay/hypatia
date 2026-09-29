@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.426] - 2026-09-29
+
+### Added
+
+- Contradiction-aware derived attention for security findings: a new pure,
+  read-only `ResearchSecurityFinding.needs_attention` property, `True`
+  only when a finding's *current* persisted state is `VALIDATED` with one
+  or more `CONTRADICTS` evidence links currently on record. Computed
+  fresh on every read from already-persisted facts, never itself
+  persisted, mirroring the current-state-only discipline
+  `research.ResearchSecurityFindingLifecycleIntegrity` already documents
+  for the same underlying limitation (evidence links and status
+  transitions are two independently-append-ordered lists with no
+  interleaving field, so replay/derivation cannot and does not claim
+  which came first).
+- A new fixed notice constant,
+  `response.ResponseComposer.SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE`,
+  surfaced alongside the existing not-authority notice in every finding
+  create/evidence-attach/status-transition response and in the finding
+  preview listing (per-finding, plus once aggregated) whenever
+  `needs_attention` is `True`. The desktop finding panel's detail pane
+  shows the identical canonical text.
+
+### Security
+
+- No status mutation, no automatic transition, no new evidence relation,
+  no confidence score, and no persisted field: `needs_attention` is a
+  pure boolean read over the two facts already exposed
+  (`status`, `contradicting_evidence`). `CONTRADICTING EVIDENCE !=
+  AUTOMATIC REFUTATION`: the notice names only that a human should look
+  again, never that validation was historically invalid, that the
+  contradiction predates the validation, or that the finding is refuted.
+
 ## [0.3.425] - 2026-09-29
 
 ### Added

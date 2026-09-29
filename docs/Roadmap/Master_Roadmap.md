@@ -955,8 +955,30 @@ startup, not duplicated write-path logic. Deliberately not replayed,
 because it is not provable from persisted, non-interleaved append-only
 history: a hypothesis's status *at the exact moment* its finding was
 created, and whether a `CONTRADICTS` link predates a `VALIDATED`
-transition. Item 8 (Business-logic/state-transition model, which has no
-existing precedent or design in this codebase) remains not yet started.
+transition. v0.3.426 added the first piece of derived epistemic visibility
+on top of that closed gap: `ResearchSecurityFinding.needs_attention`, a
+pure, read-only property naming exactly the current-state tension a
+reader could otherwise only notice by comparing two separately-printed
+numbers — `status` currently `VALIDATED` while `contradicting_evidence`
+is currently non-empty — surfaced in every finding response and the
+desktop panel. It is deliberately narrower than the "not replayed"
+history questions named above: a live derived read can honestly say "this
+is true right now" without needing to prove *when* it became true, which
+is exactly why replay (at load time, fail-closed for the whole
+application) could not safely make the equivalent claim.
+`CONTRADICTING EVIDENCE != AUTOMATIC REFUTATION` — no status changes, no
+confidence score or number was introduced, and findings still have no
+confidence field of any kind (the general-research `ResearchClaimConfidence`/
+`ResearchClaimCalibrator` machinery was investigated and found not
+mechanically reusable here: findings have no authored-confidence field to
+calibrate, and finding evidence links carry no trust/independence
+dimension, unlike `ResearchSourceAssessmentRecord`). `ResearchReproductionRecord`
+remains fully disconnected from the Finding lifecycle — confirmed still
+true, and still deliberately out of scope; a join is structurally
+possible (`reproduction.recipe_id` -> recipe -> `subject_kind == FINDING`)
+but not yet built. Item 8 (Business-logic/state-transition model, which
+has no existing precedent or design in this codebase) remains not yet
+started.
 
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a

@@ -669,5 +669,172 @@ class FindingsForProgramTests(unittest.TestCase):
             )
 
 
+class NeedsAttentionTests(unittest.TestCase):
+    """`needs_attention` is a current-state-only read: `VALIDATED` plus a
+    currently-recorded `CONTRADICTS` link, nothing about which was recorded
+    first (see the `ResearchSecurityFinding` docstring's `needs_attention`
+    paragraph)."""
+
+    def _derive(
+        self,
+        status_value: ResearchSecurityFindingStatus | None,
+        contradicting_count: int,
+        *,
+        with_validates: bool = False,
+        duplicate_of_finding_id: str | None = None,
+        superseded_by_finding_id: str | None = None,
+    ) -> ResearchSecurityFinding:
+        record = finding_record()
+        links = tuple(
+            evidence_link(
+                link_id=f"contradicts-{index}",
+                evidence_id=chr(ord("b") + index) * 64,
+                relation=ResearchSecurityFindingEvidenceRelation.CONTRADICTS,
+            )
+            for index in range(contradicting_count)
+        )
+        if with_validates:
+            links = (
+                evidence_link(
+                    link_id="validates-1",
+                    evidence_id="9" * 64,
+                    relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+                ),
+                *links,
+            )
+        transitions: tuple[ResearchSecurityFindingStatusTransitionRecord, ...] = ()
+        if status_value is not None:
+            transitions = (
+                status_transition(
+                    status=status_value,
+                    duplicate_of_finding_id=duplicate_of_finding_id,
+                    superseded_by_finding_id=superseded_by_finding_id,
+                ),
+            )
+        (derived,) = findings_for_program("program-a", (record,), links, transitions)
+        return derived
+
+    def test_validated_with_zero_contradicts_has_no_attention(self) -> None:
+        derived = self._derive(
+            ResearchSecurityFindingStatus.VALIDATED, 0, with_validates=True
+        )
+        self.assertFalse(derived.needs_attention)
+
+    def test_validated_with_one_contradicts_needs_attention(self) -> None:
+        derived = self._derive(
+            ResearchSecurityFindingStatus.VALIDATED, 1, with_validates=True
+        )
+        self.assertTrue(derived.needs_attention)
+
+    def test_validated_with_multiple_contradicts_needs_attention(self) -> None:
+        derived = self._derive(
+            ResearchSecurityFindingStatus.VALIDATED, 3, with_validates=True
+        )
+        self.assertTrue(derived.needs_attention)
+        self.assertEqual(len(derived.contradicting_evidence), 3)
+
+    def test_validated_with_validates_and_contradicts_needs_attention(self) -> None:
+        """The `VALIDATES` link that gated the transition stays on record
+        alongside the later `CONTRADICTS` link; both are counted, neither
+        nets the other out."""
+        derived = self._derive(
+            ResearchSecurityFindingStatus.VALIDATED, 1, with_validates=True
+        )
+        self.assertTrue(derived.needs_attention)
+        self.assertEqual(len(derived.validation_evidence), 1)
+        self.assertEqual(len(derived.contradicting_evidence), 1)
+
+    def test_candidate_with_contradicts_has_no_attention(self) -> None:
+        derived = self._derive(None, 1)
+        self.assertIs(derived.status, ResearchSecurityFindingStatus.CANDIDATE)
+        self.assertFalse(derived.needs_attention)
+
+    def test_validation_required_with_contradicts_has_no_attention(self) -> None:
+        derived = self._derive(ResearchSecurityFindingStatus.VALIDATION_REQUIRED, 1)
+        self.assertFalse(derived.needs_attention)
+
+    def test_refuted_with_contradicts_has_no_attention(self) -> None:
+        derived = self._derive(ResearchSecurityFindingStatus.REFUTED, 1)
+        self.assertFalse(derived.needs_attention)
+
+    def test_duplicate_with_contradicts_has_no_attention(self) -> None:
+        derived = self._derive(
+            ResearchSecurityFindingStatus.DUPLICATE,
+            1,
+            duplicate_of_finding_id="finding-2",
+        )
+        self.assertFalse(derived.needs_attention)
+
+    def test_superseded_with_contradicts_has_no_attention(self) -> None:
+        derived = self._derive(
+            ResearchSecurityFindingStatus.SUPERSEDED,
+            1,
+            superseded_by_finding_id="finding-2",
+        )
+        self.assertFalse(derived.needs_attention)
+
+    def test_recomputing_from_the_same_persisted_logs_is_deterministic(self) -> None:
+        """Stands in for reload/restart: `findings_for_program` is pure, so
+        calling it twice on byte-identical input must agree on
+        `needs_attention` exactly as it already must agree on every other
+        derived field -- restart can never fabricate a fresher answer than
+        the persisted logs support."""
+        record = finding_record()
+        contradicting = evidence_link(
+            link_id="c1",
+            evidence_id="b" * 64,
+            relation=ResearchSecurityFindingEvidenceRelation.CONTRADICTS,
+        )
+        transition = status_transition(status=ResearchSecurityFindingStatus.VALIDATED)
+        first = findings_for_program(
+            "program-a", (record,), (contradicting,), (transition,)
+        )
+        second = findings_for_program(
+            "program-a", (record,), (contradicting,), (transition,)
+        )
+        self.assertEqual(first, second)
+        self.assertTrue(first[0].needs_attention)
+        self.assertTrue(second[0].needs_attention)
+
+    def test_reading_the_property_mutates_nothing(self) -> None:
+        derived = self._derive(
+            ResearchSecurityFindingStatus.VALIDATED, 1, with_validates=True
+        )
+        status_before = derived.status
+        contradicting_before = derived.contradicting_evidence
+        history_before = derived.status_history
+
+        for _ in range(3):
+            self.assertTrue(derived.needs_attention)
+
+        self.assertIs(derived.status, status_before)
+        self.assertEqual(derived.contradicting_evidence, contradicting_before)
+        self.assertEqual(derived.status_history, history_before)
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            derived.status = ResearchSecurityFindingStatus.REFUTED  # type: ignore[misc]
+
+    def test_attention_requires_both_validated_status_and_contradiction_together(
+        self,
+    ) -> None:
+        """Mutation-equivalent guard, without monkeypatching a property: a
+        status-only implementation (`status is VALIDATED`, ignoring evidence)
+        would wrongly return `True` for the second case below; a
+        contradiction-only implementation (`len(contradicting) > 0`, ignoring
+        status) would wrongly return `True` for the third. Only the real,
+        both-conditions implementation gets all three right."""
+        validated_with_contradiction = self._derive(
+            ResearchSecurityFindingStatus.VALIDATED, 1, with_validates=True
+        )
+        validated_without_contradiction = self._derive(
+            ResearchSecurityFindingStatus.VALIDATED, 0, with_validates=True
+        )
+        refuted_with_contradiction = self._derive(
+            ResearchSecurityFindingStatus.REFUTED, 1
+        )
+        self.assertTrue(validated_with_contradiction.needs_attention)
+        self.assertFalse(validated_without_contradiction.needs_attention)
+        self.assertFalse(refuted_with_contradiction.needs_attention)
+
+
 if __name__ == "__main__":
     unittest.main()
