@@ -38,6 +38,7 @@ from research.ResearchSecurityValidationRecipeSubjectKind import (
 from response.ResponseComposer import (
     REPRODUCTION_NOT_AUTHORITY_NOTICE,
     SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
+    SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE,
     SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
     ResponseComposer,
 )
@@ -67,6 +68,7 @@ def _finding(
     finding_id: str = "finding-1",
     program_id: str = "program-a",
     status: ResearchSecurityFindingStatus = ResearchSecurityFindingStatus.CANDIDATE,
+    supporting_evidence: tuple[ResearchSecurityFindingEvidenceLinkRecord, ...] = (),
     contradicting_evidence: tuple[ResearchSecurityFindingEvidenceLinkRecord, ...] = (),
     validation_evidence: tuple[ResearchSecurityFindingEvidenceLinkRecord, ...] = (),
 ) -> ResearchSecurityFinding:
@@ -98,7 +100,7 @@ def _finding(
         required_followup="required followup",
         origin=ResearchSecurityFindingOrigin.OPERATOR_AUTHORED,
         created_at=RECORDED,
-        supporting_evidence=(),
+        supporting_evidence=supporting_evidence,
         contradicting_evidence=contradicting_evidence,
         validation_evidence=validation_evidence,
         status=status,
@@ -317,6 +319,92 @@ class ReproductionHistorySurfaceTests(unittest.TestCase):
         )
         self.assertIn(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE, response.message)
         self.assertTrue(finding.needs_attention)
+
+
+class EvidenceCeilingSurfaceTests(unittest.TestCase):
+    """v0.3.428: `evidence_ceiling` is surfaced everywhere a finding is
+    shown, with its own fixed not-truth disclaimer, never replacing the
+    existing not-authority/attention notices."""
+
+    def setUp(self) -> None:
+        self.composer = ResponseComposer()
+        self.request = BrainRequest(message="x")
+
+    def test_create_response_shows_the_ceiling_and_its_disclaimer(self) -> None:
+        finding = _finding(
+            supporting_evidence=(
+                _link("s1", "a" * 64, ResearchSecurityFindingEvidenceRelation.SUPPORTS),
+            )
+        )
+        response = self.composer.research_security_finding_create(self.request, finding)
+        self.assertIn("Evidence confidence ceiling: low", response.message)
+        self.assertIn(
+            SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE, response.message
+        )
+
+    def test_preview_shows_each_findings_own_ceiling(self) -> None:
+        unassessed = _finding(finding_id="finding-1")
+        validated = _finding(
+            finding_id="finding-2",
+            status=ResearchSecurityFindingStatus.VALIDATED,
+            validation_evidence=(
+                _link(
+                    "v1",
+                    "a" * 64,
+                    ResearchSecurityFindingEvidenceRelation.VALIDATES,
+                    finding_id="finding-2",
+                ),
+            ),
+        )
+        response = self.composer.research_security_finding_preview(
+            self.request, (_entry(unassessed), _entry(validated))
+        )
+        lines = [line for line in response.message.splitlines() if line.startswith("-")]
+        (unassessed_line,) = [line for line in lines if "(candidate," in line]
+        (validated_line,) = [line for line in lines if "(validated," in line]
+        self.assertIn("evidence confidence ceiling: unassessed", unassessed_line)
+        self.assertIn("evidence confidence ceiling: medium", validated_line)
+        self.assertIn(
+            SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE, response.message
+        )
+
+    def test_a_refuted_finding_with_validating_evidence_shows_unassessed(self) -> None:
+        """The ceiling never reads `medium` beside an explicit refutation,
+        even though `VALIDATES` evidence remains on the append-only record."""
+        finding = _finding(
+            status=ResearchSecurityFindingStatus.REFUTED,
+            validation_evidence=(
+                _link(
+                    "v1", "a" * 64, ResearchSecurityFindingEvidenceRelation.VALIDATES
+                ),
+            ),
+        )
+        response = self.composer.research_security_finding_status_transition(
+            self.request, finding
+        )
+        self.assertIn("Evidence confidence ceiling: unassessed", response.message)
+
+    def test_the_not_truth_disclaimer_never_says_confirmed_or_probability_words(
+        self,
+    ) -> None:
+        response = self.composer.research_security_finding_create(
+            self.request, _finding()
+        )
+        lowered = response.message.lower()
+        self.assertNotIn("% likely", lowered)
+        self.assertNotIn("probability", lowered)
+        self.assertNotIn("confirmed", lowered)
+
+    def test_the_not_authority_notice_still_appears_alongside_the_ceiling(
+        self,
+    ) -> None:
+        response = self.composer.research_security_finding_create(
+            self.request, _finding()
+        )
+        self.assertIn(SECURITY_FINDING_NOT_AUTHORITY_NOTICE, response.message)
+        self.assertIn(
+            SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE, response.message
+        )
 
 
 if __name__ == "__main__":

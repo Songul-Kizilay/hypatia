@@ -215,6 +215,21 @@ SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE = (
     " attention."
 )
 
+#: Fixed, literal, and unconditional wherever `evidence_ceiling` is shown
+#: (see `research.ResearchSecurityFinding.evidence_ceiling`). Distinct from
+#: `SECURITY_FINDING_NOT_AUTHORITY_NOTICE`: that notice says the status
+#: grants no authority; this one says the ceiling names a structural bound
+#: on the record's own shape, not a probability or a truth-confidence, so a
+#: reader never mistakes "the evidence structure could carry at most this
+#: much" for "this finding is this likely to be true." The one canonical
+#: copy: the desktop finding panel imports this constant rather than
+#: restating it.
+SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE = (
+    "Evidence confidence ceiling describes what the recorded evidence"
+    " structure can defensibly support, not how likely this finding is to"
+    " be true."
+)
+
 #: Deliberately separate text from `SECURITY_FINDING_NOT_AUTHORITY_NOTICE`:
 #: a validation recipe has no status of its own, so that notice's "This
 #: status does not grant authority" wording would misdescribe what is being
@@ -1977,6 +1992,8 @@ class ResponseComposer:
             f"Supporting evidence: {len(finding.supporting_evidence)}",
             f"Contradicting evidence: {len(finding.contradicting_evidence)}",
             f"Validation evidence: {len(finding.validation_evidence)}",
+            f"Evidence confidence ceiling: {finding.evidence_ceiling.value}",
+            SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE,
         ]
         if finding.needs_attention:
             lines.append(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE)
@@ -2105,6 +2122,11 @@ class ResponseComposer:
         descriptive visibility, never itself validation: `REPRODUCED != a
         confirmed vulnerability`, `NOT_REPRODUCED != refuted`, and this
         listing never changes `finding.status`/`needs_attention`.
+
+        Each finding's `evidence_ceiling` is also shown -- what the
+        recorded evidence structure can defensibly support, never a
+        probability. Present for every finding, terminal statuses included,
+        exactly like `Status:` itself.
         """
         lines = [f"Security findings: {len(entries)}"]
         for entry in entries:
@@ -2128,6 +2150,7 @@ class ResponseComposer:
                 f"{len(finding.supporting_evidence)} supporting, "
                 f"{len(finding.contradicting_evidence)} contradicting, "
                 f"{len(finding.validation_evidence)} validating, "
+                f"evidence confidence ceiling: {finding.evidence_ceiling.value}, "
                 f"scope: {scope_text}{attention_suffix})"
             )
             for reproduction in entry.reproductions:
@@ -2136,6 +2159,8 @@ class ResponseComposer:
                     f" {reproduction.outcome.value} (recipe"
                     f" {reproduction.recipe_id})"
                 )
+        if entries:
+            lines.append(SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE)
         if any(entry.reproductions for entry in entries):
             lines.append(REPRODUCTION_NOT_AUTHORITY_NOTICE)
         if any(entry.finding.needs_attention for entry in entries):

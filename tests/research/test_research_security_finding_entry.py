@@ -19,6 +19,18 @@ from research.ResearchReproductionOutcome import ResearchReproductionOutcome
 from research.ResearchReproductionRecord import ResearchReproductionRecord
 from research.ResearchSecurityFinding import ResearchSecurityFinding
 from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
+from research.ResearchSecurityFindingEvidenceCeiling import (
+    ResearchSecurityFindingEvidenceCeiling,
+)
+from research.ResearchSecurityFindingEvidenceKind import (
+    ResearchSecurityFindingEvidenceKind,
+)
+from research.ResearchSecurityFindingEvidenceLinkRecord import (
+    ResearchSecurityFindingEvidenceLinkRecord,
+)
+from research.ResearchSecurityFindingEvidenceRelation import (
+    ResearchSecurityFindingEvidenceRelation,
+)
 from research.ResearchSecurityFindingOrigin import ResearchSecurityFindingOrigin
 from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
@@ -34,7 +46,9 @@ NO_SCOPE = ResearchAssetScopeResolutionView(
 
 
 def _finding(
-    finding_id: str = "finding-1", program_id: str = "program-a"
+    finding_id: str = "finding-1",
+    program_id: str = "program-a",
+    validation_evidence: tuple[ResearchSecurityFindingEvidenceLinkRecord, ...] = (),
 ) -> ResearchSecurityFinding:
     return ResearchSecurityFinding(
         finding_id=finding_id,
@@ -52,9 +66,23 @@ def _finding(
         created_at=RECORDED,
         supporting_evidence=(),
         contradicting_evidence=(),
-        validation_evidence=(),
+        validation_evidence=validation_evidence,
         status=ResearchSecurityFindingStatus.CANDIDATE,
         status_history=(),
+    )
+
+
+def _validates_link(
+    finding_id: str = "finding-1", program_id: str = "program-a"
+) -> ResearchSecurityFindingEvidenceLinkRecord:
+    return ResearchSecurityFindingEvidenceLinkRecord(
+        link_id="validates-1",
+        finding_id=finding_id,
+        program_id=program_id,
+        evidence_kind=ResearchSecurityFindingEvidenceKind.HTTP_EVIDENCE,
+        evidence_id="a" * 64,
+        relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+        recorded_at=RECORDED,
     )
 
 
@@ -178,6 +206,46 @@ class WithReproductionsTests(unittest.TestCase):
         )
         with self.assertRaises(ResearchError):
             original.with_reproductions((_reproduction(subject_id="finding-2"),))
+
+
+class ReproductionDoesNotAffectEvidenceCeilingTests(unittest.TestCase):
+    """v0.3.428: `evidence_ceiling` is computed exclusively from
+    `ResearchSecurityFinding`'s own evidence tuples -- it does not read
+    `ResearchSecurityFindingEntry.reproductions` at all, for any outcome."""
+
+    def test_no_reproduction_history_leaves_the_ceiling_unchanged(self) -> None:
+        entry = ResearchSecurityFindingEntry(finding=_finding(), scope=NO_SCOPE)
+        with_history = entry.with_reproductions((_reproduction(),))
+        self.assertIs(
+            entry.finding.evidence_ceiling, with_history.finding.evidence_ceiling
+        )
+
+    def test_every_reproduction_outcome_leaves_the_ceiling_unchanged(self) -> None:
+        baseline = ResearchSecurityFindingEntry(
+            finding=_finding(), scope=NO_SCOPE
+        ).finding.evidence_ceiling
+        for outcome in ResearchReproductionOutcome:
+            with self.subTest(outcome=outcome):
+                entry = ResearchSecurityFindingEntry(
+                    finding=_finding(), scope=NO_SCOPE
+                ).with_reproductions((_reproduction(outcome=outcome),))
+                self.assertIs(entry.finding.evidence_ceiling, baseline)
+
+    def test_every_reproduction_outcome_leaves_a_non_unassessed_ceiling_unchanged(
+        self,
+    ) -> None:
+        """A non-trivial baseline: `MEDIUM`, not `UNASSESSED`, so this
+        proves REPRODUCED cannot raise it and no outcome can lower it
+        either -- not just that a floor stays a floor."""
+        medium_finding = _finding(validation_evidence=(_validates_link(),))
+        baseline = medium_finding.evidence_ceiling
+        self.assertIs(baseline, ResearchSecurityFindingEvidenceCeiling.MEDIUM)
+        for outcome in ResearchReproductionOutcome:
+            with self.subTest(outcome=outcome):
+                entry = ResearchSecurityFindingEntry(
+                    finding=medium_finding, scope=NO_SCOPE
+                ).with_reproductions((_reproduction(outcome=outcome),))
+                self.assertIs(entry.finding.evidence_ceiling, baseline)
 
 
 if __name__ == "__main__":

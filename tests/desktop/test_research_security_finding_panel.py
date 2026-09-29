@@ -45,6 +45,7 @@ from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 from response.ResponseComposer import (
     REPRODUCTION_NOT_AUTHORITY_NOTICE,
     SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
+    SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE,
     SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
 )
 from tests.desktop.test_research_command_bindings import (
@@ -105,6 +106,7 @@ def finding(
     status: ResearchSecurityFindingStatus = ResearchSecurityFindingStatus.CANDIDATE,
     status_history: tuple[ResearchSecurityFindingStatusTransitionRecord, ...] = (),
     contradicting_evidence: tuple[ResearchSecurityFindingEvidenceLinkRecord, ...] = (),
+    validation_evidence: tuple[ResearchSecurityFindingEvidenceLinkRecord, ...] = (),
 ) -> ResearchSecurityFinding:
     link = ResearchSecurityFindingEvidenceLinkRecord(
         link_id="link-1",
@@ -131,7 +133,7 @@ def finding(
         created_at=RECORDED,
         supporting_evidence=(link,),
         contradicting_evidence=contradicting_evidence,
-        validation_evidence=(),
+        validation_evidence=validation_evidence,
         status=status,
         status_history=status_history,
     )
@@ -439,6 +441,61 @@ class ResearchSecurityFindingPanelBehaviorTests(unittest.TestCase):
         value, _dispatched = panel()
         for attribute_name in dir(value):
             self.assertNotIn("reproduction", attribute_name.lower())
+
+    def test_render_shows_the_evidence_ceiling_and_its_disclaimer(self) -> None:
+        value, _dispatched = panel()
+        value.tree.insert.return_value = "row-1"
+
+        value._render(
+            BrainResponse(
+                message="ok",
+                request_id="request-1",
+                intent="research_security_finding_preview",
+                memory_count=0,
+                research_security_findings=(entry(finding()),),
+            )
+        )
+
+        detail_lines = value._details["row-1"].splitlines()
+        self.assertIn("Evidence confidence ceiling: low", detail_lines)
+        self.assertIn(SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE, detail_lines)
+        self.assertEqual(detail_lines[-1], SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+
+    def test_render_shows_unassessed_for_a_refuted_finding_with_validating_evidence(
+        self,
+    ) -> None:
+        """The ceiling never reads `medium` beside an explicit refutation."""
+        value, _dispatched = panel()
+        value.tree.insert.return_value = "row-1"
+        validates = ResearchSecurityFindingEvidenceLinkRecord(
+            link_id="link-2",
+            finding_id="finding-1",
+            program_id="program-a",
+            evidence_kind=ResearchSecurityFindingEvidenceKind.HTTP_EVIDENCE,
+            evidence_id="b" * 64,
+            relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+            recorded_at=RECORDED,
+        )
+
+        value._render(
+            BrainResponse(
+                message="ok",
+                request_id="request-1",
+                intent="research_security_finding_preview",
+                memory_count=0,
+                research_security_findings=(
+                    entry(
+                        finding(
+                            status=ResearchSecurityFindingStatus.REFUTED,
+                            validation_evidence=(validates,),
+                        )
+                    ),
+                ),
+            )
+        )
+
+        detail_lines = value._details["row-1"].splitlines()
+        self.assertIn("Evidence confidence ceiling: unassessed", detail_lines)
 
     def test_render_reports_scope_recomputed_live(self) -> None:
         value, _dispatched = panel()

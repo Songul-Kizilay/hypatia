@@ -2,10 +2,42 @@
 
 ## Runtime Version
 
-`v0.3.427 (Genesis)`
+`v0.3.428 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.428 adds Security Finding evidence assessment / confidence
+foundation: a new pure, read-only `ResearchSecurityFinding.evidence_ceiling`
+property returning a new `ResearchSecurityFindingEvidenceCeiling`
+(`UNASSESSED`/`LOW`/`MEDIUM`/`HIGH`) -- what the recorded evidence
+*structure* can defensibly support, never a probability or truth-confidence.
+Deliberately a new, separate type from the unrelated general-research
+`ResearchClaimConfidence`/`ResearchClaimCalibrator`: finding evidence links
+carry no `ResearchInformationTrust`/`ResearchSourceIndependence`-equivalent
+dimension, so only the *pattern* (contradiction collapses confidence) is
+reused, never the code. Reachable tiers, presence/absence only (never
+counted): `UNASSESSED` when `status` is `REFUTED` or any `CONTRADICTS`
+link exists; `MEDIUM` when any `VALIDATES` link exists; `LOW` when any
+`SUPPORTS` link exists; `UNASSESSED` otherwise. `HIGH` is declared but
+permanently unreachable today -- reaching it would require an
+independence/trust judgement finding evidence does not carry. Surfaced via
+a new disclaimer notice, `SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE`,
+co-rendered unconditionally wherever the ceiling is shown.
+`cognition.ResearchSecurityFindingApplicationService` has zero diff; no
+status mutation, no new store, no new Brain intent; `ResearchReproductionRecord`
+outcomes play no part in this property. Independent hypatia-epistemics
+review: PASS (epistemics was the designated primary/gating reviewer for
+this milestone's central design decision -- confirmed Path A, the
+structural-ceiling approach, is genuinely repository-grounded and does not
+require information the store lacks). Independent hypatia-security review:
+PASS, no findings. Independent hypatia-qa review: PASS-with-one-caveat
+(found and closed, before this delivery, a real test-coverage gap: the
+original test suite only exercised equal-count contradiction/support
+combinations, which an unintended vote-counting implementation could have
+slipped through; added explicit asymmetric-count assertions proving
+presence-only semantics). Windows canonical environment: 7755 tests, `OK
+(skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.427 adds Finding <-> Reproduction Record derived-read
 visibility: a security finding's preview now also shows its

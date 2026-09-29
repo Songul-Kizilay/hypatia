@@ -40,6 +40,12 @@ deliberately declines to check). `needs_attention` therefore never claims
 the contradiction predates the validation, that the validation was
 historically invalid, or that the finding is refuted — it names only that
 a human should look again. CONTRADICTING EVIDENCE != AUTOMATIC REFUTATION.
+
+`evidence_ceiling` is a third derived-read property, returning a
+`ResearchSecurityFindingEvidenceCeiling`: what the recorded evidence
+*structure* can defensibly support, never a truth-confidence. See that
+property's own docstring for the exact rule and why `HIGH` is
+permanently unreachable from today's finding evidence model.
 """
 
 from __future__ import annotations
@@ -49,6 +55,9 @@ from datetime import datetime
 
 from core.Exceptions import ResearchError
 from research.ResearchAssetKind import ResearchAssetKind
+from research.ResearchSecurityFindingEvidenceCeiling import (
+    ResearchSecurityFindingEvidenceCeiling,
+)
 from research.ResearchSecurityFindingEvidenceLinkRecord import (
     ResearchSecurityFindingEvidenceLinkRecord,
 )
@@ -173,6 +182,71 @@ class ResearchSecurityFinding:
             self.status is ResearchSecurityFindingStatus.VALIDATED
             and len(self.contradicting_evidence) > 0
         )
+
+    @property
+    def evidence_ceiling(self) -> ResearchSecurityFindingEvidenceCeiling:
+        """Return what this finding's *current* evidence structure can
+        defensibly support -- never a probability, never a truth-confidence.
+
+        Presence/absence only, never a count: `MEDIUM` is reached by one
+        `VALIDATES` link exactly as readily as by ten, mirroring
+        `_require_validation_gate`'s own existing rule ("at least one
+        validating evidence citation") rather than inventing a new
+        magnitude concept. Two links citing the same `evidence_id` are two
+        recorded facts, never counted as two independent ones -- this
+        property counts neither, so a repeated citation cannot move the
+        ceiling at all.
+
+        Reachable tiers, in order of precedence:
+
+        1. `UNASSESSED` -- `status` is currently `REFUTED`. `REFUTED` is
+           reachable from any non-terminal status by a bare operator
+           judgement (`_require_linkage`/`is_valid_status_transition` gate
+           only the *linkage* fields for `DUPLICATE`/`SUPERSEDED`; no
+           analogous `_require_refutation_gate` exists), so a finding can
+           be `REFUTED` with strong-looking `VALIDATES` evidence still on
+           record. A ceiling naming that evidence `MEDIUM` right next to an
+           explicit operator refutation would misdescribe the record more
+           than it would inform a reader; the operator's own explicit
+           terminal judgement dominates.
+        2. `UNASSESSED` -- one or more `CONTRADICTS` links currently exist,
+           regardless of what else is recorded. Mirrors
+           `ResearchClaimCalibrator._ceilings`'s own identical rule for the
+           unrelated claim subsystem (`if profile.contradicted: return
+           ..., ResearchClaimConfidence.UNASSESSED`) -- the same pattern,
+           not the same code, applied to this type's own evidence shape.
+           This is a ceiling constraint only: it changes nothing about
+           `status` or `needs_attention`. CONTRADICTING EVIDENCE !=
+           AUTOMATIC REFUTATION.
+        3. `MEDIUM` -- one or more `VALIDATES` links currently exist (and
+           none of the above applied).
+        4. `LOW` -- one or more `SUPPORTS` links currently exist (and none
+           of the above applied).
+        5. `UNASSESSED` -- no evidence links of any kind are currently
+           recorded.
+
+        `HIGH` is never returned: reaching it would require an
+        independence or trust judgement over the cited evidence that this
+        record does not carry (see
+        `research.ResearchSecurityFindingEvidenceCeiling`'s module
+        docstring). `DUPLICATE`/`SUPERSEDED` are administrative
+        dispositions, not evidentiary judgements, and are deliberately
+        given no special case here -- the ceiling for those statuses still
+        reflects the evidence structure exactly as it would for any other
+        non-`REFUTED` status. Reproduction Record history plays no part in
+        this property at all: an operator's own manual observation is not
+        independent corroboration and `REPRODUCED` is never confirmed
+        vulnerability truth (see `research.ResearchReproductionOutcome`).
+        """
+        if self.status is ResearchSecurityFindingStatus.REFUTED:
+            return ResearchSecurityFindingEvidenceCeiling.UNASSESSED
+        if len(self.contradicting_evidence) > 0:
+            return ResearchSecurityFindingEvidenceCeiling.UNASSESSED
+        if len(self.validation_evidence) > 0:
+            return ResearchSecurityFindingEvidenceCeiling.MEDIUM
+        if len(self.supporting_evidence) > 0:
+            return ResearchSecurityFindingEvidenceCeiling.LOW
+        return ResearchSecurityFindingEvidenceCeiling.UNASSESSED
 
 
 def _latest_status(

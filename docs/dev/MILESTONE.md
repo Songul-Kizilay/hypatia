@@ -10,16 +10,178 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.427
+## Current — v0.3.428
+
+| Field | Value |
+| --- | --- |
+| Milestone | Security Finding evidence assessment / confidence foundation (M1 — Finding Lifecycle Closure, addresses the remaining confidence gap) |
+| Base SHA | 40fa7db (origin/main tip, v0.3.427 delivered) |
+| Branch | `feature/finding-evidence-assessment-v0.3.428`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS — designated primary/gating reviewer for this milestone's central design decision (Path A vs Path B), confirmed Path A is genuinely repository-grounded; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and closed one real test-coverage gap (asymmetric-count precedence) before this delivery |
+| Blockers | none |
+
+Rationale: v0.3.406-427 delivered every other M1 lifecycle piece (evidence
+links, validation gate, cross-store replay integrity, contradiction
+attention, reproduction visibility) but findings still carried no
+confidence-like read at all — only a categorical, operator-driven
+`status`. Repository-grounded audit (this session, mirroring v0.3.426's
+own prior audit) confirmed the general-research
+`ResearchClaimConfidence`/`ResearchClaimCalibrator` subsystem could not be
+mechanically reused: it computes a claim's confidence ceiling from
+`ResearchInformationTrust` and `ResearchSourceIndependence` — both
+operator-authored, per-*source* judgements `ResearchSecurityFindingEvidenceLinkRecord`
+has no equivalent of (it carries only `evidence_id` and a `relation`).
+`ResearchHttpEvidenceRecord` itself has exactly one
+`ResearchHttpEvidenceProvenanceKind` member today, so every citation
+shares identical provenance — there is no trust gradient and no way to
+distinguish "the same observation restated" from "two independently
+obtained observations." This ruled out Path B (the milestone's
+fallback for when no defensible confidence-like mapping exists) only if
+Path A itself turned out to require that missing information — it does
+not: **Path A (structural confidence ceiling)** was selected because a
+defensible ceiling can be built from facts the record already has
+(evidence-relation presence/absence, `status`) without ever touching
+independence, trust, corroboration, or magnitude.
+
+`research.ResearchSecurityFindingEvidenceCeiling` (new file): a small
+StrEnum, `UNASSESSED`/`LOW`/`MEDIUM`/`HIGH`, matching
+`ResearchClaimConfidence`'s four-tier *shape* for forward extensibility
+but deliberately a separate type — this codebase's own established
+convention (`ResearchSecurityFindingEvidenceKind` vs
+`ResearchAssetProvenanceKind`, named explicitly in that file's own
+docstring) is that each subsystem owns its vocabulary independently even
+where members overlap, so the two subsystems can evolve independently
+later without coupling.
+
+`ResearchSecurityFinding.evidence_ceiling` (new property, added directly
+after `needs_attention` in the same file, following that same "if a
+result can be computed directly from `ResearchSecurityFinding`, do not
+build a framework around it" precedent): presence/absence only, in this
+precedence order — (1) `UNASSESSED` if `status is REFUTED` (a bare
+operator judgement gated by no evidence requirement of its own, per
+`is_valid_status_transition`'s table — a finding can be `REFUTED` with
+strong-looking `VALIDATES` evidence still on record, so the ceiling must
+not read `MEDIUM` beside an explicit refutation); (2) `UNASSESSED` if any
+`CONTRADICTS` link currently exists, mirroring
+`ResearchClaimCalibrator._ceilings`'s own identical "contradicted ->
+confidence `UNASSESSED`" rule as a *pattern*, not code reuse; (3)
+`MEDIUM` if any `VALIDATES` link exists, mirroring
+`_require_validation_gate`'s own existing "at least one validating
+evidence citation" rule (one link is exactly as sufficient as ten); (4)
+`LOW` if any `SUPPORTS` link exists; (5) `UNASSESSED` otherwise. `HIGH` is
+declared but never returned by any branch — reaching it would require an
+independence/trust judgement this record does not carry.
+`DUPLICATE`/`SUPERSEDED` are deliberately given no special case (they are
+administrative dispositions, not evidentiary judgements). Reproduction
+Record history plays no part in this property at all — an operator's own
+manual observation is not independent corroboration and `REPRODUCED` is
+never confirmed vulnerability truth.
+
+Surfaced via a new fixed disclaimer,
+`response.ResponseComposer.SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE`
+("Evidence confidence ceiling describes what the recorded evidence
+structure can defensibly support, not how likely this finding is to be
+true."), co-rendered *unconditionally* wherever the ceiling value is
+shown — every finding create/evidence-attach/status-transition response
+(`_security_finding_summary_lines`, the same shared helper as before),
+the finding preview listing, and the desktop finding panel's detail pane
+(inserted before the existing not-authority notice, which stays the
+pane's fixed final line for every status, matching its pre-existing
+contract).
+
+Scope: one new file (`ResearchSecurityFindingEvidenceCeiling.py`), one
+new property in `ResearchSecurityFinding.py`, one new constant plus two
+call-site extensions in `ResponseComposer.py`, one extended method in
+`ResearchSecurityFindingPanel.py`, and five test files (`tests/research/
+test_research_security_finding.py`'s new `EvidenceCeilingTests` class —
+23 tests including a precedence-order mutation guard and an
+asymmetric-count dominance guard; `tests/research/
+test_research_security_finding_entry.py`'s new
+`ReproductionDoesNotAffectEvidenceCeilingTests` class, proving
+independence from reproduction history for both a trivial and a
+non-trivial baseline; `tests/research/
+test_json_file_research_security_finding_store.py`'s new reload test;
+`tests/response/test_research_security_finding_response.py`'s new
+`EvidenceCeilingSurfaceTests` class; `tests/desktop/
+test_research_security_finding_panel.py`'s two new tests). No new store,
+no schema/version bump, no new Brain intent, no new status, no new
+evidence relation, no numeric score or percentage anywhere.
+`cognition.ResearchSecurityFindingApplicationService` (the write-path
+service) has zero diff — confirmed by hypatia-security directly diffing
+the file.
+
+Security invariants (restated, unchanged by this milestone): MODEL OUTPUT
+!= AUTHORITY; VALIDATED FINDING != AUTHORITY TO ACT; REPRODUCTION RECORD
+!= EXECUTION AUTHORITY; CONTRADICTING EVIDENCE != AUTOMATIC REFUTATION.
+`evidence_ceiling` performs no I/O, reads no free-text field (title,
+description, required followup, a transition reason), so untrusted or
+model-generated content cannot influence the returned tier. `needs_attention`
+(v0.3.426) and the reproduction-history join (v0.3.427) are both entirely
+unchanged by this diff.
+
+Review findings and how each was resolved:
+- **hypatia-epistemics** (independent, read-only, designated primary/
+  gating reviewer): PASS. Tried explicitly to prove the LOW/MEDIUM/
+  UNASSESSED mapping requires information the store does not have —
+  could not: every branch reads only `status` and evidence-tuple
+  presence, all of which the record already carries; `HIGH` (the tier
+  that *would* need trust/independence data) is correctly never reached.
+  Scrutinized the `REFUTED`-forces-`UNASSESSED` rule specifically and
+  confirmed it is a repository-grounded reading (no evidence gate exists
+  for `REFUTED`), not an invented truth-claim — it only suppresses a
+  label, never touches `status`/`needs_attention`. Confirmed every
+  render site's wording never implies a probability or percentage. Noted
+  one non-blocking wording nit (the label "Evidence confidence ceiling"
+  contains the word "confidence," the exact vocabulary the docstrings
+  work to disclaim) — mitigated by the always-co-rendered notice, and
+  the label text matches this milestone's own instructed wording, so
+  left as specified.
+- **hypatia-security** (independent, read-only): PASS, no findings.
+  Confirmed `evidence_ceiling`'s body is five plain comparisons with no
+  I/O; confirmed zero diff on `ResearchSecurityFindingApplicationService`
+  and on every existing status/relation enum and gate; confirmed no
+  free-text field or `ResearchReproductionRecord` reference reaches the
+  property at all.
+- **hypatia-qa** (independent): found one real, concrete gap before this
+  delivery — every contradiction-combination test used equal counts
+  (e.g. 1 `SUPPORTS` vs 1 `CONTRADICTS`), so a magnitude-comparing
+  ("vote-counting") implementation could have passed the suite as
+  originally written. **Closed**: added
+  `test_a_single_contradiction_dominates_regardless_of_how_much_else_exists`,
+  asserting one `CONTRADICTS` link still forces `UNASSESSED` against five
+  `SUPPORTS`/`VALIDATES` links each, independently re-verified against a
+  deliberately-broken magnitude-comparison variant. Also confirmed the
+  pre-existing desktop last-line contract still holds and that the
+  reproduction-independence tests cover a non-trivial (`MEDIUM`, not
+  just `UNASSESSED`) baseline.
+
+Verification (2026-09-29, Windows canonical environment, hypatia-lead):
+7755 tests, `OK (skipped=3)` — 34 net new over v0.3.427's 7721. Black,
+Ruff, MyPy (`src`, 614 source files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.427 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Finding <-> Reproduction Record derived-read visibility (M1 — Finding Lifecycle Closure, next step after v0.3.426's contradiction-attention delivery) |
 | Base SHA | 3280efd (origin/main tip, v0.3.426 delivered) |
 | Branch | `feature/finding-reproduction-visibility-v0.3.427`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 8e78383cf380e09cfdd0ce0ab65ad2e9f712464b |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS, no evidentiary/historical-ordering overclaim found; hypatia-security: independent review, PASS, no findings, purely additive read composition confirmed, `ResearchSecurityFindingApplicationService` has zero diff; hypatia-qa: independent review, PASS-with-one-low-severity-caveat (see below) |
+| PR | #406, MERGED 2026-09-29T15:04:40Z, standard merge commit `40fa7dbfc5679a997bd520f87706ada42cc1a6bd` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 8e78383c origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Blockers | none |
+
+Post-merge verification (2026-09-29, hypatia-lead, performed at the start
+of the v0.3.428 session): PR #406 base `main`, head
+`feature/finding-reproduction-visibility-v0.3.427`, carried exactly 1
+commit (the release commit `8e78383`), 14 files changed matching this
+milestone's own stated scope exactly. Both PR-triggered `test-build-smoke`
+checks `pass` (runs `36586658301`/`36586658644`). Author/committer
+identity unchanged (Songül Kızılay via GitHub noreply email, Claude
+Sonnet 5 co-author trailer preserved on the release commit).
 
 Rationale: v0.3.426's own ledger entry noted `ResearchReproductionRecord`
 was confirmed fully disconnected from the Finding lifecycle — no desktop

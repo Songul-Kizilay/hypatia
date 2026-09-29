@@ -19,6 +19,11 @@ The detail pane also lists each finding's currently-associated reproduction
 history (`entry.reproductions`), read-only and purely descriptive -- no
 button or control here ever records, edits, or runs a reproduction; that
 remains the Reproduction feature's own panel to add later.
+
+It also shows `finding.evidence_ceiling` alongside its fixed not-truth
+disclaimer, imported rather than restated for the same reason as the
+other notices: what the recorded evidence structure can defensibly
+support, never a probability that the finding is true.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
 from response.ResponseComposer import (
     REPRODUCTION_NOT_AUTHORITY_NOTICE,
     SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
+    SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE,
     SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
 )
 
@@ -375,6 +381,7 @@ class ResearchSecurityFindingPanel:
                 f"Supporting evidence IDs: {supporting_ids}",
                 f"Contradicting evidence IDs: {contradicting_ids}",
                 f"Validation evidence IDs: {validation_ids}",
+                f"Evidence confidence ceiling: {finding.evidence_ceiling.value}",
                 f"Duplicate of: {duplicate_of}",
                 f"Superseded by: {superseded_by}",
                 "Status history:",
@@ -383,6 +390,7 @@ class ResearchSecurityFindingPanel:
                 "Reproductions:",
                 *reproduction_lines,
             ]
+            detail_lines.append(SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE)
             if entry.reproductions:
                 detail_lines.append(REPRODUCTION_NOT_AUTHORITY_NOTICE)
             if finding.needs_attention:

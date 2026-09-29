@@ -19,6 +19,9 @@ from research.ResearchSecurityFinding import (
     ResearchSecurityFinding,
     findings_for_program,
 )
+from research.ResearchSecurityFindingEvidenceCeiling import (
+    ResearchSecurityFindingEvidenceCeiling,
+)
 from research.ResearchSecurityFindingEvidenceKind import (
     ResearchSecurityFindingEvidenceKind,
 )
@@ -834,6 +837,361 @@ class NeedsAttentionTests(unittest.TestCase):
         self.assertTrue(validated_with_contradiction.needs_attention)
         self.assertFalse(validated_without_contradiction.needs_attention)
         self.assertFalse(refuted_with_contradiction.needs_attention)
+
+
+class EvidenceCeilingTests(unittest.TestCase):
+    """`evidence_ceiling` is a current-state-only, presence-based read over
+    the same three evidence tuples `needs_attention` already reads, plus
+    `status`. See the property's own docstring for the exact rule."""
+
+    def _derive(
+        self,
+        *,
+        status_value: ResearchSecurityFindingStatus | None = None,
+        supports_count: int = 0,
+        contradicts_count: int = 0,
+        validates_count: int = 0,
+        title: str = "title",
+        description: str = "description",
+        required_followup: str = "required followup",
+        duplicate_of_finding_id: str | None = None,
+        superseded_by_finding_id: str | None = None,
+    ) -> ResearchSecurityFinding:
+        record = finding_record(
+            title=title,
+            description=description,
+            required_followup=required_followup,
+        )
+        links: list[ResearchSecurityFindingEvidenceLinkRecord] = []
+        # sha256-hex-shaped evidence IDs only (0-9a-f); each group draws from
+        # its own slice of the hex alphabet so no two groups can collide.
+        for index in range(supports_count):
+            links.append(
+                evidence_link(
+                    link_id=f"supports-{index}",
+                    evidence_id="0123456789ab"[index] * 64,
+                    relation=ResearchSecurityFindingEvidenceRelation.SUPPORTS,
+                )
+            )
+        for index in range(contradicts_count):
+            links.append(
+                evidence_link(
+                    link_id=f"contradicts-{index}",
+                    evidence_id="c" * 64 if index == 0 else f"c{index}".ljust(64, "0"),
+                    relation=ResearchSecurityFindingEvidenceRelation.CONTRADICTS,
+                )
+            )
+        for index in range(validates_count):
+            links.append(
+                evidence_link(
+                    link_id=f"validates-{index}",
+                    evidence_id="d" * 64 if index == 0 else f"d{index}".ljust(64, "0"),
+                    relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+                )
+            )
+        transitions: tuple[ResearchSecurityFindingStatusTransitionRecord, ...] = ()
+        if status_value is not None:
+            transitions = (
+                status_transition(
+                    status=status_value,
+                    duplicate_of_finding_id=duplicate_of_finding_id,
+                    superseded_by_finding_id=superseded_by_finding_id,
+                ),
+            )
+        (derived,) = findings_for_program(
+            "program-a", (record,), tuple(links), transitions
+        )
+        return derived
+
+    # -- required scenarios 1-9: evidence combinations ------------------------
+
+    def test_no_evidence_is_unassessed(self) -> None:
+        self.assertIs(
+            self._derive().evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+
+    def test_supports_only_is_low(self) -> None:
+        self.assertIs(
+            self._derive(supports_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.LOW,
+        )
+
+    def test_multiple_supports_is_still_low_never_higher(self) -> None:
+        """Independence is never inferred from quantity: three `SUPPORTS`
+        links reach the identical ceiling as one."""
+        self.assertIs(
+            self._derive(supports_count=3).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.LOW,
+        )
+
+    def test_validates_only_is_medium(self) -> None:
+        self.assertIs(
+            self._derive(validates_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.MEDIUM,
+        )
+
+    def test_supports_and_validates_is_medium(self) -> None:
+        """`VALIDATES` dominates `SUPPORTS`, never summed with it."""
+        self.assertIs(
+            self._derive(supports_count=1, validates_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.MEDIUM,
+        )
+
+    def test_contradicts_only_is_unassessed(self) -> None:
+        self.assertIs(
+            self._derive(contradicts_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+
+    def test_supports_and_contradicts_is_unassessed(self) -> None:
+        self.assertIs(
+            self._derive(supports_count=1, contradicts_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+
+    def test_validates_and_contradicts_is_unassessed(self) -> None:
+        """Contradiction dominates even over validating evidence -- the
+        identical dominance `ResearchClaimCalibrator._ceilings` already
+        applies for the unrelated claim subsystem."""
+        self.assertIs(
+            self._derive(validates_count=1, contradicts_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+
+    def test_supports_validates_and_contradicts_is_unassessed(self) -> None:
+        self.assertIs(
+            self._derive(
+                supports_count=1, validates_count=1, contradicts_count=1
+            ).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+
+    def test_a_single_contradiction_dominates_regardless_of_how_much_else_exists(
+        self,
+    ) -> None:
+        """Presence, never a vote: one `CONTRADICTS` link must force
+        `UNASSESSED` even outnumbered five-to-one by `SUPPORTS`/`VALIDATES`
+        links. A magnitude-comparing ("netting") implementation -- e.g.
+        `UNASSESSED` only when `contradicts_count >= max(supports_count,
+        validates_count)` -- would wrongly pass every *equal-count* test
+        above but fails here."""
+        self.assertIs(
+            self._derive(supports_count=5, contradicts_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+        self.assertIs(
+            self._derive(validates_count=5, contradicts_count=1).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+        self.assertIs(
+            self._derive(
+                supports_count=5, validates_count=5, contradicts_count=1
+            ).evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+
+    # -- required scenarios 10-15: every status --------------------------------
+
+    def test_candidate_status_does_not_override_the_evidence_based_ceiling(
+        self,
+    ) -> None:
+        derived = self._derive(status_value=None, validates_count=1)
+        self.assertIs(derived.status, ResearchSecurityFindingStatus.CANDIDATE)
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.MEDIUM
+        )
+
+    def test_validation_required_status_does_not_override_the_ceiling(self) -> None:
+        derived = self._derive(
+            status_value=ResearchSecurityFindingStatus.VALIDATION_REQUIRED,
+            supports_count=1,
+        )
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.LOW
+        )
+
+    def test_validated_status_does_not_override_the_ceiling(self) -> None:
+        derived = self._derive(
+            status_value=ResearchSecurityFindingStatus.VALIDATED, validates_count=1
+        )
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.MEDIUM
+        )
+
+    def test_refuted_status_forces_unassessed_even_with_validating_evidence(
+        self,
+    ) -> None:
+        """`REFUTED` is a bare operator judgement, gated by no evidence
+        requirement of its own, so it can coexist with strong-looking
+        `VALIDATES` evidence. The ceiling must not read `MEDIUM` beside an
+        explicit refutation."""
+        derived = self._derive(
+            status_value=ResearchSecurityFindingStatus.REFUTED, validates_count=1
+        )
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.UNASSESSED
+        )
+
+    def test_duplicate_status_does_not_override_the_ceiling(self) -> None:
+        """`DUPLICATE` is an administrative disposition, not an evidentiary
+        judgement -- deliberately given no special case."""
+        derived = self._derive(
+            status_value=ResearchSecurityFindingStatus.DUPLICATE,
+            validates_count=1,
+            duplicate_of_finding_id="finding-2",
+        )
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.MEDIUM
+        )
+
+    def test_superseded_status_does_not_override_the_ceiling(self) -> None:
+        derived = self._derive(
+            status_value=ResearchSecurityFindingStatus.SUPERSEDED,
+            supports_count=1,
+            superseded_by_finding_id="finding-2",
+        )
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.LOW
+        )
+
+    # -- required scenario 16: duplicate evidence IDs never inflate -----------
+
+    def test_the_same_evidence_id_cited_twice_does_not_inflate_the_ceiling(
+        self,
+    ) -> None:
+        record = finding_record()
+        first = evidence_link(link_id="link-1", evidence_id="a" * 64)
+        second = evidence_link(link_id="link-2", evidence_id="a" * 64)
+        (derived,) = findings_for_program("program-a", (record,), (first, second), ())
+        self.assertEqual(len(derived.supporting_evidence), 2)
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.LOW
+        )
+
+    # -- required scenario 17: free text never influences the ceiling --------
+
+    def test_free_text_fields_never_influence_the_ceiling(self) -> None:
+        plain = self._derive(validates_count=1)
+        with_different_text = self._derive(
+            validates_count=1,
+            title="A completely different title",
+            description="A completely different description mentioning"
+            " CRITICAL EXPLOITED CONFIRMED HIGH.",
+            required_followup="Different follow-up text.",
+        )
+        self.assertIs(plain.evidence_ceiling, with_different_text.evidence_ceiling)
+
+    # -- HIGH is permanently unreachable today ---------------------------------
+
+    def test_high_is_unreachable_across_every_combination_tried(self) -> None:
+        statuses: tuple[ResearchSecurityFindingStatus | None, ...] = (
+            None,
+            ResearchSecurityFindingStatus.VALIDATION_REQUIRED,
+            ResearchSecurityFindingStatus.VALIDATED,
+            ResearchSecurityFindingStatus.REFUTED,
+        )
+        for status_value in statuses:
+            for supports_count in (0, 1, 5):
+                for validates_count in (0, 1, 5):
+                    for contradicts_count in (0, 1, 5):
+                        with self.subTest(
+                            status=status_value,
+                            supports=supports_count,
+                            validates=validates_count,
+                            contradicts=contradicts_count,
+                        ):
+                            derived = self._derive(
+                                status_value=status_value,
+                                supports_count=supports_count,
+                                validates_count=validates_count,
+                                contradicts_count=contradicts_count,
+                            )
+                            self.assertNotEqual(
+                                derived.evidence_ceiling,
+                                ResearchSecurityFindingEvidenceCeiling.HIGH,
+                            )
+
+    # -- required scenario 20: restart/reload determinism ----------------------
+
+    def test_recomputing_from_the_same_persisted_logs_is_deterministic(self) -> None:
+        record = finding_record()
+        validates = evidence_link(
+            link_id="v1",
+            evidence_id="a" * 64,
+            relation=ResearchSecurityFindingEvidenceRelation.VALIDATES,
+        )
+        first = findings_for_program("program-a", (record,), (validates,), ())
+        second = findings_for_program("program-a", (record,), (validates,), ())
+        self.assertEqual(first, second)
+        self.assertIs(
+            first[0].evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.MEDIUM
+        )
+        self.assertIs(
+            second[0].evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.MEDIUM
+        )
+
+    # -- required scenario 21: reading the property mutates nothing -----------
+
+    def test_reading_the_property_mutates_nothing(self) -> None:
+        derived = self._derive(validates_count=1, contradicts_count=1)
+        status_before = derived.status
+        supporting_before = derived.supporting_evidence
+        contradicting_before = derived.contradicting_evidence
+        validation_before = derived.validation_evidence
+        history_before = derived.status_history
+
+        for _ in range(3):
+            self.assertIs(
+                derived.evidence_ceiling,
+                ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+            )
+
+        self.assertIs(derived.status, status_before)
+        self.assertEqual(derived.supporting_evidence, supporting_before)
+        self.assertEqual(derived.contradicting_evidence, contradicting_before)
+        self.assertEqual(derived.validation_evidence, validation_before)
+        self.assertEqual(derived.status_history, history_before)
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            derived.status = ResearchSecurityFindingStatus.REFUTED  # type: ignore[misc]
+
+    # -- required scenario 24: needs_attention is unaffected -------------------
+
+    def test_needs_attention_and_evidence_ceiling_coexist_consistently(self) -> None:
+        """A `VALIDATED` finding with a live `CONTRADICTS` link: both
+        derived properties independently name the same underlying tension,
+        neither overrides or depends on the other's implementation."""
+        derived = self._derive(
+            status_value=ResearchSecurityFindingStatus.VALIDATED,
+            validates_count=1,
+            contradicts_count=1,
+        )
+        self.assertTrue(derived.needs_attention)
+        self.assertIs(
+            derived.evidence_ceiling, ResearchSecurityFindingEvidenceCeiling.UNASSESSED
+        )
+
+    # -- mutation-equivalent guard: every branch is load-bearing ---------------
+
+    def test_ceiling_requires_the_exact_precedence_order_not_a_shortcut(self) -> None:
+        """A buggy implementation that ignored `REFUTED` entirely (checking
+        only the evidence tuples) would wrongly return `MEDIUM` for the
+        first case below; one that checked `SUPPORTS` before `CONTRADICTS`
+        (or netted them) would wrongly return `LOW` for the second. Only
+        the real, `REFUTED`-first-then-`CONTRADICTS`-then-`VALIDATES`-then-
+        `SUPPORTS` precedence order gets both right."""
+        refuted_with_validates = self._derive(
+            status_value=ResearchSecurityFindingStatus.REFUTED, validates_count=1
+        )
+        supports_with_contradicts = self._derive(supports_count=1, contradicts_count=1)
+        self.assertIs(
+            refuted_with_validates.evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
+        self.assertIs(
+            supports_with_contradicts.evidence_ceiling,
+            ResearchSecurityFindingEvidenceCeiling.UNASSESSED,
+        )
 
 
 if __name__ == "__main__":

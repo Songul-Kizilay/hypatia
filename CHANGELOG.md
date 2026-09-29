@@ -2,6 +2,45 @@
 
 All notable project changes are recorded here.
 
+## [0.3.428] - 2026-09-29
+
+### Added
+
+- Security Finding evidence assessment / confidence foundation: a new
+  pure, read-only `ResearchSecurityFinding.evidence_ceiling` property
+  returning a new `ResearchSecurityFindingEvidenceCeiling`
+  (`UNASSESSED`/`LOW`/`MEDIUM`/`HIGH`) -- what the recorded evidence
+  *structure* can defensibly support, never a probability or a
+  truth-confidence. A new, deliberately separate type from the unrelated
+  general-research `ResearchClaimConfidence`: finding evidence links carry
+  no `ResearchInformationTrust`/`ResearchSourceIndependence`-equivalent
+  dimension, so only the *pattern* ("contradiction collapses confidence")
+  is reused, never the code or the enum.
+- Reachable tiers, presence/absence only (never counted, so duplicate
+  evidence IDs or link counts cannot move the ceiling): `UNASSESSED` when
+  `status` is `REFUTED` or any `CONTRADICTS` link is currently recorded;
+  `MEDIUM` when any `VALIDATES` link is currently recorded; `LOW` when any
+  `SUPPORTS` link is currently recorded; `UNASSESSED` otherwise. `HIGH` is
+  a declared vocabulary member never returned by any path today --
+  reaching it would require an independence/trust judgement this record
+  does not carry.
+- Surfaced via a new fixed disclaimer,
+  `response.ResponseComposer.SECURITY_FINDING_EVIDENCE_CEILING_NOT_TRUTH_NOTICE`,
+  co-rendered unconditionally wherever the ceiling is shown: every finding
+  create/evidence-attach/status-transition response, the finding preview
+  listing, and the desktop finding panel's detail pane.
+
+### Security
+
+- Purely additive, pure derived read: no status mutation, no new store,
+  no schema/version bump, no new Brain intent.
+  `cognition.ResearchSecurityFindingApplicationService` has zero diff.
+  Depends only on `status` and evidence-tuple lengths -- never on any
+  free-text field (title, description, required followup, a transition
+  reason), so untrusted or model-generated content cannot influence the
+  returned tier. `ResearchReproductionRecord`/`REPRODUCED` outcomes play
+  no part in this property at all.
+
 ## [0.3.427] - 2026-09-29
 
 ### Added
