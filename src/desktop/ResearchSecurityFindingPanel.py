@@ -28,7 +28,10 @@ from research.ResearchSecurityFindingEvidenceRelation import (
     ResearchSecurityFindingEvidenceRelation,
 )
 from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
-from response.ResponseComposer import SECURITY_FINDING_NOT_AUTHORITY_NOTICE
+from response.ResponseComposer import (
+    SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
+    SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
+)
 
 
 def _single_line(value: str) -> str:
@@ -344,31 +347,32 @@ class ResearchSecurityFindingPanel:
             superseded_by = (
                 latest.superseded_by_finding_id if latest is not None else None
             ) or "none"
-            self._details[iid] = "\n".join(
-                (
-                    f"Finding ID: {finding.finding_id}",
-                    f"Program: {finding.program_id}",
-                    f"Source hypothesis: {finding.source_hypothesis_id}",
-                    f"Kind: {finding.finding_kind.value}",
-                    "Subject: "
-                    f"{finding.subject_kind.value}:{finding.subject_canonical_value}",
-                    f"Title: {_single_line(finding.title)}",
-                    f"Description: {_single_line(finding.description)}",
-                    f"Required followup: {_single_line(finding.required_followup)}",
-                    f"Origin: {finding.origin.value}",
-                    f"Created at: {finding.created_at.isoformat()}",
-                    f"Status: {finding.status.value}",
-                    f"Supporting evidence IDs: {supporting_ids}",
-                    f"Contradicting evidence IDs: {contradicting_ids}",
-                    f"Validation evidence IDs: {validation_ids}",
-                    f"Duplicate of: {duplicate_of}",
-                    f"Superseded by: {superseded_by}",
-                    "Status history:",
-                    *history_lines,
-                    f"Scope: {scope_text}",
-                    SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
-                )
-            )
+            detail_lines = [
+                f"Finding ID: {finding.finding_id}",
+                f"Program: {finding.program_id}",
+                f"Source hypothesis: {finding.source_hypothesis_id}",
+                f"Kind: {finding.finding_kind.value}",
+                "Subject: "
+                f"{finding.subject_kind.value}:{finding.subject_canonical_value}",
+                f"Title: {_single_line(finding.title)}",
+                f"Description: {_single_line(finding.description)}",
+                f"Required followup: {_single_line(finding.required_followup)}",
+                f"Origin: {finding.origin.value}",
+                f"Created at: {finding.created_at.isoformat()}",
+                f"Status: {finding.status.value}",
+                f"Supporting evidence IDs: {supporting_ids}",
+                f"Contradicting evidence IDs: {contradicting_ids}",
+                f"Validation evidence IDs: {validation_ids}",
+                f"Duplicate of: {duplicate_of}",
+                f"Superseded by: {superseded_by}",
+                "Status history:",
+                *history_lines,
+                f"Scope: {scope_text}",
+            ]
+            if finding.needs_attention:
+                detail_lines.append(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE)
+            detail_lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+            self._details[iid] = "\n".join(detail_lines)
 
     def _on_select(self, _event: object = None) -> None:
         """Show one already-loaded row's fields. Never starts a request."""

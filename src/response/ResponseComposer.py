@@ -199,6 +199,22 @@ SECURITY_FINDING_NOT_AUTHORITY_NOTICE = (
     " execute tools, access systems, or expand scope."
 )
 
+#: Fixed, literal, and conditional: appended only when a finding's *current*
+#: derived state is `needs_attention` (see `research.ResearchSecurityFinding`)
+#: — currently `VALIDATED` with one or more `CONTRADICTS` evidence links on
+#: record. States only the current fact, never event order: it must never be
+#: read as "validation was historically invalid" or "the contradiction
+#: predates the validation," neither of which is provable from persisted,
+#: non-interleaved append-only history. CONTRADICTING EVIDENCE != AUTOMATIC
+#: REFUTATION — this notice names attention, not a status change, a
+#: refutation, or a confirmed/disproven vulnerability. The one canonical
+#: copy: the desktop finding panel imports this constant rather than
+#: restating it.
+SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE = (
+    "This validated finding currently has contradicting evidence and needs"
+    " attention."
+)
+
 #: Deliberately separate text from `SECURITY_FINDING_NOT_AUTHORITY_NOTICE`:
 #: a validation recipe has no status of its own, so that notice's "This
 #: status does not grant authority" wording would misdescribe what is being
@@ -1962,6 +1978,8 @@ class ResponseComposer:
             f"Contradicting evidence: {len(finding.contradicting_evidence)}",
             f"Validation evidence: {len(finding.validation_evidence)}",
         ]
+        if finding.needs_attention:
+            lines.append(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE)
         if not finding.status.terminal:
             lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
         return lines
@@ -2091,6 +2109,11 @@ class ResponseComposer:
                 )
             else:
                 scope_text = "no active scope revision for this program"
+            attention_suffix = (
+                ", NEEDS ATTENTION (contradicting evidence on a validated finding)"
+                if finding.needs_attention
+                else ""
+            )
             lines.append(
                 f"- {finding.finding_kind.value} on "
                 f"{finding.subject_kind.value}:{finding.subject_canonical_value}"
@@ -2098,8 +2121,10 @@ class ResponseComposer:
                 f"{len(finding.supporting_evidence)} supporting, "
                 f"{len(finding.contradicting_evidence)} contradicting, "
                 f"{len(finding.validation_evidence)} validating, "
-                f"scope: {scope_text})"
+                f"scope: {scope_text}{attention_suffix})"
             )
+        if any(entry.finding.needs_attention for entry in entries):
+            lines.append(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE)
         if any(not entry.finding.status.terminal for entry in entries):
             lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
         return BrainResponse(

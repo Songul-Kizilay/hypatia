@@ -2,10 +2,30 @@
 
 ## Runtime Version
 
-`v0.3.425 (Genesis)`
+`v0.3.426 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.426 adds a contradiction-aware derived attention signal for
+security findings: a new pure, read-only
+`ResearchSecurityFinding.needs_attention` property, `True` only when a
+finding's *current* persisted state is `VALIDATED` with one or more
+`CONTRADICTS` evidence links currently on record. It is a current-state
+observation only — it never claims the contradiction predates the
+validation, that validation was historically invalid, or that the finding
+is refuted (`CONTRADICTING EVIDENCE != AUTOMATIC REFUTATION`), mirroring
+the exact limitation v0.3.425's own
+`ResearchSecurityFindingLifecycleIntegrity` already documents and
+deliberately declines to resolve. Surfaced via a new fixed notice
+constant, `SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE`, in every
+finding create/evidence-attach/status-transition response, in the finding
+preview listing, and in the desktop finding panel's detail pane —
+alongside the existing not-authority notice, never replacing it. No
+status mutation, no new evidence relation, no confidence score/number,
+and no new persisted field. Independent hypatia-epistemics,
+hypatia-security, and hypatia-qa reviews all PASS. Windows canonical
+environment: 7687 tests, `OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.425 closes the "full F4 scope" cross-store Finding lifecycle
 gaps v0.3.420 explicitly deferred: a new pure function,

@@ -10,16 +10,151 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.425
+## Current — v0.3.426
+
+| Field | Value |
+| --- | --- |
+| Milestone | Contradiction-aware derived attention for security findings (M1 — Finding Lifecycle Closure, smallest coherent next step after v0.3.425's full F4 delivery) |
+| Base SHA | 4b313e9 (origin/main tip, v0.3.425 delivered) |
+| Branch | `feature/finding-contradiction-attention-v0.3.426`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS, no historical-ordering overclaim found; hypatia-security: independent review, PASS, no findings, read-surface-only confirmed; hypatia-qa: independent review, PASS, ran all 211 targeted tests, checked near-miss buggy implementations against the new tests, no coverage gap found |
+| Blockers | none |
+
+Repository-grounded audit before scoping (hypatia-lead, full detail in this
+session's own record): a finding has no confidence field and never has —
+only a categorical, operator-driven `status`. `ResearchClaimConfidence`/
+`ResearchClaimCalibrator` are real, tested machinery, but belong to the
+unrelated general research-claim subsystem (`ResearchRun`/
+`ResearchSourceAssessmentRecord`, with trust/independence/corroboration
+dimensions findings' evidence links do not carry) — not mechanically
+reusable here; only the *pattern* (categorical never numeric, compare/
+report rather than mutate, a separate derived "needs attention" read)
+transfers, applied to findings' actual `SUPPORTS`/`CONTRADICTS`/
+`VALIDATES` evidence model. `ResponseComposer` already printed raw
+`Contradicting evidence: N` next to `Status: validated` in every finding
+response, so the underlying fact was visible but never named — this
+milestone closes exactly that one concrete, evidenced gap.
+`ResearchReproductionRecord` is confirmed fully disconnected from the
+Finding lifecycle today (no desktop panel, no derived-read join even
+though `recipe.subject_kind == FINDING` makes one possible) and was
+deliberately left out of this milestone's scope, per the instruction to
+recommend the smallest coherent step.
+
+Rationale: repository-grounded audit (this session) found a finding has no
+confidence field, evidence-derived or otherwise — only a categorical,
+operator-driven `status`. The general-research `ResearchClaimConfidence`/
+`ResearchClaimCalibrator` machinery is real and tested but belongs to a
+different subsystem entirely (trust/independence/corroboration dimensions
+over `ResearchRun` sources) and is not mechanically reusable for findings'
+`SUPPORTS`/`CONTRADICTS`/`VALIDATES` evidence model; only its *pattern*
+(categorical never numeric, report rather than mutate) transfers. The one
+concrete, evidenced gap: `ResponseComposer` already printed raw
+`Contradicting evidence: N` beside `Status: validated` in every finding
+response, but nothing computed or named the tension a reader could easily
+miss. This milestone closes exactly that gap with the smallest possible
+addition: one derived, read-only boolean.
+
+`research.ResearchSecurityFinding.needs_attention`: `True` only when a
+finding's *current* persisted `status` is `VALIDATED` and its *current*
+`contradicting_evidence` tuple is non-empty — a pure expression over two
+fields the type already exposes, computed fresh on every read, never
+itself persisted. It is a current-state observation only: `attach_evidence`
+has no gate of its own, so a legitimate history can record `CONTRADICTS`
+evidence after an already-recorded `VALIDATED` transition, and
+`evidence_links`/`status_transitions` are two independently-append-ordered
+lists with no interleaving field between them — the identical limitation
+v0.3.425's own `ResearchSecurityFindingLifecycleIntegrity` already
+documents and deliberately declines to resolve for the same reason.
+`needs_attention` therefore never claims the contradiction predates the
+validation, that validation was historically invalid, or that the finding
+is refuted. `CONTRADICTING EVIDENCE != AUTOMATIC REFUTATION`.
+
+Surfaced via one new fixed notice constant,
+`response.ResponseComposer.SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE`
+("This validated finding currently has contradicting evidence and needs
+attention."), appended — never replacing — the existing
+`SECURITY_FINDING_NOT_AUTHORITY_NOTICE` in every finding create/
+evidence-attach/status-transition response (`_security_finding_summary_lines`,
+the one shared, canonical helper all three already use) and in the finding
+preview listing (a per-finding `NEEDS ATTENTION` suffix plus the notice
+once, aggregated, mirroring the existing not-terminal aggregate-notice
+pattern). The desktop finding panel's read-only detail pane imports and
+shows the identical canonical text rather than restating it, inserted
+before the not-authority notice so that notice remains the pane's fixed
+final line for every status, matching its pre-existing contract.
+
+Scope: two files changed in `src/research`/`src/response`
+(`ResearchSecurityFinding.py`: one new `@property`; `ResponseComposer.py`:
+one new constant, two call sites updated), one file changed in
+`src/desktop` (`ResearchSecurityFindingPanel.py`: one conditional detail
+line), and five test files (one new: `tests/response/
+test_research_security_finding_response.py`; four extended: `tests/
+research/test_research_security_finding.py`'s new `NeedsAttentionTests`
+class, `tests/research/test_json_file_research_security_finding_store.py`'s
+new reload-consistency test, `tests/cognition/
+test_research_security_finding_application_service.py`'s one added
+assertion on an existing test, `tests/desktop/
+test_research_security_finding_panel.py`'s two new tests). No new store,
+no schema/version bump, no new Brain intent, no new status, no new
+evidence relation, no confidence score or percentage anywhere. Reproduction
+Record -> Finding wiring was investigated and deliberately left out of
+scope (see the audit note above the Rationale).
+
+Security invariants (restated, unchanged by this milestone): MODEL OUTPUT
+!= AUTHORITY; VALIDATED FINDING != AUTHORITY TO ACT. `needs_attention`
+performs no I/O, no store write, no dispatch, and depends only on the
+typed `status` enum and an evidence-link count — never on free text
+(`reason`, evidence description), so untrusted content cannot influence
+it. No existing gate, transition table, or evidence relation is touched.
+
+Review findings and how each was resolved:
+- **hypatia-epistemics** (independent, read-only): PASS. Confirmed the
+  property, its docstring, the notice text, and every new test assert
+  only a current-state fact — no wording or assertion claims the
+  contradiction predates the validation or that validation was
+  historically invalid. Confirmed `means_confirmed_vulnerability` and
+  every existing status/relation enum have zero diff against `origin/main`.
+- **hypatia-security** (independent, read-only): PASS, no findings.
+  Confirmed the diff is read-surface-only (grepped for any new
+  `transition_status` call, store write, dispatch wiring, or desktop
+  control — none found); confirmed the notice text cannot be mistaken
+  for an authority grant.
+- **hypatia-qa** (independent): PASS. Ran all 211 targeted tests across
+  the five changed/new test files; confirmed every one of the eleven
+  required scenarios has a real, non-trivial assertion; checked three
+  plausible near-miss buggy implementations (status-only, evidence-count-
+  only-without-relation-filter, wrong-status-predicate) against the new
+  tests and confirmed each would be caught. No coverage gap found.
+
+Verification (2026-09-29, Windows canonical environment, hypatia-lead):
+7687 tests, `OK (skipped=3)` — 21 net new over v0.3.425's 7666. Black,
+Ruff, MyPy (`src`, 613 source files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.425 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Cross-store security finding lifecycle replay integrity (closes the "full F4 scope" gaps deferred by v0.3.420's F4 phase 1) |
 | Base SHA | 3cd6bfe (origin/main tip, v0.3.424 delivered) |
 | Branch | `feature/finding-lifecycle-integrity-v0.3.425`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 52bcae42f6358363f2a7ec1b8ec420bdd6113cf2 |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS, no residual epistemic risk found; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, closed one real coverage gap with a mutation-verified regression test |
+| PR | #404, MERGED 2026-09-29T13:08:58Z, standard merge commit `4b313e945daf0c4cb1f29b0a1257f4a474732bd7` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 52bcae42 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Blockers | none |
+
+Post-merge verification (2026-09-29, hypatia-lead, performed at the start
+of the v0.3.426 session): PR #404 base `main`, head
+`feature/finding-lifecycle-integrity-v0.3.425`, carried exactly 1 commit
+(the release commit `52bcae4`), 10 files changed matching this milestone's
+own stated scope exactly (1 new `src/research` file, 1 new test file, the
+`tests/test_bootstrap.py` extension, `core/Bootstrap.py`, and release
+docs/version files). Both PR-triggered `test-build-smoke` checks `pass`
+(runs `36572343320`/`36572343398`). Author/committer identity unchanged
+(Songül Kızılay via GitHub noreply email, Claude Sonnet 5 co-author
+trailer preserved on the release commit).
 
 Rationale: v0.3.420's own ledger entry ("Historical scope: v0.3.420")
 explicitly deferred "the full F4 scope" as needing "a genuine

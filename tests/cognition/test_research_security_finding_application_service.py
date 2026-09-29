@@ -920,6 +920,11 @@ class TransitionStatusTests(unittest.TestCase):
         self.assertIs(derived.status, ResearchSecurityFindingStatus.VALIDATED)
         self.assertEqual(len(derived.status_history), 1)
         self.assertEqual(len(derived.contradicting_evidence), 1)
+        # v0.3.426: the live write path can produce exactly the current-state
+        # tension `needs_attention` names -- status stays VALIDATED (never
+        # auto-downgraded, asserted above), while a CONTRADICTS link recorded
+        # after that transition is now also on record.
+        self.assertTrue(derived.needs_attention)
 
     def test_transition_is_judged_against_the_latest_status_not_the_earliest(
         self,
