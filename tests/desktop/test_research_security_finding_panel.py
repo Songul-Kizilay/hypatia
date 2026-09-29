@@ -19,6 +19,8 @@ from desktop.ResearchSecurityFindingPanel import ResearchSecurityFindingPanel
 from research.ResearchAssetInventoryEntry import ResearchAssetScopeResolutionView
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetObservationRecord import canonicalize_asset_value
+from research.ResearchReproductionOutcome import ResearchReproductionOutcome
+from research.ResearchReproductionRecord import ResearchReproductionRecord
 from research.ResearchSecurityFinding import ResearchSecurityFinding
 from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
 from research.ResearchSecurityFindingEvidenceKind import (
@@ -36,8 +38,12 @@ from research.ResearchSecurityFindingStatusTransitionRecord import (
     ResearchSecurityFindingStatusTransitionRecord,
 )
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
+from research.ResearchSecurityValidationRecipeSubjectKind import (
+    ResearchSecurityValidationRecipeSubjectKind,
+)
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 from response.ResponseComposer import (
+    REPRODUCTION_NOT_AUTHORITY_NOTICE,
     SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
     SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
 )
@@ -134,12 +140,33 @@ def finding(
 def entry(
     finding_value: ResearchSecurityFinding | None = None,
     has_active_scope_revision: bool = False,
+    reproductions: tuple[ResearchReproductionRecord, ...] = (),
 ) -> ResearchSecurityFindingEntry:
     return ResearchSecurityFindingEntry(
         finding=finding_value or finding(),
         scope=ResearchAssetScopeResolutionView(
             has_active_scope_revision=has_active_scope_revision, resolution=None
         ),
+        reproductions=reproductions,
+    )
+
+
+def reproduction(
+    reproduction_id: str = "reproduction-1",
+    recipe_id: str = "recipe-1",
+    finding_id: str = "finding-1",
+    outcome: ResearchReproductionOutcome = ResearchReproductionOutcome.REPRODUCED,
+) -> ResearchReproductionRecord:
+    return ResearchReproductionRecord(
+        reproduction_id=reproduction_id,
+        program_id="program-a",
+        recipe_id=recipe_id,
+        subject_kind=ResearchSecurityValidationRecipeSubjectKind.FINDING,
+        subject_id=finding_id,
+        outcome=outcome,
+        notes="",
+        evidence_ids=(),
+        recorded_at=RECORDED,
     )
 
 
@@ -331,6 +358,87 @@ class ResearchSecurityFindingPanelBehaviorTests(unittest.TestCase):
 
         detail = value._details["row-1"]
         self.assertNotIn(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE, detail)
+
+    def test_render_shows_reproduction_history_read_only(self) -> None:
+        value, _dispatched = panel()
+        value.tree.insert.return_value = "row-1"
+        recorded = reproduction()
+
+        value._render(
+            BrainResponse(
+                message="ok",
+                request_id="request-1",
+                intent="research_security_finding_preview",
+                memory_count=0,
+                research_security_findings=(entry(reproductions=(recorded,)),),
+            )
+        )
+
+        detail_lines = value._details["row-1"].splitlines()
+        self.assertIn(
+            f"  {recorded.recorded_at.isoformat()}: {recorded.outcome.value}"
+            f" (recipe {recorded.recipe_id}, id {recorded.reproduction_id})",
+            detail_lines,
+        )
+        self.assertIn(REPRODUCTION_NOT_AUTHORITY_NOTICE, detail_lines)
+        # The not-authority notice remains the fixed final line regardless.
+        self.assertEqual(detail_lines[-1], SECURITY_FINDING_NOT_AUTHORITY_NOTICE)
+
+    def test_render_shows_a_neutral_absence_state_with_no_reproduction_history(
+        self,
+    ) -> None:
+        value, _dispatched = panel()
+        value.tree.insert.return_value = "row-1"
+
+        value._render(
+            BrainResponse(
+                message="ok",
+                request_id="request-1",
+                intent="research_security_finding_preview",
+                memory_count=0,
+                research_security_findings=(entry(),),
+            )
+        )
+
+        detail_lines = value._details["row-1"].splitlines()
+        self.assertIn("Reproductions:", detail_lines)
+        self.assertIn("  none", detail_lines)
+        self.assertNotIn(REPRODUCTION_NOT_AUTHORITY_NOTICE, detail_lines)
+
+    def test_reproduced_outcome_is_shown_plainly_not_as_a_status_change(self) -> None:
+        """REPRODUCED never appears anywhere near `Status:` -- it is listed
+        only under the separate `Reproductions:` section, and the finding's
+        own `Status:` line is computed solely from `finding.status`."""
+        value, _dispatched = panel()
+        value.tree.insert.return_value = "row-1"
+        recorded = reproduction(outcome=ResearchReproductionOutcome.REPRODUCED)
+
+        value._render(
+            BrainResponse(
+                message="ok",
+                request_id="request-1",
+                intent="research_security_finding_preview",
+                memory_count=0,
+                research_security_findings=(
+                    entry(
+                        finding(status=ResearchSecurityFindingStatus.CANDIDATE),
+                        reproductions=(recorded,),
+                    ),
+                ),
+            )
+        )
+
+        detail_lines = value._details["row-1"].splitlines()
+        self.assertIn("Status: candidate", detail_lines)
+        status_line = next(line for line in detail_lines if line.startswith("Status:"))
+        self.assertNotIn("reproduced", status_line.lower())
+
+    def test_no_reproduction_control_exists_on_this_panel(self) -> None:
+        """This milestone is read-only visibility: the panel exposes no
+        widget/attribute that could record, edit, or run a reproduction."""
+        value, _dispatched = panel()
+        for attribute_name in dir(value):
+            self.assertNotIn("reproduction", attribute_name.lower())
 
     def test_render_reports_scope_recomputed_live(self) -> None:
         value, _dispatched = panel()

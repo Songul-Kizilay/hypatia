@@ -13,6 +13,8 @@ from brain.BrainRequest import BrainRequest
 from research.ResearchAssetInventoryEntry import ResearchAssetScopeResolutionView
 from research.ResearchAssetKind import ResearchAssetKind
 from research.ResearchAssetObservationRecord import canonicalize_asset_value
+from research.ResearchReproductionOutcome import ResearchReproductionOutcome
+from research.ResearchReproductionRecord import ResearchReproductionRecord
 from research.ResearchSecurityFinding import ResearchSecurityFinding
 from research.ResearchSecurityFindingEntry import ResearchSecurityFindingEntry
 from research.ResearchSecurityFindingEvidenceKind import (
@@ -30,7 +32,11 @@ from research.ResearchSecurityFindingStatusTransitionRecord import (
     ResearchSecurityFindingStatusTransitionRecord,
 )
 from research.ResearchSecurityHypothesisKind import ResearchSecurityHypothesisKind
+from research.ResearchSecurityValidationRecipeSubjectKind import (
+    ResearchSecurityValidationRecipeSubjectKind,
+)
 from response.ResponseComposer import (
+    REPRODUCTION_NOT_AUTHORITY_NOTICE,
     SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
     SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
     ResponseComposer,
@@ -130,12 +136,35 @@ def _validated_with_contradiction(
 
 def _entry(
     finding_value: ResearchSecurityFinding,
+    reproductions: tuple[ResearchReproductionRecord, ...] = (),
 ) -> ResearchSecurityFindingEntry:
     return ResearchSecurityFindingEntry(
         finding=finding_value,
         scope=ResearchAssetScopeResolutionView(
             has_active_scope_revision=False, resolution=None
         ),
+        reproductions=reproductions,
+    )
+
+
+def _reproduction(
+    reproduction_id: str = "reproduction-1",
+    recipe_id: str = "recipe-1",
+    finding_id: str = "finding-1",
+    program_id: str = "program-a",
+    outcome: ResearchReproductionOutcome = ResearchReproductionOutcome.REPRODUCED,
+    recorded_at: datetime = RECORDED,
+) -> ResearchReproductionRecord:
+    return ResearchReproductionRecord(
+        reproduction_id=reproduction_id,
+        program_id=program_id,
+        recipe_id=recipe_id,
+        subject_kind=ResearchSecurityValidationRecipeSubjectKind.FINDING,
+        subject_id=finding_id,
+        outcome=outcome,
+        notes="",
+        evidence_ids=(),
+        recorded_at=recorded_at,
     )
 
 
@@ -218,6 +247,76 @@ class SecurityFindingAttentionSurfaceTests(unittest.TestCase):
             SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE, response.message
         )
         self.assertNotIn("NEEDS ATTENTION", response.message)
+
+
+class ReproductionHistorySurfaceTests(unittest.TestCase):
+    """v0.3.427: `entry.reproductions` in the finding preview, visibility only."""
+
+    def setUp(self) -> None:
+        self.composer = ResponseComposer()
+        self.request = BrainRequest(message="x")
+
+    def test_a_finding_with_no_reproduction_history_omits_the_section(self) -> None:
+        response = self.composer.research_security_finding_preview(
+            self.request, (_entry(_finding()),)
+        )
+        self.assertNotIn("reproduction", response.message.lower())
+        self.assertNotIn(REPRODUCTION_NOT_AUTHORITY_NOTICE, response.message)
+
+    def test_a_finding_with_reproduction_history_lists_each_record(self) -> None:
+        reproduction = _reproduction()
+        response = self.composer.research_security_finding_preview(
+            self.request, (_entry(_finding(), (reproduction,)),)
+        )
+        self.assertIn(reproduction.recorded_at.isoformat(), response.message)
+        self.assertIn(reproduction.outcome.value, response.message)
+        self.assertIn(reproduction.recipe_id, response.message)
+        self.assertIn(REPRODUCTION_NOT_AUTHORITY_NOTICE, response.message)
+
+    def test_multiple_reproductions_are_all_listed(self) -> None:
+        first = _reproduction(
+            reproduction_id="r1", outcome=ResearchReproductionOutcome.NOT_REPRODUCED
+        )
+        second = _reproduction(
+            reproduction_id="r2", outcome=ResearchReproductionOutcome.INCONCLUSIVE
+        )
+        response = self.composer.research_security_finding_preview(
+            self.request, (_entry(_finding(), (first, second)),)
+        )
+        self.assertIn(
+            ResearchReproductionOutcome.NOT_REPRODUCED.value, response.message
+        )
+        self.assertIn(ResearchReproductionOutcome.INCONCLUSIVE.value, response.message)
+
+    def test_reproduced_outcome_is_named_plainly_never_as_a_confirmed_result(
+        self,
+    ) -> None:
+        reproduction = _reproduction(outcome=ResearchReproductionOutcome.REPRODUCED)
+        response = self.composer.research_security_finding_preview(
+            self.request, (_entry(_finding(), (reproduction,)),)
+        )
+        lowered = response.message.lower()
+        self.assertIn("reproduced", lowered)
+        self.assertNotIn("confirmed vulnerability", lowered)
+        self.assertNotIn("exploit", lowered)
+
+    def test_the_not_authority_notice_still_appears_for_a_non_terminal_status(
+        self,
+    ) -> None:
+        response = self.composer.research_security_finding_preview(
+            self.request, (_entry(_finding(), (_reproduction(),)),)
+        )
+        self.assertIn(SECURITY_FINDING_NOT_AUTHORITY_NOTICE, response.message)
+
+    def test_reproduction_history_does_not_affect_the_attention_notice(self) -> None:
+        """A validated, contradicted finding's attention notice is unaffected
+        by whether it also carries reproduction history."""
+        finding = _validated_with_contradiction()
+        response = self.composer.research_security_finding_preview(
+            self.request, (_entry(finding, (_reproduction(),)),)
+        )
+        self.assertIn(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE, response.message)
+        self.assertTrue(finding.needs_attention)
 
 
 if __name__ == "__main__":

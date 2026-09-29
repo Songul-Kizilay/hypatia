@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.427] - 2026-09-29
+
+### Added
+
+- Finding <-> Reproduction Record derived-read visibility: a security
+  finding's preview now also shows its currently-associated Reproduction
+  Record history, joined live via `finding_id -> recipe(subject_kind=
+  FINDING, subject_id=finding_id) -> reproductions(recipe_id)`. Reuses the
+  already-existing, already-tested
+  `ResearchReproductionApplicationService.reproductions_for_subject` read
+  unchanged (works because `ResearchReproductionRecord.subject_kind`/
+  `subject_id` are denormalized onto the record at write time, copied
+  directly from the looked-up recipe, never caller-supplied).
+- `research.ResearchSecurityFindingEntry` gained a new
+  `reproductions: tuple[ResearchReproductionRecord, ...] = ()` field
+  (default empty, every existing call site unaffected) and a
+  `with_reproductions` copy method. `__post_init__` fail-closed validates
+  every attached reproduction's `subject_kind is FINDING` and
+  `(subject_id, program_id)` match the finding's own identity.
+- A new private `CognitiveEngine._with_finding_reproduction_history`
+  composes the join at the one layer that already holds both
+  already-constructed services, specifically to avoid giving
+  `ResearchSecurityFindingApplicationService` a reverse dependency on
+  `ResearchReproductionApplicationService` (which already depends on the
+  finding service, the opposite direction).
+- `ResponseComposer.research_security_finding_preview` and the desktop
+  finding panel's detail pane both list each finding's reproduction
+  history (`recorded_at`, `outcome.value`, `recipe_id`), reusing the
+  existing, unmodified `REPRODUCTION_NOT_AUTHORITY_NOTICE` constant.
+
+### Security
+
+- Purely additive read composition: no status mutation, no new evidence
+  relation, no new store, no new Brain intent, no new desktop control, no
+  fetch/process/network call. `ResearchSecurityFindingApplicationService`
+  has zero diff. `REPRODUCED != CONFIRMED VULNERABILITY`,
+  `NOT_REPRODUCED != REFUTED`, `INCONCLUSIVE` mutates nothing --
+  `finding.status`/`needs_attention` are read, never written, anywhere in
+  this diff. A reproduction's free-text `notes` field is never rendered
+  into any response or detail pane.
+
 ## [0.3.426] - 2026-09-29
 
 ### Added

@@ -14,6 +14,11 @@ responses. The detail pane shows it for every status, terminal ones included
 — stricter than the Brain responses, which omit it for terminal statuses.
 `desktop` already depends on `response` elsewhere and `response` never
 imports `desktop`, so this adds no new layer direction or cycle.
+
+The detail pane also lists each finding's currently-associated reproduction
+history (`entry.reproductions`), read-only and purely descriptive -- no
+button or control here ever records, edits, or runs a reproduction; that
+remains the Reproduction feature's own panel to add later.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ from research.ResearchSecurityFindingEvidenceRelation import (
 )
 from research.ResearchSecurityFindingStatus import ResearchSecurityFindingStatus
 from response.ResponseComposer import (
+    REPRODUCTION_NOT_AUTHORITY_NOTICE,
     SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE,
     SECURITY_FINDING_NOT_AUTHORITY_NOTICE,
 )
@@ -347,6 +353,12 @@ class ResearchSecurityFindingPanel:
             superseded_by = (
                 latest.superseded_by_finding_id if latest is not None else None
             ) or "none"
+            reproduction_lines = [
+                f"  {reproduction.recorded_at.isoformat()}:"
+                f" {reproduction.outcome.value} (recipe"
+                f" {reproduction.recipe_id}, id {reproduction.reproduction_id})"
+                for reproduction in entry.reproductions
+            ] or ["  none"]
             detail_lines = [
                 f"Finding ID: {finding.finding_id}",
                 f"Program: {finding.program_id}",
@@ -368,7 +380,11 @@ class ResearchSecurityFindingPanel:
                 "Status history:",
                 *history_lines,
                 f"Scope: {scope_text}",
+                "Reproductions:",
+                *reproduction_lines,
             ]
+            if entry.reproductions:
+                detail_lines.append(REPRODUCTION_NOT_AUTHORITY_NOTICE)
             if finding.needs_attention:
                 detail_lines.append(SECURITY_FINDING_CONTRADICTION_ATTENTION_NOTICE)
             detail_lines.append(SECURITY_FINDING_NOT_AUTHORITY_NOTICE)

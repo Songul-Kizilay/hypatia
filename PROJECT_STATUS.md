@@ -2,10 +2,33 @@
 
 ## Runtime Version
 
-`v0.3.426 (Genesis)`
+`v0.3.427 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.427 adds Finding <-> Reproduction Record derived-read
+visibility: a security finding's preview now also shows its
+currently-associated Reproduction Record history, joined live via
+`finding_id -> recipe(subject_kind=FINDING, subject_id=finding_id) ->
+reproductions(recipe_id)`. Reuses the already-existing, already-tested
+`ResearchReproductionApplicationService.reproductions_for_subject` read
+unchanged. `research.ResearchSecurityFindingEntry` gained a new
+`reproductions` field (default empty, fail-closed validated against the
+finding's own identity) and a `with_reproductions` copy method; a new
+private `CognitiveEngine._with_finding_reproduction_history` composes the
+join at the one layer that already holds both already-constructed
+services, specifically so `ResearchSecurityFindingApplicationService`
+never gains a reverse dependency on the Reproduction service (which
+already depends on it, the opposite direction). Purely additive read
+composition — no status mutation, no new store, no new Brain intent, no
+new desktop control: `ResearchSecurityFindingApplicationService` has zero
+diff. `REPRODUCED != CONFIRMED VULNERABILITY`, `NOT_REPRODUCED != REFUTED`,
+`INCONCLUSIVE` mutates nothing. Independent hypatia-epistemics,
+hypatia-security, and hypatia-qa reviews all PASS (hypatia-qa noted one
+low-severity, non-blocking caveat, already defended by the fail-closed
+`ResearchSecurityFindingEntry` validation). Windows canonical environment:
+7721 tests, `OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.426 adds a contradiction-aware derived attention signal for
 security findings: a new pure, read-only

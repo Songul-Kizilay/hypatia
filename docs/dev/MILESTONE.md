@@ -10,16 +10,159 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.426
+## Current — v0.3.427
+
+| Field | Value |
+| --- | --- |
+| Milestone | Finding <-> Reproduction Record derived-read visibility (M1 — Finding Lifecycle Closure, next step after v0.3.426's contradiction-attention delivery) |
+| Base SHA | 3280efd (origin/main tip, v0.3.426 delivered) |
+| Branch | `feature/finding-reproduction-visibility-v0.3.427`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS, no evidentiary/historical-ordering overclaim found; hypatia-security: independent review, PASS, no findings, purely additive read composition confirmed, `ResearchSecurityFindingApplicationService` has zero diff; hypatia-qa: independent review, PASS-with-one-low-severity-caveat (see below) |
+| Blockers | none |
+
+Rationale: v0.3.426's own ledger entry noted `ResearchReproductionRecord`
+was confirmed fully disconnected from the Finding lifecycle — no desktop
+panel, no derived-read join, even though `recipe.subject_kind == FINDING`
+already makes one structurally possible. This milestone builds that one
+join, nothing else: `finding_id -> recipe(subject_kind=FINDING,
+subject_id=finding_id) -> reproductions(recipe_id)`. Investigation before
+design found the join needs no new machinery at all — a public method,
+`ResearchReproductionApplicationService.reproductions_for_subject(
+program_id, subject_kind, subject_id)`, already existed, already tested,
+and already does exactly this two-hop join in one call: it works because
+`record_reproduction` already denormalizes `subject_kind`/`subject_id`
+onto the reproduction record itself at write time, copied directly from
+the looked-up recipe, never caller-supplied — so filtering reproductions
+by `(program_id, FINDING, finding_id)` is byte-identical to walking
+`finding -> recipe -> reproduction` through two stores. Nothing here is
+new business logic; it is wiring an existing, safe read into a new
+display surface.
+
+The one real design question was dependency direction:
+`ResearchReproductionApplicationService` already depends on
+`ResearchSecurityFindingApplicationService` (a `SecurityFindingReader`
+Protocol, needed for other reasons) and `CognitiveEngine` constructs the
+finding service strictly before the reproduction service exists. Giving
+the finding service a reverse dependency on the reproduction service
+would therefore require either a circular constructor dependency or an
+ad hoc post-construction setter — neither acceptable. Instead, the join
+is composed one layer up, in a new private
+`CognitiveEngine._with_finding_reproduction_history`, which already holds
+references to both already-constructed services: it calls
+`reproductions_for_subject` once per finding entry after a successful
+`research_security_finding_preview` dispatch, then rebuilds the entries
+and recomposes the identical response through the same
+`ResponseComposer.research_security_finding_preview` call the finding
+service itself uses. `ResearchSecurityFindingApplicationService` therefore
+has zero diff — confirmed by hypatia-security directly diffing the file.
+
+`research.ResearchSecurityFindingEntry` gained one new field,
+`reproductions: tuple[ResearchReproductionRecord, ...] = ()` (default
+empty, so every pre-existing call site — production and test — is
+unaffected), and one new method, `with_reproductions`, a pure
+`dataclasses.replace` copy. `__post_init__` now fail-closed validates
+every attached reproduction's `subject_kind is FINDING` and
+`(subject_id, program_id)` match the finding's own identity — a second,
+independent enforcement point beyond `reproductions_for_subject`'s own
+filtering, so a future bug in the composition layer could never silently
+leak one finding's or one program's reproduction data into another's
+displayed view; it would raise instead.
+
+Surfaced via the existing, unmodified `REPRODUCTION_NOT_AUTHORITY_NOTICE`
+constant (reused, never restated) in `ResponseComposer.
+research_security_finding_preview` (each finding's history rendered as
+`recorded_at`/`outcome.value`/`recipe_id`, the notice appended once,
+aggregated, if any finding has history) and in the desktop finding panel's
+read-only detail pane (a `Reproductions:` section, inserted before the
+existing not-authority notice so that notice stays the pane's fixed final
+line for every status, matching its pre-existing contract). Deliberately
+preview-only, mirroring how `scope` resolution is also preview-only, not
+part of the single-finding create/evidence-attach/status-transition
+responses.
+
+Scope: `ResearchSecurityFindingEntry.py` (one field, one method),
+`CognitiveEngine.py` (one new private method, one dispatch branch touched
+by two lines), `ResponseComposer.py` (`research_security_finding_preview`
+extended), `ResearchSecurityFindingPanel.py` (detail pane extended), and
+four test files (one new: `tests/research/
+test_research_security_finding_entry.py`; three extended: `tests/
+cognition/test_cognitive_engine.py`'s new
+`FindingReproductionVisibilityDispatchTests` class — 13 tests against the
+real `ProductionCognitiveEngine` covering every join/filter/restart/
+read-only scenario — `tests/response/
+test_research_security_finding_response.py`'s new
+`ReproductionHistorySurfaceTests` class, `tests/desktop/
+test_research_security_finding_panel.py`'s four new tests). No new store,
+no schema/version bump, no new Brain intent, no new status, no new
+evidence relation, no confidence score anywhere.
+
+Security invariants (restated, unchanged by this milestone): MODEL OUTPUT
+!= AUTHORITY; VALIDATED FINDING != AUTHORITY TO ACT; REPRODUCTION RECORD
+!= EXECUTION AUTHORITY. `REPRODUCED != CONFIRMED VULNERABILITY`,
+`NOT_REPRODUCED != REFUTED`, `INCONCLUSIVE` mutates nothing.
+`finding.status`/`needs_attention` are read, never written, anywhere in
+this diff (proven by three dedicated tests recording each outcome kind
+and asserting both fields unchanged). A reproduction's free-text `notes`
+field is never rendered into any response or detail pane.
+
+Review findings and how each was resolved:
+- **hypatia-epistemics** (independent, read-only): PASS. Confirmed
+  reproduction history is presented only as "currently associated,"
+  never as a claim about event order, causation, or exploit confirmation;
+  confirmed `REPRODUCED`/`NOT_REPRODUCED`/`INCONCLUSIVE` are rendered via
+  their own `.value` verbatim, never relabeled; confirmed no test or
+  docstring asserts anything about ordering beyond what the fixture's own
+  literal call sequence proves.
+- **hypatia-security** (independent, read-only): PASS, no findings.
+  Confirmed via direct diff that `ResearchSecurityFindingApplicationService`
+  is untouched and the dependency direction runs Reproduction-depends-on-
+  Finding only, never reversed; confirmed `_with_finding_reproduction_history`
+  performs no I/O beyond the existing pure read; confirmed the new
+  `ResearchSecurityFindingEntry` validation is genuinely fail-closed
+  (raises, never silently drops); confirmed `notes` is never interpolated
+  into any rendered text.
+- **hypatia-qa** (independent): PASS-with-one-low-severity-caveat. Ran
+  305 targeted tests, all pass; confirmed every required join/filter/
+  restart/read-only scenario has a real assertion against the real
+  wired engine; confirmed the pre-existing detail-pane last-line contract
+  (`test_detail_notice_is_the_canonical_response_constant_for_every_status`)
+  still holds. **Caveat, left open**: no test asserts
+  `reproductions_for_subject` is called with the correct `program_id`
+  scoping specifically in a mixed-program preview response — rated
+  theoretical and low severity by hypatia-qa itself, since the composing
+  code already always uses `entry.finding.program_id` (never an
+  independently-sourced value) and `ResearchSecurityFindingEntry
+  .__post_init__`'s fail-closed identity check would catch any resulting
+  mismatch regardless. Not closed this milestone; a candidate for a
+  future test-only hardening pass if ever revisited.
+
+Verification (2026-09-29, Windows canonical environment, hypatia-lead):
+7721 tests, `OK (skipped=3)` — 34 net new over v0.3.426's 7687. Black,
+Ruff, MyPy (`src`, 613 source files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.426 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Contradiction-aware derived attention for security findings (M1 — Finding Lifecycle Closure, smallest coherent next step after v0.3.425's full F4 delivery) |
 | Base SHA | 4b313e9 (origin/main tip, v0.3.425 delivered) |
 | Branch | `feature/finding-contradiction-attention-v0.3.426`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | fc52a53fc6b56a62880f84016ff4bfc47f7099e0 |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS, no historical-ordering overclaim found; hypatia-security: independent review, PASS, no findings, read-surface-only confirmed; hypatia-qa: independent review, PASS, ran all 211 targeted tests, checked near-miss buggy implementations against the new tests, no coverage gap found |
+| PR | #405, MERGED 2026-09-29T14:05:40Z, standard merge commit `3280efd7bde91d2711ffa2c0069261bd9a3fe3be` |
+| origin/main reachability | verified: `git merge-base --is-ancestor fc52a53f origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Blockers | none |
+
+Post-merge verification (2026-09-29, hypatia-lead, performed at the start
+of the v0.3.427 session): PR #405 base `main`, head
+`feature/finding-contradiction-attention-v0.3.426`, carried exactly 1
+commit (the release commit `fc52a53`), 14 files changed matching this
+milestone's own stated scope exactly. Both PR-triggered `test-build-smoke`
+checks `pass` (runs `36579437239`/`36579437311`). Author/committer
+identity unchanged (Songül Kızılay via GitHub noreply email, Claude
+Sonnet 5 co-author trailer preserved on the release commit).
 
 Repository-grounded audit before scoping (hypatia-lead, full detail in this
 session's own record): a finding has no confidence field and never has —
