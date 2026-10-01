@@ -953,6 +953,9 @@ class CognitiveEngine:
                         if self._kali_operation_run_service is not None
                         else ()
                     ),
+                    kali_simulation_available=(
+                        self._kali_operation_fake_runner_service is not None
+                    ),
                 )
             )
         except Exception:  # noqa: BLE001 - a projection fault must not add claims

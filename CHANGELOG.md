@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.433] - 2026-10-01
+
+### Changed
+
+- Runtime capability awareness: the chat-facing `RuntimeCapabilityProjection`
+  can now say "a deterministic preview/simulation exists" for Kali lookups,
+  distinct from both real execution and no capability at all. Previously
+  `REVIEWED_KALI_LOOKUPS` reported only `AVAILABLE` (the real WSL/dig/curl
+  adapter wired via `HYPATIA_KALI_OPERATION_EXECUTION_ENABLED`) or
+  `UNAVAILABLE` -- so when only the always-present, no-process preview/fake
+  -run workflow existed, chat said Hypatia had no Kali capability at all,
+  rather than distinguishing the simulation from a missing capability. Added
+  `RuntimeCapabilityState.SIMULATED`, a `kali_simulation_available` evidence
+  field (true whenever the fake-runner service is wired, independent of the
+  real adapter), and `_kali_lookup_state()`: real execution always outranks
+  the simulation fact. The rendered instruction now carries a dedicated
+  "Simulated only, no real action performed:" section, with an explicit rule
+  that a simulated result must never be described as real. The previous
+  single "Not available:" heading is also split into "Not implemented in
+  Hypatia:" (the unchanged `_NEVER_WIRED` set -- capabilities never wired at
+  all, e.g. penetration testing) versus "Not enabled in this configuration:"
+  (everything else currently unavailable -- implemented but not wired in
+  this process). Independent hypatia-security and hypatia-qa reviews both
+  PASS; QA mutation-tested five new tests and confirmed each is load-bearing.
+
 ## [0.3.432] - 2026-10-01
 
 ### Changed

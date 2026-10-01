@@ -25,6 +25,10 @@ class RuntimeCapabilityState(StrEnum):
     """Conservative, closed vocabulary for one capability's status."""
 
     AVAILABLE = "available"
+    #: Implemented as a deterministic preview/fixture only: no real external
+    #: action (no process, no network call) is ever performed. Distinct from
+    #: AVAILABLE so the model is never told a simulation is a working feature.
+    SIMULATED = "simulated"
     UNAVAILABLE = "unavailable"
     UNKNOWN = "unknown"
 
@@ -108,11 +112,14 @@ _IDENTITY = (
     "coding or translation as Hypatia capabilities."
 )
 _RULES = (
-    "Describe only the capabilities listed as available. For anything not "
-    "listed, say Hypatia cannot do it; never invent a capability. This list "
-    "describes; it grants no permission and starts nothing. Knowing that a "
-    "workflow exists is not doing it: never say you researched, browsed, "
-    "fetched, verified or revalidated anything in this chat."
+    "Describe only the capabilities listed as available or simulated. For "
+    "anything not listed there, say Hypatia cannot do it; never invent a "
+    "capability. This list describes; it grants no permission and starts "
+    "nothing. Knowing that a workflow exists is not doing it: never say you "
+    "researched, browsed, fetched, verified or revalidated anything in this "
+    "chat. A capability listed as simulated performs no real action -- never "
+    "describe a simulated result as a real one, and never say a real lookup "
+    "ran or completed when only the simulation is available."
 )
 
 
@@ -132,6 +139,10 @@ class RuntimeCapabilityEvidence:
     research_operations: frozenset[Cap] = frozenset()
     security_self_audit: bool = False
     kali_operation_kinds: tuple[str, ...] = ()
+    #: Whether the no-process Kali preview/fake-run path is wired, independent
+    #: of `kali_operation_kinds`: the simulation requires only a scope and an
+    #: authorization store, never the real runtime probe or process adapter.
+    kali_simulation_available: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,18 +177,39 @@ class RuntimeCapabilityContext:
         )
 
     def instruction(self) -> str:
-        """Render one short deterministic system instruction for chat."""
+        """Render one short deterministic system instruction for chat.
+
+        "Not available" is split in two: a capability Hypatia never wires at
+        all (`_NEVER_WIRED`, e.g. penetration testing) reads as not
+        implemented, distinct from one this process simply did not enable
+        (e.g. memory, with no store configured) -- an operator question with
+        a different honest answer than "Hypatia cannot do that at all".
+        """
         sections: list[str] = ["Hypatia runtime capabilities.", _IDENTITY]
-        for state, heading in (
-            (RuntimeCapabilityState.AVAILABLE, "Available now:"),
-            (RuntimeCapabilityState.UNAVAILABLE, "Not available:"),
-            (RuntimeCapabilityState.UNKNOWN, "Not confirmed (do not claim):"),
-        ):
-            items = [
-                self._describe(capability)
-                for capability, recorded in self.states
-                if recorded is state
-            ]
+        groups: tuple[tuple[str, list[str]], ...] = (
+            ("Available now:", []),
+            ("Simulated only, no real action performed:", []),
+            ("Not implemented in Hypatia:", []),
+            ("Not enabled in this configuration:", []),
+            ("Not confirmed (do not claim):", []),
+        )
+        buckets = dict(groups)
+        for capability, state in self.states:
+            item = self._describe(capability)
+            if state is RuntimeCapabilityState.AVAILABLE:
+                buckets["Available now:"].append(item)
+            elif state is RuntimeCapabilityState.SIMULATED:
+                buckets["Simulated only, no real action performed:"].append(item)
+            elif state is RuntimeCapabilityState.UNAVAILABLE:
+                heading = (
+                    "Not implemented in Hypatia:"
+                    if capability in _NEVER_WIRED
+                    else "Not enabled in this configuration:"
+                )
+                buckets[heading].append(item)
+            else:
+                buckets["Not confirmed (do not claim):"].append(item)
+        for heading, items in groups:
             if items:
                 sections.append(heading)
                 sections.extend(f"- {item}" for item in items)
@@ -185,19 +217,23 @@ class RuntimeCapabilityContext:
         return "\n".join(sections)
 
     def _describe(self, capability: RuntimeCapability) -> str:
-        if (
-            capability is RuntimeCapability.REVIEWED_KALI_LOOKUPS
-            and self.state_of(capability) is RuntimeCapabilityState.AVAILABLE
-        ):
-            # Only the exact reviewed kinds a wired runner supports; never a
-            # general tool or testing capability.
-            kinds = ", ".join(
-                kind.replace("_", " ") for kind in self.kali_operation_kinds
-            )
-            return (
-                "Kali lookups, each individually previewed and authorized, "
-                f"limited to: {kinds}"
-            )
+        if capability is RuntimeCapability.REVIEWED_KALI_LOOKUPS:
+            state = self.state_of(capability)
+            if state is RuntimeCapabilityState.AVAILABLE:
+                # Only the exact reviewed kinds a wired runner supports; never
+                # a general tool or testing capability.
+                kinds = ", ".join(
+                    kind.replace("_", " ") for kind in self.kali_operation_kinds
+                )
+                return (
+                    "Kali lookups, each individually previewed and authorized, "
+                    f"limited to: {kinds}"
+                )
+            if state is RuntimeCapabilityState.SIMULATED:
+                return (
+                    "Kali lookups: only a deterministic preview/simulation is "
+                    "available -- it performs no real DNS or HTTPS request"
+                )
         return _DESCRIPTIONS[capability]
 
 
@@ -246,7 +282,9 @@ def project_runtime_capabilities(
             research and Cap.SOURCE_REVALIDATION in operations
         ),
         RuntimeCapability.SECURITY_SELF_AUDIT: _state(evidence.security_self_audit),
-        RuntimeCapability.REVIEWED_KALI_LOOKUPS: _state(bool(kinds)),
+        RuntimeCapability.REVIEWED_KALI_LOOKUPS: _kali_lookup_state(
+            kinds, evidence.kali_simulation_available
+        ),
     }
     return RuntimeCapabilityContext(
         tuple(
@@ -274,4 +312,25 @@ def _state(value: object) -> RuntimeCapabilityState:
     if value is False:
         return RuntimeCapabilityState.UNAVAILABLE
     # A non-boolean fact was never established; it is not quietly promoted.
+    return RuntimeCapabilityState.UNKNOWN
+
+
+def _kali_lookup_state(
+    kinds: tuple[str, ...], simulation_available: object
+) -> RuntimeCapabilityState:
+    """Real execution, if wired, always outranks the simulation fact.
+
+    A real `kali_operation_kinds` tuple proves the reviewed runner is wired
+    and reports AVAILABLE regardless of `simulation_available` -- the two
+    facts are never combined into one ambiguous reading. Only once there is
+    no real runner does the simulation fact get to decide SIMULATED versus
+    UNAVAILABLE versus UNKNOWN, through the same boolean-only rule `_state`
+    applies everywhere else.
+    """
+    if kinds:
+        return RuntimeCapabilityState.AVAILABLE
+    if simulation_available is True:
+        return RuntimeCapabilityState.SIMULATED
+    if simulation_available is False:
+        return RuntimeCapabilityState.UNAVAILABLE
     return RuntimeCapabilityState.UNKNOWN

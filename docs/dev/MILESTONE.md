@@ -10,16 +10,106 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.432
+## Current — v0.3.433
+
+| Field | Value |
+| --- | --- |
+| Milestone | Runtime capability awareness: let chat distinguish the Kali simulation from real execution and from no capability at all, and split "not available" into not-implemented versus not-enabled-here (Priority 2 of the desktop-UX/capability-awareness/safe-recovery task) |
+| Base SHA | 8dfd408 (origin/main tip, v0.3.432 delivered) |
+| Branch | `feature/capability-awareness`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, no findings — mutation-tested five new tests directly against `_kali_lookup_state`/`instruction()`, each confirmed load-bearing |
+| Blockers | none |
+
+Rationale: Hypatia already had `RuntimeCapabilityProjection.py`, a module
+that derives a short, honest "what can Hypatia do" instruction from
+immutable wiring facts and sends it as a separate `system_instruction` on
+every chat LLM call, alongside (never replacing) the configured system
+prompt. Repository-grounded audit found its one Kali-related token,
+`REVIEWED_KALI_LOOKUPS`, reported only `AVAILABLE` (the real WSL/dig/curl
+adapter wired via `HYPATIA_KALI_OPERATION_EXECUTION_ENABLED`) or
+`UNAVAILABLE` — with no way to say "a deterministic preview/simulation
+workflow exists, but performs no real lookup," even though that no-process
+simulation (`KaliOperationFakeRunnerApplicationService`) is in fact always
+wired: it needs only the program-scope and authorization stores, which
+`Bootstrap` constructs unconditionally, with no feature flag at all. This
+under-reporting was always safe (it never overclaimed) but meant chat told
+the user Hypatia had no Kali capability whatsoever rather than
+distinguishing "I can simulate this for you to preview" from "I cannot do
+this" — exactly the "cannot distinguish simulations from working features"
+gap the task named. Added `RuntimeCapabilityState.SIMULATED`, a
+`kali_simulation_available` evidence field wired from `CognitiveEngine`'s
+existing fake-runner-service presence check, and `_kali_lookup_state()`:
+a real, non-empty `kali_operation_kinds` tuple always outranks the
+simulation fact unconditionally (checked first, before the simulation
+boolean is even read), so the two facts can never combine into one
+ambiguous reading even if both happened to be true. The rendered
+instruction now carries a dedicated "Simulated only, no real action
+performed:" section, and `_RULES` was strengthened with an explicit
+prohibition on describing a simulated result as real or claiming a real
+lookup ran when only the simulation is available. Separately, the old
+single "Not available:" heading was split into "Not implemented in
+Hypatia:" (the pre-existing, unchanged `_NEVER_WIRED` frozenset —
+penetration testing, continuous monitoring, device/media control, system
+administration, chat web browsing — capabilities no runtime wiring can
+ever prove) versus "Not enabled in this configuration:" (everything else
+currently unavailable — implemented in Hypatia but not wired in this
+particular process), covering the task's "implemented but disabled" and
+"planned or unsupported" categories without inferring anything from the
+README, roadmap, or module/folder layout — the existing
+`NoRoadmapInferenceTests` AST-import check continues to pass unchanged.
+
+Review findings and how each was resolved:
+- **hypatia-security** (independent): PASS, no findings. Re-derived from
+  `CognitiveEngine.__init__` that the real run service can structurally
+  never be wired while the fake-runner service is `None` — confirming
+  `_kali_lookup_state`'s real-always-wins ordering holds even in that
+  always-true-together case. Confirmed the module's import set is
+  unchanged (still only `dataclasses`/`enum`/the one research import),
+  confirmed no conversational/user/model text can reach `RuntimeCapabilityContext`
+  or `_RULES`, and confirmed none of the Kali authority files
+  (`KaliOperationRunApplicationService`, `KaliOperationFakeRunnerApplicationService`,
+  the authorization/preview services, any store) appear anywhere in the diff.
+- **hypatia-qa** (independent): PASS, no findings. Mutation-tested five
+  branches directly (swapped the real/simulated check order; weakened the
+  `is True` identity check to truthy; collapsed the `UNKNOWN` fallback
+  into `UNAVAILABLE`; swapped the not-implemented/not-enabled heading
+  assignment; swapped the available/simulated bucket assignment) and
+  confirmed each mutation was caught by a specific failing test, then
+  byte-for-byte restored the file. Traced `Bootstrap.py` directly (not on
+  trust) to confirm `program_scope_revision_store`/`kali_operation_authorization_store`
+  are unconditionally constructed, so the updated integration test's
+  `SIMULATED` expectation is the true behavior of the real wiring path,
+  not a vacuous assertion. Grepped the whole repository for the old
+  heading text and the Kali capability token and found no other test
+  silently relying on the previous UNAVAILABLE-only behavior.
+
+Verification (2026-10-01, Windows canonical environment): 7837 tests,
+`OK` — 6 net new over v0.3.432's 7831 (5 new unit tests in
+`test_runtime_capability_projection.py`, 1 test behavior corrected in
+place in `test_runtime_capability_self_awareness.py` rather than added).
+Black, Ruff, MyPy (`src`, 618 source files) all clean. `git diff --check`
+clean.
+
+## Historical scope: v0.3.432 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Desktop UX: replace the crowded top-level `ttk.Notebook` tab bar with a collapsible, scrollable left sidebar grouped into Home / Research / Web Security & Bug Bounty / System (Priority 1 of the desktop-UX/capability-awareness/safe-recovery task) |
 | Base SHA | cb4a8c0 (origin/main tip, v0.3.431 delivered) |
 | Branch | `feature/desktop-sidebar-navigation`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 96c2b87920ea8400b42461f0dd5763f34d98d1a6 |
+| Status | delivered |
+| PR | #411, MERGED 2026-10-01T14:40:31Z, standard merge commit `8dfd4089e476e0824266a64856550dd334669d71` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 96c2b87920ea8400b42461f0dd5763f34d98d1a6 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS — found two real, closeable test-coverage gaps (no direct `SidebarNavigationView` interactive-logic coverage; no isolated `tool_console`-alone registry test), both closed same session and independently re-run green |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.433 session): PR #411 base `main`, head
+`feature/desktop-sidebar-navigation`, state `MERGED`, merge commit
+`8dfd4089e476e0824266a64856550dd334669d71`, matching the
+independently-fetched `origin/main` tip exactly.
 
 Rationale: the desktop shell's single `ttk.Notebook` had grown to 16
 top-level tabs with truncated/ambiguous labels (`"Security"` for the

@@ -99,10 +99,18 @@ class RuntimeCapabilitySelfAwarenessTests(unittest.TestCase):
                 RuntimeCapabilityState.AVAILABLE,
                 capability,
             )
-        # No Kali runner is configured in this environment, so none is claimed.
+        # No real Kali runner is configured in this environment, so real
+        # execution is never claimed -- but the no-process preview/fake-run
+        # workflow is always wired here (it needs only the scope and
+        # authorization stores Bootstrap always constructs), so it is
+        # truthfully reported as simulated rather than silently omitted.
         self.assertIs(
             context.state_of(RuntimeCapability.REVIEWED_KALI_LOOKUPS),
-            RuntimeCapabilityState.UNAVAILABLE,
+            RuntimeCapabilityState.SIMULATED,
+        )
+        self.assertIn(
+            "it performs no real DNS or HTTPS request",
+            context.instruction(),
         )
         for capability in (
             RuntimeCapability.CHAT_WEB_BROWSING,
