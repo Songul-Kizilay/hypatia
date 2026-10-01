@@ -6863,6 +6863,7 @@ class TkinterDesktopWindow:
         commands: list[tuple[str, Callable[[], None]]] = [
             ("Refresh status", self._refresh_execution_status),
             ("Missions recovered at startup", self._show_recovered_research_missions),
+            ("Paused executions", self._show_paused_research_executions),
             ("Advance one step", self._advance_execution_one_step),
         ]
         if self._curiosity_enabled:
@@ -6910,6 +6911,21 @@ class TkinterDesktopWindow:
                 # A mission recovered after restart can be reviewed for source
                 # independence just like one started in this session.
                 self._mission_independence_run_id = run_ids[0]
+
+    def _show_paused_research_executions(self) -> None:
+        """List every execution paused for authority; name the only one.
+
+        Without this, a plain, non-mission authority pause is invisible
+        after a restart unless the operator already remembers its exact
+        execution ID -- `_show_recovered_research_missions` only ever
+        lists mission-recovery outcomes.
+        """
+        response = self._approval_request(self._controller.paused_research_executions)
+        execution_ids = (
+            response.research_paused_execution_ids if response is not None else ()
+        )
+        if len(execution_ids) == 1:
+            self._execution_id.set(execution_ids[0])
 
     def _refresh_execution_status(self) -> None:
         self._approval_request(

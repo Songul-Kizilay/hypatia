@@ -2,6 +2,41 @@
 
 All notable project changes are recorded here.
 
+## [0.3.435] - 2026-10-01
+
+### Changed
+
+- Safe pause/resume visibility: a plain, non-mission research-plan
+  execution durably paused for a named authority requirement (an
+  `authority_pause`; the execution's own `status` stays `RUNNING` --
+  only its pending step is blocked) was invisible after a restart unless
+  the operator already remembered its exact execution ID.
+  `process_recovered` (the desktop's only prior "what's pending" listing)
+  is scoped specifically to mission-recovery outcomes, so it never
+  covered this case. Added `ResearchPlanExecutionApplicationService
+  .process_paused` (read-only; advances, resumes, authorizes and persists
+  nothing), a `research_plan_execution_paused` intent dispatched the
+  same way every sibling execution intent already is, a
+  `DesktopController.paused_research_executions()` passthrough, and a
+  new "Paused executions" desktop button that auto-fills the execution
+  ID field when exactly one is listed -- mirroring the existing
+  "Missions recovered at startup" button and its supporting methods as
+  closely as possible throughout.
+
+### Security
+
+- No new authority, write, or chat-reachable path: the new listing only
+  reads two already-populated in-memory dicts (live executions; restored
+  snapshots loaded once at startup), with a live entry always taking
+  precedence over a stale restored one for the same execution ID.
+  Independent hypatia-security review PASS, no findings. Independent
+  hypatia-qa review found and this session closed one real gap: nothing
+  exercised the actual `CognitiveEngine.process()` dispatch route for
+  the new intent end-to-end (only the pure service logic and the
+  mocked-brain desktop wiring were tested separately) -- closed with a
+  real-engine dispatch test, plus the new intent added to the existing
+  reachable-intents allowlist test.
+
 ## [0.3.434] - 2026-10-01
 
 ### Changed

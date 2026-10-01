@@ -100,6 +100,9 @@ from research.ResearchPlanAuthorizationVerdict import (
 )
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
+from research.ResearchPlanExecutionAuthorityPause import (
+    ResearchPlanExecutionAuthorityPause,
+)
 from research.ResearchPlanExecutionSnapshot import (
     ResearchPlanExecutionSnapshot,
 )
@@ -4568,6 +4571,42 @@ class ResponseComposer:
             memory_count=0,
             research_recovered_mission_ids=tuple(entry[0] for entry in entries),
             research_recovered_mission_run_ids=tuple(entry[3] for entry in entries),
+        )
+
+    def research_plan_execution_paused(
+        self,
+        request: BrainRequest,
+        entries: tuple[tuple[str, ResearchPlanExecutionAuthorityPause, str], ...],
+    ) -> BrainResponse:
+        """List every execution paused for a named authority, without acting.
+
+        Covers what `research_plan_execution_recovered_missions` does
+        not: that listing is scoped to mission-recovery outcomes, so a
+        plain, non-mission authority pause is otherwise invisible after a
+        restart unless the operator already remembers its exact
+        execution ID.
+        """
+        lines = ["Executions paused for authority:"]
+        lines.extend(
+            f"- Plan ID: {plan_id} | requires {pause.requirement_kind.value} on "
+            f"{pause.step_id}: {pause.detail}"
+            + (f" | Run ID: {run_id}" if run_id else "")
+            for plan_id, pause, run_id in entries
+        )
+        if not entries:
+            lines.append("No execution is currently paused for authority.")
+        lines.append(
+            "Listing performs no research work, grants no authority and starts "
+            "nothing; use execution status with a plan ID, then resume and "
+            "advance it only once the named authority is genuinely met."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution_paused",
+            memory_count=0,
+            research_paused_execution_ids=tuple(entry[0] for entry in entries),
+            research_paused_execution_run_ids=tuple(entry[2] for entry in entries),
         )
 
     def research_plan_execution_missing(

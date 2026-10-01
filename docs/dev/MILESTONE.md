@@ -10,16 +10,115 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.434
+## Current — v0.3.435
+
+| Field | Value |
+| --- | --- |
+| Milestone | Safe pause/resume visibility: a read-only "paused executions" listing covering non-mission authority pauses after a restart, which the existing mission-scoped recovery listing never covered (Priority 4 of the desktop-UX/capability-awareness/safe-recovery task) |
+| Base SHA | c33d8cb (origin/main tip, v0.3.434 delivered) |
+| Branch | `feature/safe-pause-resume-ux`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review — found one real, closeable gap (the new intent's actual `CognitiveEngine.process()` dispatch had no end-to-end test, and the "parity with every sibling" justification for skipping it was itself incorrect for most siblings), closed same session, independently re-verified |
+| Blockers | none |
+
+Rationale: v0.3.429-431 already hardened the authority-pause/deferred
+-grant lifecycle itself (stale-pause clearing, hard grant expiry,
+expired-grant renewal); this milestone's audit deliberately did not
+reopen any of that and instead looked for what Priority 4 asked for
+that genuinely remained missing. Repository-grounded audit found
+`ResearchPlanExecutionApplicationService.process_recovered` — the
+desktop's only existing "what's pending after a restart" listing — is
+scoped specifically to *mission* recovery outcomes: it reads only
+`self._mission_recovery_reports`/`self._mission_recovery_refusals`,
+written exclusively by the mission-scoped startup driver in
+`ResearchGoalStartApplicationService` (which refuses anything without a
+`mission_scope`). A plain, non-mission execution durably paused for a
+named authority requirement (`authority_pause` set; critically, `status`
+stays `RUNNING` — only the pending step is blocked, it is *not* the
+separate `BLOCKED` status) is therefore invisible after a restart unless
+the operator already remembers its exact execution ID — exactly the
+"pending-task visibility after application restart" and "desktop
+presentation of pause reasons and required permissions" gaps the task
+named. Added `process_paused` (new `RESEARCH_PLAN_EXECUTION_PAUSED_INTENT`,
+read-only: advances, resumes, authorizes and persists nothing), which
+unions `self._executions` (live, in-session state) and `self._restored`
+(snapshots loaded once at startup for plan_ids not already live) for
+every entry whose `authority_pause` is not `None`, with a live entry
+always taking precedence over a stale restored one for the same
+execution ID. New `ResponseComposer.research_plan_execution_paused`
+renders the listing the same way `authority_pause` is already rendered
+in `process_status`/`process_restored` elsewhere in that file — naming
+the requirement kind, step and detail, never implying resumability or
+authorization. `CognitiveEngine`'s dispatch addition is structurally
+identical to the adjacent, pre-existing recovered-missions dispatch.
+`DesktopController.paused_research_executions()` and the new "Paused
+executions" button mirror `recovered_research_missions()`/
+`_show_recovered_research_missions` as closely as possible, including
+auto-filling the execution ID field when exactly one execution is
+listed.
+
+Review findings and how each was resolved:
+- **hypatia-security** (independent): PASS, no findings. Traced
+  `rebind_restored` directly to confirm no reachable code path leaves a
+  plan_id live in both `self._executions` and `self._restored`
+  simultaneously with an exception mid-way, and confirmed the `seen`-set
+  dedup still wins by construction even in a forged dual-presence state
+  (exercised by `test_a_live_pause_takes_precedence_over_a_stale_restored_entry`).
+  Confirmed `ResearchPlanExecutionState.py`, `DeferredExecutionGrant.py`
+  and `TrustedDeferredExecutionControlService.py` are untouched by this
+  diff. Traced the full call chain to confirm the new intent string is
+  never producible by `BrainRouter`'s free-text detection or reachable
+  from `DesktopController.submit_message`'s bare-string path — chat text
+  cannot reach it. Confirmed the rendered text makes no resumable/
+  authorized/safe claim beyond what the pre-existing `authority_pause`
+  renderers already say.
+- **hypatia-qa** (independent): found that nothing exercised the real
+  `CognitiveEngine.process()` dispatch route for the new intent — the
+  new unit tests call `process_paused`/`is_paused_request` directly, and
+  the new desktop test uses a mocked `Brain`, so a dropped or broken
+  two-line dispatch addition would have passed every existing test.
+  Also found the milestone's own "at parity with every sibling" framing
+  for judging that gap acceptable was itself wrong: most sibling intents
+  (`start`, `status`, `advance`, `cancel`) do have genuine engine-level
+  dispatch tests elsewhere in the suite; `recovered` was not a
+  representative example to generalize from. Both closed same session:
+  a real-engine dispatch test added to `tests/integration/
+  test_research_execution_restart.py` (proves the dispatch itself, not
+  just the pure service logic, using the same genuinely-separate
+  -runtime fixture that already covers restart behavior for this exact
+  application service), and the new intent added to the existing
+  reachable-intents allowlist test in `test_authorized_execution_start.py`.
+  QA also disclosed, unprompted, a process mistake made and fully
+  self-corrected during its own mutation testing (a `git checkout`/
+  `stash` sequence that briefly reverted two files, caught and repaired
+  via `git apply` before reporting) — independently re-verified
+  byte-identical afterward before proceeding.
+
+Verification (2026-10-01, Windows canonical environment): 7854 tests,
+`OK` — 1 net new over v0.3.434's 7853 (the real-engine dispatch test;
+the allowlist addition extends an existing test rather than adding one).
+Black, Ruff, MyPy (`src`, 618 source files) all clean. `git diff --check`
+clean.
+
+## Historical scope: v0.3.434 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Authorized-scope registration UX: a direct "register a scope" entry point on the Kali Tools tab, reusing the existing enrollment dialog (Priority 3 of the desktop-UX/capability-awareness/safe-recovery task) |
 | Base SHA | c9a816f (origin/main tip, v0.3.433 delivered) |
 | Branch | `feature/kali-scope-registration-ux`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | a403f05ed0b97801867047a747f3292742d70fcc |
+| Status | delivered |
+| PR | #413, MERGED 2026-10-01T15:44:38Z, standard merge commit `c33d8cb68a98485b9a66a7d8dd42167c7caeadaa` |
+| origin/main reachability | verified: `git merge-base --is-ancestor a403f05ed0b97801867047a747f3292742d70fcc origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review — found one real, closeable coverage gap in the new dialog-opening method's happy path, proved exploitable by mutation (dropping the wired enrollment service and the post-close refresh passed every existing gate), closed same session with a test mirroring the sibling method's existing coverage, independently re-verified |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.435 session): PR #413 base `main`, head
+`feature/kali-scope-registration-ux`, state `MERGED`, merge commit
+`c33d8cb68a98485b9a66a7d8dd42167c7caeadaa`, matching the
+independently-fetched `origin/main` tip exactly.
 
 Rationale: the Kali Tools tab's "Registered program scope" selector had
 no way to register a scope from that tab — just the generic "Select a

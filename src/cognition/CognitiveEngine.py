@@ -1278,6 +1278,8 @@ class CognitiveEngine:
             )
         if self._research_plan_execution_service.is_recovered_request(request):
             return self._research_plan_execution_service.process_recovered(request)
+        if self._research_plan_execution_service.is_paused_request(request):
+            return self._research_plan_execution_service.process_paused(request)
 
         if self._research_plan_execution_service.is_cancel_request(request):
             return self._research_plan_execution_service.process_cancel(request)

@@ -2,10 +2,29 @@
 
 ## Runtime Version
 
-`v0.3.434 (Genesis)`
+`v0.3.435 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.435 closes a safe pause/resume visibility gap: a plain,
+non-mission execution durably paused for a named authority requirement
+(`authority_pause`; `status` stays `RUNNING`, only the pending step is
+blocked) was invisible after a restart unless the operator already
+remembered its exact execution ID, since the desktop's only prior
+"what's pending" listing (`process_recovered`) is scoped specifically to
+mission-recovery outcomes. Added a read-only
+`research_plan_execution_paused` listing (new `process_paused` on
+`ResearchPlanExecutionApplicationService`, dispatched like every sibling
+execution intent, exposed through a new `DesktopController
+.paused_research_executions()` and a new "Paused executions" desktop
+button), mirroring the existing "Missions recovered at startup" surface
+as closely as possible. Independent hypatia-security review PASS, no
+findings; independent hypatia-qa review found and this session closed
+one real gap -- the new intent's actual `CognitiveEngine.process()`
+dispatch had no end-to-end test -- closed with a real-engine dispatch
+test and an addition to the existing reachable-intents allowlist test.
+Windows canonical environment: 7854 tests, `OK`; Black/Ruff/MyPy clean.
 
 Version v0.3.434 gives the Kali Tools tab a direct way to register an
 authorized program scope. Previously its "Registered program scope"
