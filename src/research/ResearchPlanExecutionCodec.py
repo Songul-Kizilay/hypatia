@@ -33,6 +33,7 @@ from research.ResearchAttemptRecoveryDecision import (
     ResearchAttemptRecoveryDecision,
 )
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorityRequirementKind import ResearchAuthorityRequirementKind
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchAutonomyResult import AutonomyStopReason
@@ -43,6 +44,9 @@ from research.ResearchExecutionSpend import ResearchExecutionSpend
 from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchMissionScope import ResearchMissionScope
 from research.ResearchPlanDigest import is_plan_digest
+from research.ResearchPlanExecutionAuthorityPause import (
+    ResearchPlanExecutionAuthorityPause,
+)
 from research.ResearchPlanExecutionSnapshot import (
     MAX_SNAPSHOT_DETAIL_CHARACTERS,
     MAX_SNAPSHOT_STEPS,
@@ -209,6 +213,14 @@ def encode_execution_snapshot(
             "step_id": snapshot.advance_refusal_step_id,
             "detail": snapshot.advance_refusal_detail,
         }
+    if snapshot.authority_pause is not None:
+        document["authority_pause"] = {
+            "step_id": snapshot.authority_pause.step_id,
+            "requirement_kind": snapshot.authority_pause.requirement_kind.value,
+            "plan_digest": snapshot.authority_pause.plan_digest,
+            "research_run_id": snapshot.authority_pause.research_run_id,
+            "detail": snapshot.authority_pause.detail,
+        }
     return document
 
 
@@ -224,6 +236,13 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
     it can coexist with any of the combinations below without needing its own
     combinatorial entry in ``_EXECUTION_FIELDS_WITH_*``.  Its absence decodes
     as no recorded refusal, never as a guess.
+
+    ``authority_pause`` is likewise optional and independent of every other
+    field, stripped and decoded first for the same reason. Its absence
+    decodes as no recorded pause, never as either "authorized" or "blocked".
+    A document naming both ``advance_refusal`` and ``authority_pause`` decodes
+    both fields here but is then refused by the resulting snapshot's own
+    mutual-exclusion check, exactly like any other malformed combination.
     """
     if isinstance(document, dict) and "advance_refusal" in document:
         refusal_value = document["advance_refusal"]
@@ -241,6 +260,38 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
                 refusal_value["step_id"], "advance refusal step ID"
             ),
             advance_refusal_detail=_detail(refusal_value["detail"]),
+        )
+    if isinstance(document, dict) and "authority_pause" in document:
+        pause_value = document["authority_pause"]
+        if not isinstance(pause_value, dict) or set(pause_value) != {
+            "step_id",
+            "requirement_kind",
+            "plan_digest",
+            "research_run_id",
+            "detail",
+        }:
+            raise ResearchError("Execution snapshot authority pause is invalid.")
+        base = {
+            key: value for key, value in document.items() if key != "authority_pause"
+        }
+        plan_digest_value = pause_value["plan_digest"]
+        if not is_plan_digest(plan_digest_value):
+            raise ResearchError("Execution snapshot authority pause digest is invalid.")
+        return replace(
+            decode_execution_snapshot(base),
+            authority_pause=ResearchPlanExecutionAuthorityPause(
+                requirement_kind=_enum(
+                    pause_value["requirement_kind"],
+                    ResearchAuthorityRequirementKind,
+                    "authority pause requirement kind",
+                ),
+                step_id=_text(pause_value["step_id"], "authority pause step ID"),
+                plan_digest=plan_digest_value,
+                research_run_id=_text(
+                    pause_value["research_run_id"], "authority pause research run ID"
+                ),
+                detail=_text(pause_value["detail"], "authority pause detail"),
+            ),
         )
     if isinstance(document, dict) and "mission_stop_reason" in document:
         if set(document) - {"mission_stop_reason"} not in (

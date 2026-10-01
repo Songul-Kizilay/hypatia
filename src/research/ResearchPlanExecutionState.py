@@ -20,8 +20,12 @@ from research.ResearchAttemptRecoveryDecision import (
     ResearchAttemptRecoveryDecision,
 )
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorityRequirementKind import ResearchAuthorityRequirementKind
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanExecutionAuthorityPause import (
+    ResearchPlanExecutionAuthorityPause,
+)
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
@@ -48,6 +52,13 @@ class ResearchPlanExecutionState:
     #: authority, budget, or a status signal for any other code path.
     advance_refusal_step_id: str | None = None
     advance_refusal_detail: str = ""
+    #: The exact, named authority the next pending step is missing entirely
+    #: (as opposed to `advance_refusal_*`, which covers an approved allowance
+    #: that exists but falls short). Set only by `require_authority`, cleared
+    #: the next time that exact step successfully starts. It names what would
+    #: satisfy the requirement; it never grants, consumes, or is anything
+    #: else's authority.
+    authority_pause: ResearchPlanExecutionAuthorityPause | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.plan_id, str) or not self.plan_id.strip():
@@ -105,6 +116,25 @@ class ResearchPlanExecutionState:
         if self.advance_refusal_step_id is not None and not advance_refusal_detail:
             raise ResearchError(
                 "Research plan execution advance refusal requires a reason."
+            )
+        if self.authority_pause is not None and not isinstance(
+            self.authority_pause, ResearchPlanExecutionAuthorityPause
+        ):
+            raise ResearchError("Research plan execution authority pause is invalid.")
+        if (
+            self.authority_pause is not None
+            and self.authority_pause.step_id not in step_ids
+        ):
+            raise ResearchError(
+                "Research plan execution authority pause step ID is invalid."
+            )
+        if (
+            self.authority_pause is not None
+            and self.advance_refusal_step_id is not None
+        ):
+            raise ResearchError(
+                "Research plan execution cannot record both an advance refusal "
+                "and an authority pause for the same execution."
             )
         object.__setattr__(self, "plan_id", self.plan_id.strip())
         object.__setattr__(self, "detail", detail)
@@ -199,11 +229,20 @@ class ResearchPlanExecutionState:
         # next pending step can carry a refusal) is left untouched rather
         # than guessed away.
         if self.advance_refusal_step_id == normalized:
-            return replace(
+            started = replace(
                 started,
                 advance_refusal_step_id=None,
                 advance_refusal_detail="",
             )
+        # Symmetrically, an authority pause recorded against this exact step
+        # is resolved the moment it actually starts. Whatever let the step
+        # start (a freshly consumed authorization producing an allowance) is
+        # what cleared it, never this method itself.
+        if (
+            self.authority_pause is not None
+            and self.authority_pause.step_id == normalized
+        ):
+            started = replace(started, authority_pause=None)
         return started
 
     def complete_step(
@@ -491,6 +530,51 @@ class ResearchPlanExecutionState:
             self,
             advance_refusal_step_id=self._normalized(step_id),
             advance_refusal_detail=detail,
+        )
+
+    def require_authority(
+        self,
+        step_id: str,
+        requirement_kind: ResearchAuthorityRequirementKind,
+        plan_digest: str,
+        research_run_id: str,
+        detail: str,
+    ) -> ResearchPlanExecutionState:
+        """Record that the next pending step needs authority Hypatia lacks.
+
+        This is deliberately NOT `refuse_advance` and NOT `block_step`.
+        `refuse_advance` covers an approved allowance that exists but falls
+        short of one step's cost; this covers a step for which no allowance
+        (or other named authority) exists at all. `block_step` would move the
+        whole execution to `BLOCKED`, whose only way back requires a
+        performed-but-unseen attempt this step never made. The step and the
+        execution stay exactly as advanceable as they were before this call;
+        only the explanatory, exactly-bound requirement becomes durable
+        state, and it is cleared automatically the next time this same step
+        successfully starts — never by this method, and never by merely
+        presenting an authorization, correct or not.
+        """
+        self._require_running()
+        current = self._step(step_id)
+        if current.status is not ResearchPlanStepStatus.PENDING:
+            raise ResearchError(
+                "Research plan execution can record an authority pause only "
+                "for a pending step."
+            )
+        if self.next_pending_step_id != self._normalized(step_id):
+            raise ResearchError(
+                "Research plan execution can record an authority pause only "
+                "for the next pending step."
+            )
+        return replace(
+            self,
+            authority_pause=ResearchPlanExecutionAuthorityPause(
+                requirement_kind=requirement_kind,
+                step_id=self._normalized(step_id),
+                plan_digest=plan_digest,
+                research_run_id=research_run_id,
+                detail=detail,
+            ),
         )
 
     def block_step(

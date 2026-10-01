@@ -10,6 +10,8 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+import tempfile
+
 from brain.BrainRequest import BrainRequest
 from cognition.ResearchPlanExecutionApplicationService import (
     RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT,
@@ -19,14 +21,22 @@ from cognition.ResearchPlanExecutionApplicationService import (
     ResearchPlanExecutionApplicationService,
 )
 from core.Exceptions import ResearchError
+from research.JsonFileResearchExecutionStore import JsonFileResearchExecutionStore
+from research.ResearchAuthorityRequirementKind import ResearchAuthorityRequirementKind
+from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
 from research.ResearchPlanStepOperationResult import (
     ResearchPlanStepOperationResult,
 )
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
+from research.SourceRevalidationStepBinding import SourceRevalidationStepBinding
 from response.ResponseComposer import ResponseComposer
 
 STEPS = (
@@ -507,6 +517,374 @@ class ResearchPlanExecutionAdvanceTests(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertIn("It is not resumed after a restart.", response.message)
+
+
+def _semantic_evidence_step_draft() -> ResearchPlanStepDraftInput:
+    return ResearchPlanStepDraftInput(
+        instruction="Propose evidence",
+        capability=ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL.value,
+        semantic_evidence_binding=SemanticEvidenceStepBinding(
+            input_fingerprint="a" * 64,
+            endpoint="http://127.0.0.1:11434/v1/chat/completions",
+            model="fixture",
+        ),
+    )
+
+
+def _model_step_start_request(research_run_id: str = "run-1") -> BrainRequest:
+    return BrainRequest(
+        message="Start research plan",
+        metadata={
+            "intent": RESEARCH_PLAN_EXECUTION_START_INTENT,
+            "research_plan_question": "What evidence supports the claim?",
+            "research_plan_steps": (_semantic_evidence_step_draft(),),
+            "research_run_id": research_run_id,
+        },
+    )
+
+
+class ResearchPlanExecutionAuthorityPauseTests(unittest.TestCase):
+    """`process_advance` durably pauses a step missing authority entirely.
+
+    Deliberately distinct from `ResearchPlanExecutionAdvanceTests`'s existing
+    budget/capability coverage: those exercise `BLOCKED` (impossible work)
+    and `_advance_refused` (an approved allowance falling short). This class
+    exercises the third, previously untested path -- no allowance at all --
+    where advancing today has always returned the same ephemeral rejection
+    message; what this milestone adds is the durable trace alongside it.
+    """
+
+    def _service(
+        self,
+        *,
+        execution_store: JsonFileResearchExecutionStore | None = None,
+        id_factory=lambda: "plan-authority",  # type: ignore[no-untyped-def]
+    ) -> ResearchPlanExecutionApplicationService:
+        registry = ResearchPlanOperationRegistry()
+        registry.register(
+            ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL,
+            RecordingStepOperation(),
+        )
+        return ResearchPlanExecutionApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 23, tzinfo=UTC),
+                id_factory=id_factory,
+            ),
+            operation_registry=registry,
+            execution_store=execution_store,
+        )
+
+    def _started(
+        self,
+        service: ResearchPlanExecutionApplicationService,
+        research_run_id: str = "run-1",
+    ) -> str:
+        response = service.process_start(_model_step_start_request(research_run_id))
+        assert response.research_plan_execution is not None
+        return response.research_plan_execution.plan_id
+
+    def test_missing_model_budget_pauses_durably_instead_of_only_rejecting(
+        self,
+    ) -> None:
+        service = self._service()
+        plan_id = self._started(service)
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn(
+            "Model steps require an explicit approved execution budget.",
+            response.message,
+        )
+        # The immediate rejection response is byte-for-byte unchanged by the
+        # durable side effect; the pause is visible on a later status read.
+        status = service.process_status(
+            plan_request(RESEARCH_PLAN_EXECUTION_STATUS_INTENT, plan_id)
+        )
+        self.assertIn("Paused for authority on step-1", status.message)
+        state = service._executions[plan_id]
+        self.assertIsNotNone(state.authority_pause)
+        assert state.authority_pause is not None
+        self.assertIs(
+            state.authority_pause.requirement_kind,
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+        )
+        self.assertEqual(state.authority_pause.step_id, "step-1")
+        self.assertEqual(state.authority_pause.research_run_id, "run-1")
+        self.assertEqual(
+            state.authority_pause.plan_digest,
+            plan_digest(service._plans[plan_id]),
+        )
+        # Nothing was attempted or charged, and the execution stays running.
+        self.assertIs(state.status, ResearchPlanExecutionStatus.RUNNING)
+        self.assertIs(state.steps[0].status, ResearchPlanStepStatus.PENDING)
+        self.assertEqual(service._allowances.get(plan_id), None)
+
+    def test_missing_source_revalidation_allowance_pauses_durably(self) -> None:
+        registry = ResearchPlanOperationRegistry()
+        registry.register(
+            ResearchPlanStepCapability.SOURCE_REVALIDATION,
+            RecordingStepOperation(),
+        )
+        service = ResearchPlanExecutionApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 23, tzinfo=UTC),
+                id_factory=lambda: "plan-revalidation",
+            ),
+            operation_registry=registry,
+        )
+        response = service.process_start(
+            BrainRequest(
+                message="Start research plan",
+                metadata={
+                    "intent": RESEARCH_PLAN_EXECUTION_START_INTENT,
+                    "research_plan_question": "What evidence supports the claim?",
+                    "research_plan_steps": (
+                        ResearchPlanStepDraftInput(
+                            instruction="Revalidate a source",
+                            capability=(
+                                ResearchPlanStepCapability.SOURCE_REVALIDATION.value
+                            ),
+                            source_revalidation_binding=SourceRevalidationStepBinding(
+                                research_run_id="run-1",
+                                prior_observation_id="observation-1",
+                                requested_url="https://example.org/source",
+                                max_sources=1,
+                            ),
+                        ),
+                    ),
+                    "research_run_id": "run-1",
+                },
+            )
+        )
+        assert response.research_plan_execution is not None
+        plan_id = response.research_plan_execution.plan_id
+
+        advanced = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        self.assertFalse(advanced.success)
+        self.assertIn(
+            "Source revalidation requires an explicit approved execution " "allowance",
+            advanced.message,
+        )
+        state = service._executions[plan_id]
+        self.assertIsNotNone(state.authority_pause)
+        assert state.authority_pause is not None
+        self.assertIs(
+            state.authority_pause.requirement_kind,
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+        )
+        self.assertEqual(state.authority_pause.step_id, "step-1")
+
+    def test_pause_without_a_bound_research_run_falls_back_to_ephemeral_only(
+        self,
+    ) -> None:
+        """No `ResearchPlanAuthorization` can bind without a research run, so
+        this deliberately does not record an incomplete requirement -- the
+        plain rejection is unchanged, exactly as before this milestone.
+        """
+        service = self._service()
+        response = service.process_start(
+            BrainRequest(
+                message="Start research plan",
+                metadata={
+                    "intent": RESEARCH_PLAN_EXECUTION_START_INTENT,
+                    "research_plan_question": "What evidence supports the claim?",
+                    "research_plan_steps": (_semantic_evidence_step_draft(),),
+                    # No research_run_id: this execution is never bound to a run.
+                },
+            )
+        )
+        assert response.research_plan_execution is not None
+        plan_id = response.research_plan_execution.plan_id
+        self.assertIsNone(service._contexts[plan_id].research_run_id)
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn(
+            "Model steps require an explicit approved execution budget.",
+            response.message,
+        )
+        state = service._executions[plan_id]
+        self.assertIsNone(state.authority_pause)
+
+    def test_repeated_advance_attempts_do_not_duplicate_or_drift_the_pause(
+        self,
+    ) -> None:
+        service = self._service()
+        plan_id = self._started(service)
+        advance = plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+
+        service.process_advance(advance)
+        service.process_advance(advance)
+        state = service._executions[plan_id]
+
+        assert state.authority_pause is not None
+        self.assertEqual(state.authority_pause.step_id, "step-1")
+
+    def test_pause_is_cleared_once_the_step_actually_starts(self) -> None:
+        """Proves the clearing mechanism: nothing but the step itself
+        starting resolves the pause. No public API in this milestone can
+        grant a fresh allowance to an already-running execution, so this
+        directly installs one to exercise exactly the transition
+        `require_authority`/`start_step` are built to make automatic once a
+        future milestone adds that resume mechanism.
+        """
+        service = self._service()
+        plan_id = self._started(service)
+        service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+        assert service._executions[plan_id].authority_pause is not None
+
+        service._allowances[plan_id] = ResearchExecutionAllowance(
+            budget=ResearchAutonomyBudget(max_llm_operations=1)
+        )
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertIsNone(state.authority_pause)
+        self.assertIs(state.steps[0].status, ResearchPlanStepStatus.COMPLETED)
+
+    def test_authority_pause_survives_a_persisted_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store_path = Path(directory) / "executions.json"
+            first = self._service(
+                execution_store=JsonFileResearchExecutionStore(store_path)
+            )
+            plan_id = self._started(first)
+            first.process_advance(
+                plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+            )
+            assert first._executions[plan_id].authority_pause is not None
+
+            second = self._service(
+                execution_store=JsonFileResearchExecutionStore(store_path)
+            )
+
+            self.assertNotIn(plan_id, second._executions)
+            response = second.process_status(
+                plan_request(RESEARCH_PLAN_EXECUTION_STATUS_INTENT, plan_id)
+            )
+
+            self.assertTrue(response.success)
+            self.assertIn("Paused for authority on step-1", response.message)
+            self.assertIn(
+                "Model steps require an explicit approved execution budget.",
+                response.message,
+            )
+            restored = second._restored[plan_id]
+            self.assertIsNotNone(restored.authority_pause)
+            assert restored.authority_pause is not None
+            self.assertEqual(restored.authority_pause.step_id, "step-1")
+            self.assertEqual(restored.authority_pause.research_run_id, "run-1")
+            self.assertIs(
+                restored.status,
+                ResearchPlanExecutionStatus.RUNNING,
+            )
+
+    def test_wrong_run_authorization_cannot_be_confused_with_this_pause(self) -> None:
+        """The pause names one exact run; a second execution under a
+        different run has its own, independently distinguishable pause --
+        proving there is no shared or ambiguous identity between them.
+        """
+        service = self._service()
+        first_plan_id = self._started(service, research_run_id="run-1")
+        service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, first_plan_id)
+        )
+
+        second_service = self._service(id_factory=lambda: "plan-authority-2")
+        second_plan_id = self._started(second_service, research_run_id="run-2")
+        second_service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, second_plan_id)
+        )
+
+        first_pause = service._executions[first_plan_id].authority_pause
+        second_pause = second_service._executions[second_plan_id].authority_pause
+        assert first_pause is not None and second_pause is not None
+        self.assertNotEqual(first_pause.research_run_id, second_pause.research_run_id)
+        self.assertNotEqual(first_pause, second_pause)
+
+    def test_blocked_execution_with_a_later_authority_gap_does_not_pause_or_crash(
+        self,
+    ) -> None:
+        """A later pending step that needs authority is never durably paused
+        -- or allowed to raise -- while the execution as a whole is
+        `BLOCKED` by an earlier, unrelated step. `require_authority` can
+        only be recorded while the execution is `RUNNING`; `_paused_for_authority`
+        must fall back to the plain ephemeral rejection whenever it is not,
+        exactly as it already does when no research run is bound.
+        """
+        registry = ResearchPlanOperationRegistry()
+        registry.register(
+            ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL,
+            RecordingStepOperation(),
+        )
+        service = ResearchPlanExecutionApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 23, tzinfo=UTC),
+                id_factory=lambda: "plan-authority-blocked",
+            ),
+            operation_registry=registry,
+        )
+        response = service.process_start(
+            BrainRequest(
+                message="Start research plan",
+                metadata={
+                    "intent": RESEARCH_PLAN_EXECUTION_START_INTENT,
+                    "research_plan_question": "What evidence supports the claim?",
+                    "research_plan_steps": (
+                        ResearchPlanStepDraftInput(
+                            instruction="No declared capability"
+                        ),
+                        _semantic_evidence_step_draft(),
+                    ),
+                    "research_run_id": "run-1",
+                },
+            )
+        )
+        assert response.research_plan_execution is not None
+        plan_id = response.research_plan_execution.plan_id
+
+        blocked = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+        assert blocked.research_plan_execution is not None
+        self.assertIs(
+            blocked.research_plan_execution.status,
+            ResearchPlanExecutionStatus.BLOCKED,
+        )
+
+        # The execution is BLOCKED, not RUNNING, but step-2 is still PENDING
+        # and needs authority this execution has never had. This advance
+        # must fall back to the plain ephemeral rejection -- never record a
+        # durable pause, and never raise.
+        second = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        self.assertFalse(second.success)
+        self.assertIn(
+            "Model steps require an explicit approved execution budget.",
+            second.message,
+        )
+        state = service._executions[plan_id]
+        self.assertIsNone(state.authority_pause)
+        self.assertIs(state.status, ResearchPlanExecutionStatus.BLOCKED)
 
 
 if __name__ == "__main__":

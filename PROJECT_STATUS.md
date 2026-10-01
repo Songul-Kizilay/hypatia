@@ -2,10 +2,40 @@
 
 ## Runtime Version
 
-`v0.3.428 (Genesis)`
+`v0.3.429 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.429 adds Authority Control State + Durable Pause Foundation:
+a durable, non-authoritative way for `ResearchPlanExecutionState` to name
+exactly which authority a paused step is missing -- `research
+.ResearchAuthorityRequirementKind` (closed `StrEnum`, one member today,
+`PLAN_AUTHORIZATION`) and `research.ResearchPlanExecutionAuthorityPause`
+(a frozen dataclass naming the requirement kind, step, plan digest,
+research run, and detail), modeled parallel to the already-shipped
+`advance_refusal_*` mechanism rather than as a new terminal execution
+status. `ResearchPlanExecutionApplicationService._paused_for_authority`
+records the pause when a source-revalidation or LLM-costing step has no
+execution allowance at all, bound to the plan's own digest and the bound
+research run; it is cleared only when that exact step successfully
+starts -- never by presenting any authorization, correct or not. The
+snapshot and codec persist and restore the same field, refusing any
+malformed, partial, or step-id-mismatched document. This is a narrow
+foundation step underneath Bug Bounty Researcher roadmap item 8
+(Business-logic/state-transition model), the item M1's own closing note
+named as the natural next candidate belonging to M2; it does not deliver
+item 8 itself. Independent hypatia-security review: PASS, no findings.
+Independent hypatia-qa review: PASS, found and closed two real
+test-coverage gaps (test-only, no production code touched) before this
+delivery -- a concurrent-interrupt case for a later-step pause surviving
+`restored()`, and a BLOCKED-execution case that previously crashed with
+an uncaught `ResearchError` instead of falling back to a plain rejection.
+hypatia-runtime (implementer) reported two non-blocking observations
+about its own implementation whose exact wording was not preserved
+before the implementing session was interrupted; not reconstructed or
+guessed at here. Windows canonical environment: 7786 tests, `OK`;
+Black/Ruff/MyPy clean.
 
 Version v0.3.428 adds Security Finding evidence assessment / confidence
 foundation: a new pure, read-only `ResearchSecurityFinding.evidence_ceiling`

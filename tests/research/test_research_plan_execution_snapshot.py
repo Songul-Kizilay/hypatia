@@ -11,12 +11,16 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import ResearchError
+from research.ResearchAuthorityRequirementKind import ResearchAuthorityRequirementKind
 from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchMissionScope import SEMANTIC_POLICY, ResearchMissionScope
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDigest import plan_digest
+from research.ResearchPlanExecutionAuthorityPause import (
+    ResearchPlanExecutionAuthorityPause,
+)
 from research.ResearchPlanExecutionCodec import (
     decode_execution_snapshot,
     encode_execution_snapshot,
@@ -58,6 +62,9 @@ def plan() -> ResearchPlan:
         steps=plan_steps(),
         created_at=RECORDED_AT,
     )
+
+
+PLAN_DIGEST = plan_digest(plan())
 
 
 def capture(state: ResearchPlanExecutionState) -> ResearchPlanExecutionSnapshot:
@@ -102,6 +109,31 @@ class ExecutionSnapshotCaptureTests(unittest.TestCase):
         self.assertEqual(
             snapshot.advance_refusal_detail, "budget does not cover this step"
         )
+
+    def test_capture_derives_authority_pause_from_state(self) -> None:
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .require_authority(
+                "step-1",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "Model steps require an explicit approved execution budget.",
+            )
+        )
+
+        snapshot = capture(state)
+
+        self.assertIsNotNone(snapshot.authority_pause)
+        assert snapshot.authority_pause is not None
+        self.assertIs(
+            snapshot.authority_pause.requirement_kind,
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+        )
+        self.assertEqual(snapshot.authority_pause.step_id, "step-1")
+        self.assertEqual(snapshot.authority_pause.plan_digest, PLAN_DIGEST)
+        self.assertEqual(snapshot.authority_pause.research_run_id, "run-1")
 
     def test_capture_preserves_work_and_operation_identity(self) -> None:
         state = (
@@ -199,6 +231,74 @@ class ExecutionSnapshotRestoreTests(unittest.TestCase):
         for step in restored.steps:
             self.assertIs(step.status, ResearchPlanStepStatus.PENDING)
 
+    def test_authority_pause_survives_restore_unchanged(self) -> None:
+        """A pause never coexists with a `RUNNING` step, so `restored()` has
+        nothing to reinterpret about it; it is carried through exactly as
+        recorded, mirroring `advance_refusal`'s documented, deliberate choice.
+        """
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .require_authority(
+                "step-1",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "Model steps require an explicit approved execution budget.",
+            )
+        )
+
+        restored = capture(state).restored()
+
+        self.assertIsNotNone(restored.authority_pause)
+        assert restored.authority_pause is not None
+        self.assertEqual(restored.authority_pause.step_id, "step-1")
+        self.assertEqual(restored.authority_pause.plan_digest, PLAN_DIGEST)
+        self.assertEqual(restored.authority_pause.research_run_id, "run-1")
+        # Nothing was running, and restart neither grants nor discards the
+        # pause: the execution stays exactly as it was.
+        self.assertIs(restored.status, ResearchPlanExecutionStatus.RUNNING)
+        for step in restored.steps:
+            self.assertIs(step.status, ResearchPlanStepStatus.PENDING)
+
+    def test_authority_pause_on_a_later_step_survives_a_concurrent_interrupt(
+        self,
+    ) -> None:
+        """A pause can legitimately name a step that is not the one `restored()`
+        reinterprets: the pause binds only to `next_pending_step_id`, which
+        skips over an earlier step that is concurrently `RUNNING`. This is
+        reachable through the ordinary state machine, not a forced shape, so
+        `restored()`'s claim that it "never" touches the running step the
+        pause names must hold even when a different, earlier step is the one
+        actually interrupted by restart.
+        """
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .start_step("step-1")
+            .require_authority(
+                "step-2",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "Model steps require an explicit approved execution budget.",
+            )
+        )
+
+        restored = capture(state).restored()
+
+        # The concurrently running step-1 is correctly reinterpreted...
+        self.assertIs(restored.status, ResearchPlanExecutionStatus.INTERRUPTED)
+        self.assertIs(restored.steps[0].status, ResearchPlanStepStatus.INTERRUPTED)
+        # ...while the unrelated pause on step-2 is neither granted nor
+        # discarded by that reinterpretation.
+        self.assertIsNotNone(restored.authority_pause)
+        assert restored.authority_pause is not None
+        self.assertEqual(restored.authority_pause.step_id, "step-2")
+        self.assertEqual(restored.authority_pause.plan_digest, PLAN_DIGEST)
+        self.assertEqual(restored.authority_pause.research_run_id, "run-1")
+        self.assertIs(restored.steps[1].status, ResearchPlanStepStatus.PENDING)
+
     def test_blocked_and_interrupted_are_distinct_and_non_terminal(self) -> None:
         self.assertIsNot(
             ResearchPlanStepStatus.BLOCKED,
@@ -255,6 +355,192 @@ class ExecutionSnapshotCodecTests(unittest.TestCase):
             decoded.advance_refusal_detail, "budget does not cover this step"
         )
         self.assertEqual(decoded, snapshot)
+
+    def test_round_trip_preserves_authority_pause(self) -> None:
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .require_authority(
+                "step-1",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "Model steps require an explicit approved execution budget.",
+            )
+        )
+        snapshot = capture(state)
+
+        decoded = decode_execution_snapshot(encode_execution_snapshot(snapshot))
+
+        self.assertIsNotNone(decoded.authority_pause)
+        assert decoded.authority_pause is not None
+        self.assertEqual(decoded.authority_pause.step_id, "step-1")
+        self.assertEqual(decoded.authority_pause.plan_digest, PLAN_DIGEST)
+        self.assertEqual(decoded.authority_pause.research_run_id, "run-1")
+        self.assertIs(
+            decoded.authority_pause.requirement_kind,
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+        )
+        self.assertEqual(decoded, snapshot)
+
+    def test_legacy_document_decodes_authority_pause_as_absent(self) -> None:
+        """No ``authority_pause`` key at all: the pre-existing document shape.
+
+        Decodes as no recorded pause -- never as "authorized", never as
+        "blocked" -- mirroring how a legacy document with no
+        ``advance_refusal`` key decodes as no recorded refusal.
+        """
+        snapshot = capture(ResearchPlanExecutionState.prepare(plan()).start())
+        document = encode_execution_snapshot(snapshot)
+
+        self.assertNotIn("authority_pause", document)
+
+        decoded = decode_execution_snapshot(document)
+
+        self.assertIsNone(decoded.authority_pause)
+
+    def test_authority_pause_coexists_with_mission_stop_reason(self) -> None:
+        """The two independent optional singleton keys decode together.
+
+        Mirrors the equivalent ``advance_refusal`` ordering test: stripping
+        ``authority_pause`` first, then recursing, so it never has to be
+        enumerated alongside every mission-recovery field combination.
+        """
+        mission_plan = ResearchPlan(
+            plan_id="mission-plan-1",
+            question=QUESTION,
+            steps=plan_steps(),
+            created_at=RECORDED_AT,
+        )
+        scope = ResearchMissionScope(
+            ResearchDiscoveryProviderName.CROSSREF,
+            source_policy=SEMANTIC_POLICY,
+            max_sources=3,
+            semantic_policy=SemanticMissionPolicy(
+                "http://127.0.0.1:11434/v1/chat/completions",
+                "fixture",
+                ResearchDisclosure.LOCAL_ONLY,
+            ),
+        )
+        state = (
+            ResearchPlanExecutionState.prepare(mission_plan)
+            .start()
+            .require_authority(
+                "step-1",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                plan_digest(mission_plan),
+                "run-1",
+                "reason",
+            )
+        )
+        snapshot = ResearchPlanExecutionSnapshot.capture(
+            state,
+            QUESTION,
+            plan_steps(),
+            RECORDED_AT,
+            mission_plan_digest=plan_digest(mission_plan),
+            mission_scope=scope,
+            mission_disclosure=ResearchDisclosure.LOCAL_ONLY,
+            mission_stop_reason=AutonomyStopReason.STEP_BLOCKED,
+        )
+        document = encode_execution_snapshot(snapshot)
+
+        self.assertIn("authority_pause", document)
+        self.assertIn("mission_stop_reason", document)
+
+        decoded = decode_execution_snapshot(document)
+
+        self.assertEqual(decoded, snapshot)
+        assert decoded.authority_pause is not None
+        self.assertEqual(decoded.authority_pause.step_id, "step-1")
+        self.assertIs(decoded.mission_stop_reason, AutonomyStopReason.STEP_BLOCKED)
+
+    def test_malformed_authority_pause_documents_are_rejected(self) -> None:
+        state = (
+            ResearchPlanExecutionState.prepare(plan())
+            .start()
+            .require_authority(
+                "step-1",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "reason",
+            )
+        )
+        valid = encode_execution_snapshot(capture(state))
+        valid_pause = valid["authority_pause"]
+
+        for mutate in (
+            lambda d: d.update(
+                {
+                    "authority_pause": {
+                        k: v for k, v in valid_pause.items() if k != "detail"
+                    }
+                }
+            ),
+            lambda d: d.update({"authority_pause": {**valid_pause, "step_id": ""}}),
+            lambda d: d.update(
+                {"authority_pause": {**valid_pause, "step_id": "step-9"}}
+            ),
+            lambda d: d.update({"authority_pause": "not-a-dict"}),
+            lambda d: d.update(
+                {"authority_pause": {**valid_pause, "plan_digest": "not-a-digest"}}
+            ),
+            lambda d: d.update(
+                {"authority_pause": {**valid_pause, "research_run_id": ""}}
+            ),
+            lambda d: d.update(
+                {"authority_pause": {**valid_pause, "requirement_kind": "imaginary"}}
+            ),
+            lambda d: d.update({"authority_pause": {**valid_pause, "detail": ""}}),
+            lambda d: d.update(
+                {"authority_pause": {**valid_pause, "detail": "x" * 501}}
+            ),
+        ):
+            with self.subTest(mutate=mutate):
+                document = copy.deepcopy(valid)
+                mutate(document)
+                with self.assertRaises(ResearchError):
+                    decode_execution_snapshot(document)
+
+        self.assertEqual(
+            decode_execution_snapshot(valid).authority_pause.step_id,  # type: ignore[union-attr]
+            "step-1",
+        )
+
+    def test_document_naming_both_refusal_and_pause_is_rejected(self) -> None:
+        """A document cannot claim both bookkeeping kinds for one execution.
+
+        Each optional key decodes independently and successfully on its own,
+        but the resulting snapshot's own mutual-exclusion invariant then
+        refuses the combined document -- proved here at the codec boundary,
+        not merely by direct dataclass construction.
+        """
+        refused = encode_execution_snapshot(
+            capture(
+                ResearchPlanExecutionState.prepare(plan())
+                .start()
+                .refuse_advance("step-1", "insufficient allowance")
+            )
+        )
+        paused = encode_execution_snapshot(
+            capture(
+                ResearchPlanExecutionState.prepare(plan())
+                .start()
+                .require_authority(
+                    "step-1",
+                    ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                    PLAN_DIGEST,
+                    "run-1",
+                    "reason",
+                )
+            )
+        )
+        document = dict(paused)
+        document["advance_refusal"] = refused["advance_refusal"]
+
+        with self.assertRaises(ResearchError):
+            decode_execution_snapshot(document)
 
     def test_legacy_document_decodes_advance_refusal_as_absent(self) -> None:
         """No ``advance_refusal`` key at all: the pre-existing document shape.
@@ -514,6 +800,52 @@ class ExecutionSnapshotCodecTests(unittest.TestCase):
                 recorded_at=RECORDED_AT,
                 advance_refusal_step_id="step-9",
                 advance_refusal_detail="reason",
+            )
+
+    def test_authority_pause_must_name_a_known_step(self) -> None:
+        step = ResearchPlanExecutionStepSnapshot(
+            step_id="step-1",
+            capability=ResearchPlanStepCapability.NONE,
+            status=ResearchPlanStepStatus.PENDING,
+        )
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionSnapshot(
+                plan_id="plan-1",
+                question=QUESTION,
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(step,),
+                recorded_at=RECORDED_AT,
+                authority_pause=ResearchPlanExecutionAuthorityPause(
+                    requirement_kind=ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                    step_id="step-9",
+                    plan_digest=PLAN_DIGEST,
+                    research_run_id="run-1",
+                    detail="reason",
+                ),
+            )
+
+    def test_authority_pause_cannot_coexist_with_an_advance_refusal(self) -> None:
+        step = ResearchPlanExecutionStepSnapshot(
+            step_id="step-1",
+            capability=ResearchPlanStepCapability.NONE,
+            status=ResearchPlanStepStatus.PENDING,
+        )
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionSnapshot(
+                plan_id="plan-1",
+                question=QUESTION,
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(step,),
+                recorded_at=RECORDED_AT,
+                advance_refusal_step_id="step-1",
+                advance_refusal_detail="insufficient allowance",
+                authority_pause=ResearchPlanExecutionAuthorityPause(
+                    requirement_kind=ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                    step_id="step-1",
+                    plan_digest=PLAN_DIGEST,
+                    research_run_id="run-1",
+                    detail="reason",
+                ),
             )
 
 

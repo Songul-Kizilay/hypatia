@@ -67,6 +67,7 @@ from research.ResearchAttemptRecoveryDecision import (
     ResearchAttemptRecoveryDecision,
 )
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorityRequirementKind import ResearchAuthorityRequirementKind
 from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchContinuationStopReason import (
@@ -538,6 +539,7 @@ class ResearchPlanExecutionApplicationService:
                 detail=snapshot.detail,
                 advance_refusal_step_id=snapshot.advance_refusal_step_id,
                 advance_refusal_detail=snapshot.advance_refusal_detail,
+                authority_pause=snapshot.authority_pause,
             )
             context = ResearchPlanExecutionContext(
                 research_run_id=research_run_id,
@@ -1317,14 +1319,21 @@ class ResearchPlanExecutionApplicationService:
             step.capability is ResearchPlanStepCapability.SOURCE_REVALIDATION
             and allowance is None
         ):
-            return self._response_composer.research_plan_execution_rejected(
+            return self._paused_for_authority(
                 request,
+                plan_id,
+                state,
+                step_id,
                 "Source revalidation requires an explicit approved execution "
                 "allowance; it has no separate or implicit budget.",
             )
         if cost.llm_operations and allowance is None:
-            return self._response_composer.research_plan_execution_rejected(
-                request, "Model steps require an explicit approved execution budget."
+            return self._paused_for_authority(
+                request,
+                plan_id,
+                state,
+                step_id,
+                "Model steps require an explicit approved execution budget.",
             )
         if allowance is not None and not allowance.affords(cost):
             # Refused before the attempt, so nothing is charged and no
@@ -1788,6 +1797,59 @@ class ResearchPlanExecutionApplicationService:
             allowance,
             refused,
         )
+
+    def _paused_for_authority(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+        state: ResearchPlanExecutionState,
+        step_id: str,
+        detail: str,
+    ) -> BrainResponse:
+        """Record durably that advancing needs authority Hypatia does not have.
+
+        Deliberately NOT `_blocked` or `_advance_refused`: this is not
+        impossible work, and there is no approved allowance falling short —
+        there is no allowance at all. The recorded pause names exactly which
+        plan digest and research run a fresh `ResearchPlanAuthorization`
+        would have to match; it cannot authorize anything itself, grants
+        nothing, and is cleared automatically the next time this exact step
+        successfully starts. The response to the caller is unchanged by this
+        durable side effect: the same rejection is returned either way.
+
+        A `ResearchPlanAuthorization` always requires a research run, so a
+        plan with none bound cannot have a correctly bound pause recorded
+        for it; this falls back to the plain ephemeral rejection rather than
+        record an incomplete requirement nothing could ever exactly match.
+        """
+        if (
+            state.status is not ResearchPlanExecutionStatus.RUNNING
+            or state.running_step_id is not None
+        ):
+            return self._response_composer.research_plan_execution_rejected(
+                request, detail
+            )
+        plan = self._plans.get(plan_id)
+        context = self._contexts.get(plan_id)
+        research_run_id = context.research_run_id if context is not None else None
+        if plan is None or research_run_id is None:
+            return self._response_composer.research_plan_execution_rejected(
+                request, detail
+            )
+        paused = state.require_authority(
+            step_id,
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            plan_digest(plan),
+            research_run_id,
+            detail,
+        )
+        if not self._commit_outcome(plan_id, state, paused):
+            return self._superseded(request, plan_id, step_id, "authority_required")
+        self._events.authority_required(
+            plan_id, step_id, ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION.value
+        )
+        self._persist(plan_id)
+        return self._response_composer.research_plan_execution_rejected(request, detail)
 
     @staticmethod
     def _optional_run_id(request: BrainRequest) -> str | None:
