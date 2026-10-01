@@ -10,14 +10,84 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.436
+## Current — v0.3.437
+
+| Field | Value |
+| --- | --- |
+| Milestone | Runtime capability instruction also states Hypatia's own running version as one plain fact, so the chat model can truthfully answer "which version are you running" instead of correctly saying it does not know |
+| Base SHA | adb3127 (origin/main tip, v0.3.436 delivered) |
+| Branch | `fix/runtime-version-capability-reporting`, a `git worktree` forked directly from verified `origin/main` (worktree `D:\hypatia-worktrees\version-capability-reporting`) |
+| Status | release |
+| Specialists | none — single bounded fix, investigated and implemented directly in the main session |
+| Blockers | none |
+
+Rationale: the user reported that Hypatia, launched through the desktop
+EVREN launcher, answered "which version are you running? what
+capabilities are actually enabled, and which Kali operations are
+available?" by saying it did not know its version, and described Kali as
+simulation-only and broad web/penetration testing as unimplemented.
+Investigation found two independent causes, not one: (1) the desktop
+launcher (`C:\Users\songu\Desktop\start_hypatia.bat` /
+`start_hypatia_evren.ps1`, outside this repository) was at the time
+pointing at a `D:\Hypatia\Hypatia.exe` built 2026-08-22 (roughly v0.3.30),
+six weeks stale and predating the capability-awareness feature entirely —
+later re-pointed, concurrently with this session, at a hash-verified
+v0.3.436 build by a separate development session; this repository
+milestone does not touch that launcher. (2) Independent of the stale
+EXE, a real, confirmed defect in the committed v0.3.436 code: the capital
+`V` `core.Version.VERSION` fact was already read by
+`ResearchMissionAuditApplicationService` for the research mission audit
+export, but was never passed into `CognitiveEngine._project_runtime_capabilities`
+and therefore never reached `RuntimeCapabilityContext.instruction()`, the
+text actually sent to the chat model as `system_instruction` on every
+ordinary "message" turn. Reproduced live: built an isolated worktree at
+`origin/main`'s exact v0.3.436 SHA, ran the real `Bootstrap` wiring (no
+mocks) against the user's actual, already-running local EVREN bridge
+(`http://127.0.0.1:8765`, model `deepseek-v4-flash`) in a temp data
+directory, and sent the user's exact question — the live model correctly
+replied it had no version information, matching the report exactly. The
+capability and Kali-readiness portions of the same reply were independently
+confirmed *accurate as shipped*, not a bug: `REVIEWED_KALI_LOOKUPS`
+reports `simulated` because this install never sets
+`HYPATIA_KALI_OPERATION_EXECUTION_ENABLED` (off by default, per
+`core.RuntimeOptIn`), and even with that opt-in set, WSL itself is
+currently non-functional on this machine (`wsl -l -v` fails with
+`Wsl/CallMsi/Install/REGDB_E_CLASSNOTREG`); `PENETRATION_TESTING` is in
+`RuntimeCapabilityProjection._NEVER_WIRED` and correctly always reports
+"not implemented" regardless of any opt-in. Fix: added
+`hypatia_version: str = ""` to `RuntimeCapabilityEvidence` and
+`RuntimeCapabilityContext` (plain string, fails closed — a missing or
+non-string value omits the line rather than stating a wrong one, same
+pattern as every other field on the evidence record); `instruction()`
+renders it as one line, `"Hypatia version: {version}."`, placed after the
+existing identity line and before the capability sections;
+`CognitiveEngine` passes `hypatia_version=VERSION.full`. No capability
+state, authority, scope, or persistence changed; this is strictly an
+addition to an existing description-only string. Re-verified live against
+the same EVREN bridge after the fix: the model now correctly answers
+"I'm running Hypatia version 0.3.436 (Genesis)" (worktree not yet
+re-versioned to 0.3.437 at the moment of that specific live call) and the
+rest of its capability description was byte-identical to before. Added 6
+regression tests: 3 unit tests on `project_runtime_capabilities`
+(version carried through, omitted when absent, non-string value not
+stated), 2 unit tests on `instruction()` rendering (present, absent), and
+1 real end-to-end `Bootstrap`/`CognitiveEngine` integration test
+asserting `engine.runtime_capabilities.hypatia_version == VERSION.full`
+and that the instruction contains the exact version line — all against
+the real composition root, not a fake.
+
+Verification (2026-10-01, Windows canonical environment): 7875 tests,
+`OK (skipped=3)` — 6 net new over v0.3.436's 7869. Black, Ruff, MyPy
+(`src`, 620 source files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.436 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Safe Tool Gateway v2, first slice: centralize the existing `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP` execution checks behind one `KaliToolGateway`, and fix a defect where authorization could be consumed and then the process adapter could raise, with the prior code falsely reporting "Execution: not started / Process: not created" |
 | Base SHA | 49d9576 (origin/main tip, v0.3.435 delivered) |
 | Branch | `feature/safe-tool-gateway-v0.3.436`, a `git worktree` forked directly from refreshed `origin/main` (worktree `D:\hypatia-worktrees\safe-tool-gateway`) |
-| Status | release |
+| Status | delivered (SHA `adb31275366545d345a4b5aac8f7fbba943fbaa1`, reachable from `origin/main`) |
 | Specialists | hypatia-lead: audit of an uncommitted draft handed off from a prior session, sole implementer of the fixes; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, "QA-ready" — all 9 required regression-coverage items present and mutation-sound except one (forged-metadata test proves the three forged keys are ignored but doesn't structurally rule out broader metadata-trust forgery), judged a non-blocking test-rigor nice-to-have since the gateway's metadata reads are an explicit narrow whitelist |
 | Blockers | none |
 
