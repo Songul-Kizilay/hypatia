@@ -10,16 +10,169 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.429
+## Current — v0.3.430
+
+| Field | Value |
+| --- | --- |
+| Milestone | Authority Control: a real, hard expiry for `DeferredExecutionGrant` (second M2 authority-control step, found by auditing — and rejecting — the originally-scoped "second `ResearchAuthorityRequirementKind` member" ask; see rationale) |
+| Base SHA | 0f32035 (origin/main tip, v0.3.429 delivered) |
+| Branch | `feature/second-authority-boundary-v0.3.430`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: repository-grounded audit, scope selection, sole implementer; hypatia-runtime: independent review, PASS, no findings; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, no coverage gap found worth adding to |
+| Blockers | none |
+
+Rationale: the milestone was originally scoped as binding a second
+`ResearchAuthorityRequirementKind` member — `DeferredExecutionGrant` or
+`ResearchKaliOperationAuthorization` — into v0.3.429's
+`ResearchPlanExecutionAuthorityPause` durable-pause mechanism. A
+repository-grounded audit this session found **neither candidate has a
+legitimate integration point with that specific mechanism**, for two
+distinct, structural reasons:
+
+- `ResearchKaliOperationAuthorization` binds to `(program_id,
+  scope_revision_id, scope_revision_digest, operation_digest,
+  execution_policy_digest)` — no `execution_id`, `step_id`, or
+  `plan_digest` field at all. Kali operations are not even a
+  `ResearchPlanStepCapability` member (confirmed: no Kali entry exists in
+  that enum). There is no plan step for a pause to attach to; Kali
+  operations are a wholly separate subsystem from plan-step execution.
+- `DeferredExecutionGrant` *is* execution-bound (`execution_id ==
+  ResearchPlanExecutionState.plan_id`, plus `plan_digest`,
+  `capabilities`, `task_budget`), but its authorization check
+  (`deferred_execution_decision`) runs one architectural layer *above*
+  `ResearchPlanExecutionApplicationService.process_advance` — inside the
+  scheduler (`BackgroundResearchSchedulerApplicationService`/
+  `TrustedOneShotDeferredExecutionScheduler`), deliberately, as a
+  precondition checked *before* autonomy is ever invoked.
+  `BackgroundResearchTask` carries no "this is an unattended/deferred
+  attempt" flag, confirmed by inspection — `process_advance` has zero
+  visibility into who is calling it. Integrating the grant into
+  `authority_pause` would have required either inventing that cross-layer
+  flag (serving no purpose beyond this one feature) or having the
+  scheduler write directly into `ResearchPlanExecutionState`, bypassing
+  its sole owner, `ResearchPlanExecutionApplicationService`. The
+  grant/schedule lifecycle also already has its own fully durable,
+  restart-safe outcome record
+  (`OneShotDeferredExecutionSchedule.skipped(...,
+  "trusted_grant_unavailable_at_fire_time")`) — there was no actual
+  durability gap to fill, only a redundant second source of truth to
+  invent.
+
+Presented with this finding, the user chose (over three alternatives: a
+narrower authority_pause-staleness fix, this expiry fix, or stopping with
+no implementation) to redirect the milestone to a different, real gap
+surfaced by the same audit: `DeferredExecutionGrant` was **the only one
+of Hypatia's three named authority domains with no expiry at all**.
+`ResearchPlanAuthorization` and `ResearchKaliOperationAuthorization` both
+carry `expires_at`/`has_expired_at` (the latter hard-capped at 300
+seconds). `DeferredExecutionGrant` — which authorizes fully *unattended*
+execution, the highest-stakes case of the three since no human is
+present when it fires — had only `revoked_at`/`revoked_by`: once
+granted, it stayed valid indefinitely until someone manually revoked it.
+
+`research.DeferredExecutionGrant` gained `MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+= timedelta(days=7)` (matched to this codebase's one existing consumer's
+own scheduling horizon, `TrustedOneShotDeferredExecutionScheduler
+.MAX_ONE_SHOT_DEFERRED_DELAY`, also seven days — a new structural test
+asserts the two constants stay in that relationship), a derived
+`expires_at` property (`granted_at + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY`
+— deliberately never a stored field, so a restart cannot revive or
+extend a grant past its original window, and every grant already on
+disk — including pre-existing schema-version-1 records — is
+retroactively and safely bound by the same rule, since it depends only
+on `granted_at`, which every schema version always recorded), and
+`has_expired_at(moment)` mirroring `ResearchKaliOperationAuthorization
+.has_expired_at`'s exact validation style. `DeferredExecutionGrant
+.active` is deliberately untouched (stays pure revocation, independent
+of expiry — a revoked-and-expired grant still reports `"manual_only"`,
+not a new reason, proving the two facts compose rather than collide).
+
+`research.DeferredExecutionEligibility.deferred_execution_decision`
+gained a required `moment: datetime` parameter and one new branch —
+checked immediately after the existing missing/revoked check, before
+every exact-match check — returning a new, distinct reason,
+`"grant_expired"`. `cognition.TrustedDeferredExecutionControlService`
+and `cognition.BackgroundResearchSchedulerApplicationService` pass
+`self._clock()` at their call sites. Critically,
+`cognition.TrustedOneShotDeferredExecutionScheduler.fire` — the actual,
+real enforcement point for unattended execution, which does **not** go
+through `deferred_execution_decision` at all — gained its own, separate
+`grant.has_expired_at(now)` check immediately after its pre-existing
+grant-identity check and before the schedule is claimed, skipping with a
+new, equally distinct reason, `"trusted_grant_expired_at_fire_time"`, so
+the fix is real at the one place that actually matters, not merely
+cosmetic at a decision helper nothing production calls on the live path.
+No persistence/codec/schema change at all: `expires_at` is derived,
+never stored, so `JsonFileDeferredExecutionGrantStore` needed zero
+changes.
+
+Security invariants (restated, unchanged by this milestone): MODEL
+OUTPUT != AUTHORITY; SUBAGENT OUTPUT != AUTHORITY; PAUSE != PERMISSION;
+RESUME STATE != AUTHORITY TO RESUME; RESTART != FRESH AUTHORITY; RESTART
+!= FRESH BUDGET. No new terminal status, no widened authority, no
+automatic resumption, no Kali/credential/network authority touched, no
+generic authorization framework introduced — each of the three domains
+keeps its own independent `has_expired_at`, matching this codebase's
+existing per-domain-vocabulary convention rather than adding a shared
+abstraction.
+
+Review findings and how each was resolved:
+- **hypatia-runtime** (independent): PASS, no findings. Independently
+  traced that `SchedulerSelectionMode.DEFERRED` has no production caller
+  today (confirming `fire()` is genuinely the one live enforcement
+  point), confirmed `expires_at` cannot leak into the codec (it is a
+  `@property`, never a dataclass field, and `_serialize`/`_parse_entry`
+  enumerate fields explicitly by name), confirmed restart/schema-version
+  consistency across both readable schema versions, and confirmed every
+  production and test call site of the now-six-argument
+  `deferred_execution_decision` was updated.
+- **hypatia-security** (independent): PASS, no findings. Confirmed
+  `fire()` cannot reach the runner for an expired grant under any
+  traced branch (including concurrent-call ordering under the existing
+  lock), confirmed `expires_at`/`moment` are pure functions of a trusted
+  clock and `granted_at` with no path from model, subagent, Finding or
+  Reproduction Record state, confirmed a legacy schema-1 grant is
+  retroactively bound rather than exempted, and mutation-reasoned two
+  near-miss implementations (checking expiry only in the decision helper;
+  deriving `expires_at` from `moment` instead of `granted_at`) against
+  the actual tests.
+- **hypatia-qa** (independent): PASS, no coverage gap found worth adding
+  to. Empirically mutation-tested (then exactly reverted, confirmed via
+  byte-identical `git diff --stat` and a clean full-suite rerun) an
+  off-by-one in the `>=` boundary and a complete omission of the `fire()`
+  check — both caught by the existing suite, the latter by observing the
+  runner actually invoked once the check was removed, the strongest
+  possible confirmation the assertion is checking something real.
+  Verified the full revoked×expired independence matrix and both
+  boundary directions are each covered by a real, non-vacuous assertion,
+  and that no document field can forge `expires_at` (confirmed by hand
+  -constructing a document with a spurious `"expires_at"` key and
+  observing the store's existing strict field-set check reject it).
+
+Verification (2026-10-01, Windows canonical environment): 7795 tests,
+`OK` — 9 net new over v0.3.429's 7786. Black, Ruff, MyPy (`src`, 616
+source files) all clean. `git diff --check` clean (informational
+CRLF-normalization notices only).
+
+## Historical scope: v0.3.429 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Authority Control State + Durable Pause Foundation (first step underneath Bug Bounty Researcher roadmap item 8, Business-logic/state-transition model — the natural next candidate named in M1's own closing note below as belonging to M2 rather than M1) |
 | Base SHA | c435d6d (origin/main tip, v0.3.428 delivered) |
 | Branch | `feature/authority-control-state-v0.3.429`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | d4c0874fd6137d9ae8d26e380157d1174c3d70cd |
+| Status | delivered |
+| PR | #408, MERGED 2026-10-01T10:00:23Z, standard merge commit `0f32035ba113b5215967fc3697863b254feb6790` |
+| origin/main reachability | verified: `git merge-base --is-ancestor d4c0874fd613 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Specialists | hypatia-runtime: sole implementer, reporting two non-blocking observations about its own implementation whose exact wording was not preserved before the implementing session was interrupted — not reconstructed or guessed at here; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, found and closed two real test-coverage gaps (test-only, no production code touched) before this delivery |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.430 session): PR #408 base `main`, head
+`feature/authority-control-state-v0.3.429`, state `MERGED`, merge commit
+`0f32035ba113b5215967fc3697863b254feb6790`, matching the
+independently-fetched `origin/main` tip exactly.
 
 Rationale: M1 — Finding Lifecycle Closure closed with v0.3.428. Its own
 closing note (preserved below) named roadmap item 8, the Business-logic/

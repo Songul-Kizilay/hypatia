@@ -56,7 +56,7 @@ class TrustedDeferredExecutionControlService:
             task_budget=task.budget,
             grant=grant,
             decision=deferred_execution_decision(
-                task, execution, plan, allowance, grant
+                task, execution, plan, allowance, grant, self._clock()
             ),
             # From the exact plan being previewed, through the same helper the
             # grant itself is built with. Never a caller-supplied argument and
@@ -88,7 +88,9 @@ class TrustedDeferredExecutionControlService:
             granted_at=self._clock(),
             granted_by=DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR,
         )
-        decision = deferred_execution_decision(task, execution, plan, allowance, grant)
+        decision = deferred_execution_decision(
+            task, execution, plan, allowance, grant, self._clock()
+        )
         if not decision.allowed:
             raise ResearchError(
                 f"Deferred execution is not currently eligible: {decision.reason}."

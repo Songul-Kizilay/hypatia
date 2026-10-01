@@ -395,7 +395,9 @@ class BackgroundResearchSchedulerApplicationService:
             return False
         plan = live_plan(task.execution_id)
         allowance = allowance_reader(task.execution_id)
-        return deferred_execution_decision(task, state, plan, allowance, grant).allowed
+        return deferred_execution_decision(
+            task, state, plan, allowance, grant, self._clock()
+        ).allowed
 
     def _transition(self, request: BrainRequest, action: str) -> BrainResponse:
         """Read, judge and commit one ruling without anybody slipping in."""

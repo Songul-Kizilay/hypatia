@@ -264,7 +264,7 @@ class PlanTargetBindingTests(unittest.TestCase):
             granted_at=MOMENT,
             granted_by=DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR,
         )
-        exact = deferred_execution_decision(task, state, plan, allowance, grant)
+        exact = deferred_execution_decision(task, state, plan, allowance, grant, MOMENT)
         self.assertTrue(exact.allowed)
         self.assertEqual(exact.reason, "deferred_eligible")
         for changed in (
@@ -279,12 +279,14 @@ class PlanTargetBindingTests(unittest.TestCase):
         ):
             with self.subTest(binding=changed.target_binding):
                 refused = deferred_execution_decision(
-                    task, state, changed, allowance, grant
+                    task, state, changed, allowance, grant, MOMENT
                 )
                 self.assertFalse(refused.allowed)
                 self.assertEqual(refused.reason, "plan_digest_mismatch")
         revoked = grant.revoked(MOMENT, DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR)
-        refused = deferred_execution_decision(task, state, plan, allowance, revoked)
+        refused = deferred_execution_decision(
+            task, state, plan, allowance, revoked, MOMENT
+        )
         self.assertFalse(refused.allowed)
         self.assertEqual(refused.reason, "manual_only")
 

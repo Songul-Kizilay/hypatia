@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.430] - 2026-10-01
+
+### Added
+
+- Authority Control: a real, hard expiry for `DeferredExecutionGrant`.
+  `research.DeferredExecutionGrant` gained `MAX_DEFERRED_EXECUTION_GRANT_VALIDITY`
+  (seven days, matched to the one existing consumer's own scheduling
+  horizon), a derived `expires_at` property (never a stored field, so a
+  restart cannot revive or extend a grant past its original window, and
+  every grant already on disk -- including pre-existing schema-version-1
+  records -- is retroactively bound by the same rule), and
+  `has_expired_at(moment)` mirroring `ResearchKaliOperationAuthorization
+  .has_expired_at`'s validation style. `DeferredExecutionGrant` was
+  previously the only one of Hypatia's three named authority domains
+  with no expiry at all, despite authorizing fully unattended execution.
+- `research.DeferredExecutionEligibility.deferred_execution_decision`
+  gained a required `moment` parameter and a new, distinct
+  `"grant_expired"` reason. `cognition
+  .TrustedOneShotDeferredExecutionScheduler.fire` -- the actual
+  enforcement point for unattended execution, which does not go through
+  that decision helper at all -- gained its own separate expiry check,
+  skipping with a new, distinct `"trusted_grant_expired_at_fire_time"`
+  reason, so the fix is enforced where unattended execution is actually
+  triggered, not only at a decision helper nothing production calls on
+  that live path.
+
+### Security
+
+- No persistence/codec/schema change: `expires_at` is derived, never
+  stored. `DeferredExecutionGrant.active` is unchanged (stays pure
+  revocation, independent of expiry -- a revoked-and-expired grant still
+  reports `"manual_only"`, proving the two facts compose correctly). No
+  new terminal status, no widened authority, no automatic resumption, no
+  Kali/credential/network authority touched, no generic authorization
+  framework introduced.
+
 ## [0.3.429] - 2026-10-01
 
 ### Added

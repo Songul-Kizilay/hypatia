@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,7 +19,10 @@ from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.BackgroundResearchTaskStatus import BackgroundResearchTaskStatus
 from research.DeferredExecutionEligibility import deferred_execution_decision
-from research.DeferredExecutionGrant import DeferredExecutionGrant
+from research.DeferredExecutionGrant import (
+    MAX_DEFERRED_EXECUTION_GRANT_VALIDITY,
+    DeferredExecutionGrant,
+)
 from research.DeferredGrantAuthorizer import DeferredGrantAuthorizer
 from research.JsonFileDeferredExecutionGrantStore import (
     JsonFileDeferredExecutionGrantStore,
@@ -34,6 +38,7 @@ from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 NOW = datetime(2026, 9, 2, tzinfo=UTC)
+MINUTE = timedelta(minutes=1)
 
 
 class MemoryGrantStore:
@@ -179,13 +184,14 @@ class PureEligibilityTests(unittest.TestCase):
         self.context = Context()
         self.grant = grant_for(self.context)
 
-    def decide(self, grant=None):
+    def decide(self, grant=None, moment=NOW):
         return deferred_execution_decision(
             self.context.task,
             self.context.execution,
             self.context.plan,
             self.context.allowance,
             self.grant if grant is None else grant,
+            moment,
         )
 
     def test_exact_active_grant_is_eligible(self) -> None:
@@ -198,7 +204,41 @@ class PureEligibilityTests(unittest.TestCase):
             self.context.plan,
             self.context.allowance,
             None,
+            NOW,
         )
+        self.assertEqual(decision.reason, "manual_only")
+
+    def test_expired_grant_is_refused_with_its_own_named_reason(self) -> None:
+        just_before = self.decide(
+            moment=self.grant.granted_at
+            + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+            - timedelta(seconds=1)
+        )
+        self.assertTrue(just_before.allowed)
+        at_expiry = self.decide(
+            moment=self.grant.granted_at + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+        )
+        self.assertFalse(at_expiry.allowed)
+        self.assertEqual(at_expiry.reason, "grant_expired")
+        long_after = self.decide(
+            moment=self.grant.granted_at
+            + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+            + timedelta(days=365)
+        )
+        self.assertFalse(long_after.allowed)
+        self.assertEqual(long_after.reason, "grant_expired")
+
+    def test_revoked_grant_reports_manual_only_even_when_also_expired(self) -> None:
+        revoked = self.grant.revoked(
+            NOW, DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR
+        )
+        decision = self.decide(
+            grant=revoked,
+            moment=self.grant.granted_at
+            + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+            + timedelta(days=1),
+        )
+        self.assertFalse(decision.allowed)
         self.assertEqual(decision.reason, "manual_only")
 
     def test_task_execution_digest_capability_and_budget_mismatches_fail(self) -> None:
@@ -234,8 +274,96 @@ class PureEligibilityTests(unittest.TestCase):
             self.context.plan,
             self.context.allowance,
             self.grant,
+            NOW,
         )
         self.assertFalse(decision.allowed)
+
+
+class GrantExpiryTests(unittest.TestCase):
+    """`DeferredExecutionGrant.expires_at` closes the one domain in this
+    codebase with no bound on how long a standing permission for *unattended*
+    execution stays good."""
+
+    def setUp(self) -> None:
+        self.context = Context()
+        self.grant = grant_for(self.context)
+
+    def test_expiry_is_exactly_the_bounded_window_after_grant(self) -> None:
+        self.assertEqual(
+            self.grant.expires_at,
+            self.grant.granted_at + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY,
+        )
+        self.assertFalse(self.grant.has_expired_at(self.grant.expires_at - MINUTE))
+        self.assertTrue(self.grant.has_expired_at(self.grant.expires_at))
+        self.assertTrue(self.grant.has_expired_at(self.grant.expires_at + MINUTE))
+
+    def test_expiry_check_requires_an_aware_moment(self) -> None:
+        with self.assertRaises(ResearchError):
+            self.grant.has_expired_at(NOW.replace(tzinfo=None))
+
+    def test_revocation_does_not_change_expiry(self) -> None:
+        """Revoked and expired are independent facts about the same grant."""
+        revoked = self.grant.revoked(
+            NOW, DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR
+        )
+        self.assertEqual(revoked.expires_at, self.grant.expires_at)
+        self.assertFalse(revoked.active)
+        self.assertFalse(revoked.has_expired_at(NOW))
+
+    def test_restart_cannot_extend_or_revive_a_grants_validity(self) -> None:
+        """A grant reloaded after restart reports the identical expiry its
+        in-memory original did -- restart grants no fresh authority window."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "deferred.json"
+            store = JsonFileDeferredExecutionGrantStore(path)
+            store.save([self.grant])
+            restored = store.load()[0]
+        self.assertEqual(restored.expires_at, self.grant.expires_at)
+        far_future = self.grant.granted_at + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+        self.assertTrue(restored.has_expired_at(far_future))
+
+    def test_a_legacy_schema_one_grant_is_bound_by_the_same_rule(self) -> None:
+        """`expires_at` is derived from `granted_at`, which every schema
+        version always recorded, so a grant written before this rule existed
+        is retroactively and safely bound by it -- never read as eternal."""
+        legacy_document = {
+            "schema_version": 1,
+            "grants": [
+                {
+                    "grant_id": "legacy-grant",
+                    "task_id": self.context.task.task_id,
+                    "execution_id": self.context.task.execution_id,
+                    "plan_digest": plan_digest(self.context.plan),
+                    "capabilities": sorted(
+                        value.value for value in capabilities_of(self.context.plan)
+                    ),
+                    "task_budget": {
+                        "max_step_advances": self.context.task.budget.max_step_advances,
+                        "max_network_operations": (
+                            self.context.task.budget.max_network_operations
+                        ),
+                        "max_llm_operations": (
+                            self.context.task.budget.max_llm_operations
+                        ),
+                        "max_seconds": self.context.task.budget.max_seconds,
+                    },
+                    "granted_at": NOW.isoformat(),
+                    "granted_by": "trusted_local_operator",
+                    "revoked_at": None,
+                    "revoked_by": None,
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy.json"
+            path.write_text(json.dumps(legacy_document), encoding="utf-8")
+            legacy = JsonFileDeferredExecutionGrantStore(path).load()[0]
+        self.assertFalse(
+            legacy.has_expired_at(NOW + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY / 2)
+        )
+        self.assertTrue(
+            legacy.has_expired_at(NOW + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY)
+        )
 
 
 class PersistenceTests(unittest.TestCase):

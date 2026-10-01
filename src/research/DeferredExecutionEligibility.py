@@ -1,6 +1,7 @@
 """Pure exact-match decision for future unattended scheduler selection."""
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.DeferredExecutionGrant import DeferredExecutionGrant
@@ -26,11 +27,18 @@ def deferred_execution_decision(
     plan: ResearchPlan | None,
     allowance: ResearchExecutionAllowance | None,
     grant: DeferredExecutionGrant | None,
+    moment: datetime,
 ) -> DeferredExecutionDecision:
     """Decide without mutating, spending, refreshing, or executing anything."""
 
     if grant is None or not grant.active:
         return DeferredExecutionDecision(False, "manual_only")
+    # Checked right after existence/revocation and before every other exact
+    # match below: an expired grant is not wrong about this task, execution,
+    # plan or budget, so it deserves its own named reason rather than being
+    # folded into a mismatch it does not actually have.
+    if grant.has_expired_at(moment):
+        return DeferredExecutionDecision(False, "grant_expired")
     if grant.task_id != task.task_id:
         return DeferredExecutionDecision(False, "task_mismatch")
     if grant.execution_id != task.execution_id:

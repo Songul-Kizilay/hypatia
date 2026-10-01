@@ -166,6 +166,15 @@ class TrustedOneShotDeferredExecutionScheduler:
                 )
                 self._save_replacement(schedules, skipped)
                 return skipped
+            # Checked separately from the identity match above: the schedule's
+            # own grant is still the one on record, but a grant's validity
+            # window is fixed at the moment it was granted and a restart
+            # cannot extend it, so the exact same grant can still have expired
+            # since the schedule was armed.
+            if grant.has_expired_at(now):
+                skipped = schedule.skipped(now, "trusted_grant_expired_at_fire_time")
+                self._save_replacement(schedules, skipped)
+                return skipped
             claimed = schedule.claimed(now)
             self._save_replacement(schedules, claimed)
 
