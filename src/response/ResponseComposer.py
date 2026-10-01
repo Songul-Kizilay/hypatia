@@ -2677,6 +2677,12 @@ class ResponseComposer:
                 f"Advance refused on {state.advance_refusal_step_id}: "
                 f"{state.advance_refusal_detail}"
             )
+        if state.authority_pause is not None:
+            lines.append(
+                f"Paused for authority on {state.authority_pause.step_id} "
+                f"(requires {state.authority_pause.requirement_kind.value}): "
+                f"{state.authority_pause.detail}"
+            )
         interrupted = [
             step.step_id
             for step in state.steps
@@ -4512,6 +4518,12 @@ class ResponseComposer:
             lines.append(
                 f"Advance refused on {snapshot.advance_refusal_step_id}: "
                 f"{snapshot.advance_refusal_detail}"
+            )
+        if snapshot.authority_pause is not None:
+            lines.append(
+                f"Paused for authority on {snapshot.authority_pause.step_id} "
+                f"(requires {snapshot.authority_pause.requirement_kind.value}): "
+                f"{snapshot.authority_pause.detail}"
             )
         lines.extend(
             (

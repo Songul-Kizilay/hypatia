@@ -10,7 +10,12 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import ResearchError
+from research.ResearchAuthorityRequirementKind import ResearchAuthorityRequirementKind
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanDigest import plan_digest
+from research.ResearchPlanExecutionAuthorityPause import (
+    ResearchPlanExecutionAuthorityPause,
+)
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStep import ResearchPlanStep
@@ -31,6 +36,9 @@ def build_plan(step_count: int = 2) -> ResearchPlan:
         ),
         created_at=datetime(2026, 8, 23, tzinfo=UTC),
     )
+
+
+PLAN_DIGEST = plan_digest(build_plan())
 
 
 class ResearchPlanExecutionStatusTests(unittest.TestCase):
@@ -397,6 +405,247 @@ class ResearchPlanExecutionAdvanceRefusalTests(unittest.TestCase):
                 advance_refusal_step_id="step-9",
                 advance_refusal_detail="reason",
             )
+
+
+class ResearchPlanExecutionAuthorityPauseTests(unittest.TestCase):
+    """`require_authority` records a named requirement without stranding."""
+
+    def test_require_authority_records_step_kind_digest_run_and_reason(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "Model steps require an explicit approved execution budget.",
+        )
+
+        self.assertIsNotNone(paused.authority_pause)
+        assert paused.authority_pause is not None
+        self.assertIs(
+            paused.authority_pause.requirement_kind,
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+        )
+        self.assertEqual(paused.authority_pause.step_id, "step-1")
+        self.assertEqual(paused.authority_pause.plan_digest, PLAN_DIGEST)
+        self.assertEqual(paused.authority_pause.research_run_id, "run-1")
+        self.assertEqual(
+            paused.authority_pause.detail,
+            "Model steps require an explicit approved execution budget.",
+        )
+
+    def test_require_authority_does_not_change_execution_or_step_status(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+
+        self.assertIs(paused.status, ResearchPlanExecutionStatus.RUNNING)
+        self.assertIs(paused.steps[0].status, ResearchPlanStepStatus.PENDING)
+        self.assertEqual(paused.steps[0].detail, "")
+
+    def test_require_authority_requires_a_running_plan(self) -> None:
+        ready = ResearchPlanExecutionState.prepare(build_plan())
+
+        with self.assertRaises(ResearchError):
+            ready.require_authority(
+                "step-1",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "reason",
+            )
+
+    def test_require_authority_requires_a_pending_step(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        state = state.start_step("step-1")
+
+        with self.assertRaises(ResearchError):
+            state.require_authority(
+                "step-1",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "reason",
+            )
+
+    def test_require_authority_rejects_an_unknown_step(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        with self.assertRaises(ResearchError):
+            state.require_authority(
+                "step-9",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "reason",
+            )
+
+    def test_require_authority_rejects_a_later_pending_step(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        with self.assertRaises(ResearchError):
+            state.require_authority(
+                "step-2",
+                ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                PLAN_DIGEST,
+                "run-1",
+                "reason",
+            )
+
+    def test_pause_is_cleared_when_the_same_step_next_starts(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        state = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+
+        started = state.start_step("step-1")
+
+        self.assertIsNone(started.authority_pause)
+
+    def test_pause_survives_starting_a_different_step(self) -> None:
+        """Defensive: a pause never applies to a step other than its own."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+        # Force-construct a state whose next pending step differs from the
+        # paused one, exactly mirroring the advance-refusal scoping guard
+        # test, since a real sequential plan cannot produce this shape.
+        detached = ResearchPlanExecutionState(
+            plan_id=paused.plan_id,
+            status=paused.status,
+            steps=tuple(
+                (
+                    step.with_status(
+                        ResearchPlanStepStatus.COMPLETED,
+                        work_performed=True,
+                        operation="x",
+                    )
+                    if step.step_id == "step-1"
+                    else step
+                )
+                for step in paused.steps
+            ),
+            authority_pause=paused.authority_pause,
+        )
+
+        started = detached.start_step("step-2")
+
+        self.assertIsNotNone(started.authority_pause)
+        assert started.authority_pause is not None
+        self.assertEqual(started.authority_pause.step_id, "step-1")
+
+    def test_pause_does_not_strand_the_execution(self) -> None:
+        """The safety proof: a pause never removes the path back to running."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+
+        self.assertIs(paused.status, ResearchPlanExecutionStatus.RUNNING)
+        self.assertFalse(paused.status.terminal)
+        self.assertEqual(paused.next_pending_step_id, "step-1")
+
+        # A later, ordinary advance (as if authority had been supplied)
+        # succeeds exactly as it would have before the pause.
+        started = paused.start_step("step-1")
+        completed = started.complete_step(
+            "step-1", "found it", work_performed=True, operation="search"
+        )
+
+        self.assertIs(completed.steps[0].status, ResearchPlanStepStatus.COMPLETED)
+
+    def test_authority_pause_requires_a_valid_plan_digest(self) -> None:
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionState(
+                plan_id="plan-1",
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(ResearchPlanStepState(step_id="step-1"),),
+                authority_pause=ResearchPlanExecutionAuthorityPause(
+                    requirement_kind=ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                    step_id="step-1",
+                    plan_digest="not-a-digest",
+                    research_run_id="run-1",
+                    detail="reason",
+                ),
+            )
+
+    def test_authority_pause_must_name_a_known_step(self) -> None:
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionState(
+                plan_id="plan-1",
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(ResearchPlanStepState(step_id="step-1"),),
+                authority_pause=ResearchPlanExecutionAuthorityPause(
+                    requirement_kind=ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                    step_id="step-9",
+                    plan_digest=PLAN_DIGEST,
+                    research_run_id="run-1",
+                    detail="reason",
+                ),
+            )
+
+    def test_authority_pause_cannot_coexist_with_an_advance_refusal(self) -> None:
+        with self.assertRaises(ResearchError):
+            ResearchPlanExecutionState(
+                plan_id="plan-1",
+                status=ResearchPlanExecutionStatus.RUNNING,
+                steps=(ResearchPlanStepState(step_id="step-1"),),
+                advance_refusal_step_id="step-1",
+                advance_refusal_detail="insufficient allowance",
+                authority_pause=ResearchPlanExecutionAuthorityPause(
+                    requirement_kind=ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+                    step_id="step-1",
+                    plan_digest=PLAN_DIGEST,
+                    research_run_id="run-1",
+                    detail="reason",
+                ),
+            )
+
+    def test_wrong_mission_digest_or_run_cannot_be_constructed_as_a_match(
+        self,
+    ) -> None:
+        """A pause is bound to one exact digest and run; nothing coerces it.
+
+        There is no method anywhere on this type that accepts a second
+        digest or run ID and compares it -- matching happens only by a
+        caller reading these two immutable fields itself, so there is no
+        substitution path to prove wrong here beyond field identity.
+        """
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+        assert paused.authority_pause is not None
+
+        other_plan = build_plan(step_count=3)
+        self.assertNotEqual(plan_digest(other_plan), PLAN_DIGEST)
+        self.assertNotEqual(paused.authority_pause.plan_digest, plan_digest(other_plan))
+        self.assertNotEqual(paused.authority_pause.research_run_id, "run-2")
 
 
 if __name__ == "__main__":

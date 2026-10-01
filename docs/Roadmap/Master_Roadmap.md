@@ -1016,6 +1016,20 @@ M1 shortfall. Item 8 (Business-logic/state-transition model, which has no
 existing precedent or design in this codebase) remains not yet started and
 is the natural next candidate, belonging to M2 rather than M1.
 
+v0.3.429 delivered one narrow, self-contained foundation piece underneath
+item 8 — not item 8 itself, which remains a substantially larger,
+still-unscoped undertaking. The existing `ResearchPlanExecutionState`
+machine gained a durable, non-authoritative way to name exactly which
+authority a paused step is missing: `research
+.ResearchAuthorityRequirementKind` (closed `StrEnum`, one member today,
+`PLAN_AUTHORIZATION`) and `research.ResearchPlanExecutionAuthorityPause`
+(step, requirement kind, plan digest, research run, detail), modeled
+parallel to the already-shipped `advance_refusal_*` mechanism rather than
+as a new terminal execution status, cleared only when the exact named
+step successfully starts and never by presenting any authorization,
+correct or not. M2 as a whole remains unscoped: this milestone is a
+foundation step, not a claim that any numbered roadmap item is complete.
+
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a
 teaching/companion assistant for the operator. Personality and

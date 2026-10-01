@@ -29,6 +29,9 @@ from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchMissionScope import ResearchMissionScope
 from research.ResearchPlanDigest import is_plan_digest
+from research.ResearchPlanExecutionAuthorityPause import (
+    ResearchPlanExecutionAuthorityPause,
+)
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStep import ResearchPlanStep
@@ -122,6 +125,12 @@ class ResearchPlanExecutionSnapshot:
     #: budget, or a status signal for any other code path.
     advance_refusal_step_id: str | None = None
     advance_refusal_detail: str = ""
+    #: The exact, named authority the next pending step is missing entirely,
+    #: mirrored from `ResearchPlanExecutionState.authority_pause`.  Absent
+    #: for legacy snapshots and for any execution that has never paused for
+    #: authority.  Names what would satisfy the requirement; never itself
+    #: grants, consumes, or is anyone else's authority.
+    authority_pause: ResearchPlanExecutionAuthorityPause | None = None
 
     def __post_init__(self) -> None:
         if self.revalidation_plan_digest is not None and (
@@ -220,6 +229,25 @@ class ResearchPlanExecutionSnapshot:
             )
         if self.advance_refusal_step_id is not None and not advance_refusal_detail:
             raise ResearchError("Execution snapshot advance refusal requires a reason.")
+        if self.authority_pause is not None and not isinstance(
+            self.authority_pause, ResearchPlanExecutionAuthorityPause
+        ):
+            raise ResearchError("Execution snapshot authority pause is invalid.")
+        if (
+            self.authority_pause is not None
+            and self.authority_pause.step_id not in step_ids
+        ):
+            raise ResearchError(
+                "Execution snapshot authority pause step ID is invalid."
+            )
+        if (
+            self.authority_pause is not None
+            and self.advance_refusal_step_id is not None
+        ):
+            raise ResearchError(
+                "Execution snapshot cannot record both an advance refusal and "
+                "an authority pause for the same execution."
+            )
         if (
             not isinstance(self.recorded_at, datetime)
             or self.recorded_at.utcoffset() is None
@@ -274,6 +302,7 @@ class ResearchPlanExecutionSnapshot:
             detail=state.detail,
             advance_refusal_step_id=state.advance_refusal_step_id,
             advance_refusal_detail=state.advance_refusal_detail,
+            authority_pause=state.authority_pause,
             research_run_id=research_run_id,
             allowance=allowance,
             target_plan_digest=target_plan_digest,
@@ -316,6 +345,10 @@ class ResearchPlanExecutionSnapshot:
         concurrent predecessor may still be running and must become interrupted.
         The recorded refusal remains explanatory metadata and survives either
         case exactly as written, without affecting status reinterpretation.
+
+        `authority_pause` is left untouched for the same reason: it can only
+        ever name a pending step, never the running one this method acts on,
+        so restart neither grants nor discards the authority it names.
         """
         from dataclasses import replace
 

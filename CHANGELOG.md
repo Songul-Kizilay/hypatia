@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.429] - 2026-10-01
+
+### Added
+
+- Authority Control State + Durable Pause Foundation: a durable,
+  non-authoritative way for `ResearchPlanExecutionState` to name exactly
+  which authority a paused step is missing, modeled parallel to the
+  existing `advance_refusal_*` mechanism rather than as a new terminal
+  execution status.
+- New `research.ResearchAuthorityRequirementKind`, a closed `StrEnum`
+  (exactly one member today, `PLAN_AUTHORIZATION`) naming which existing
+  authority domain a pause requires, and new
+  `research.ResearchPlanExecutionAuthorityPause`, a frozen dataclass
+  (`requirement_kind`, `step_id`, `plan_digest`, `research_run_id`,
+  `detail`) that carries no method that authorizes, consumes, or grants
+  anything.
+- `ResearchPlanExecutionState.require_authority(...)` records a pause for
+  the next pending step while running; it is cleared only when that exact
+  step successfully starts, never by presenting any authorization.
+  `ResearchPlanExecutionSnapshot` and `ResearchPlanExecutionCodec` persist
+  and restore the same field with equivalent validation, refusing any
+  malformed, partial, or step-id-mismatched document.
+- `ResearchPlanExecutionApplicationService._paused_for_authority` records
+  the pause (bound to the plan's digest and the bound research run) when
+  a source-revalidation or LLM-costing step has no execution allowance at
+  all; the caller-visible rejection text is unchanged by the durable
+  write. A new event, `research.plan.execution.authority_required`, and
+  matching `ResponseComposer` rendering complete the wiring.
+
+### Security
+
+- No new terminal execution status, no widened authority, no automatic
+  resumption. `authority_pause` is pure control-plane naming: starting a
+  step still goes through the full, unchanged authorization-consumption
+  and allowance-accounting flow. Independent hypatia-security review:
+  PASS, no findings. Independent hypatia-qa review: PASS, found and
+  closed two real test-coverage gaps (test-only; no production code
+  touched) -- a concurrent-interrupt case for a later-step pause surviving
+  `restored()`, and a BLOCKED-execution case that previously crashed with
+  an uncaught `ResearchError` instead of falling back to a plain
+  rejection.
+
 ## [0.3.428] - 2026-09-29
 
 ### Added

@@ -29,6 +29,7 @@ EXECUTION_CANCELLED = "research.plan.execution.cancelled"
 EXECUTION_RESTORED = "research.plan.execution.restored"
 EXECUTION_PERSISTENCE_FAILED = "research.plan.execution.persistence_failed"
 EXECUTION_BUDGET_REFUSED = "research.plan.execution.budget_refused"
+EXECUTION_AUTHORITY_REQUIRED = "research.plan.execution.authority_required"
 
 EVENT_SOURCE = "research.execution"
 
@@ -71,6 +72,24 @@ class ResearchPlanExecutionEvents:
                 "plan_id": plan_id,
                 "step_id": step_id,
                 "capability": capability,
+                "attempted": False,
+                "charged": False,
+            },
+        )
+
+    def authority_required(
+        self,
+        plan_id: str,
+        step_id: str,
+        requirement_kind: str,
+    ) -> None:
+        """Report an advance paused for named authority, nothing attempted."""
+        self._emit(
+            EXECUTION_AUTHORITY_REQUIRED,
+            {
+                "plan_id": plan_id,
+                "step_id": step_id,
+                "requirement_kind": requirement_kind,
                 "attempted": False,
                 "charged": False,
             },

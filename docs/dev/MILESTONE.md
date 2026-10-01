@@ -10,16 +10,147 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.428
+## Current — v0.3.429
+
+| Field | Value |
+| --- | --- |
+| Milestone | Authority Control State + Durable Pause Foundation (first step underneath Bug Bounty Researcher roadmap item 8, Business-logic/state-transition model — the natural next candidate named in M1's own closing note below as belonging to M2 rather than M1) |
+| Base SHA | c435d6d (origin/main tip, v0.3.428 delivered) |
+| Branch | `feature/authority-control-state-v0.3.429`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-runtime: sole implementer, reporting two non-blocking observations about its own implementation whose exact wording was not preserved before the implementing session was interrupted — not reconstructed or guessed at here; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, found and closed two real test-coverage gaps (test-only, no production code touched) before this delivery |
+| Blockers | none |
+
+Rationale: M1 — Finding Lifecycle Closure closed with v0.3.428. Its own
+closing note (preserved below) named roadmap item 8, the Business-logic/
+state-transition model, as the natural next candidate, "belonging to M2
+rather than M1," and recorded that item as having "no existing precedent
+or design in this codebase." This milestone does not attempt item 8
+itself — a full business-logic/state-transition model is a substantially
+larger, still-unscoped undertaking. It delivers one narrow, self-contained
+foundation piece underneath it: a durable, non-authoritative way for the
+existing `ResearchPlanExecutionState` machine to name *exactly* which
+authority a paused step is missing, modeled as an addition parallel to
+the already-shipped `advance_refusal_*` mechanism rather than as a new
+terminal execution status.
+
+Two new files: `research.ResearchAuthorityRequirementKind` (a closed
+`StrEnum`, exactly one member today, `PLAN_AUTHORIZATION`, naming which
+existing authority domain — `ResearchPlanAuthorization`,
+`DeferredExecutionGrant`, or `ResearchKaliOperationAuthorization` — a
+pause requires; binding to the latter two is deliberately left for future
+work) and `research.ResearchPlanExecutionAuthorityPause` (a frozen
+dataclass: `requirement_kind`, `step_id`, `plan_digest`,
+`research_run_id`, `detail`; pure data, no method that authorizes,
+consumes, or grants anything).
+
+`ResearchPlanExecutionState` gained one new field, `authority_pause:
+ResearchPlanExecutionAuthorityPause | None`, validated to bind to an
+existing step and to be mutually exclusive with `advance_refusal_step_id`,
+plus `require_authority(...)`, callable only against the next pending
+step while the execution is `RUNNING`. The pause is cleared automatically
+— never by presenting any authorization, correct or not — the moment
+that exact step successfully starts via the existing `start_step`.
+`ResearchPlanExecutionSnapshot` mirrors the same field with the same
+validation into durable state; `capture()` copies it, and `restored()`
+deliberately leaves it untouched, because a pause can only ever name a
+pending step, never the running one `restored()` reinterprets as
+interrupted. `ResearchPlanExecutionCodec` encodes/decodes it as an
+optional, independent document field (stripped and decoded first, the
+same pattern as the existing `advance_refusal` field), refusing any
+malformed, partial, or step-id-mismatched document.
+
+`ResearchPlanExecutionApplicationService` gained a private
+`_paused_for_authority` helper, called from `process_advance` in place of
+a plain ephemeral rejection when a `SOURCE_REVALIDATION` step or an
+LLM-costing step has no execution allowance at all. It writes the durable
+pause, bound to the plan's own digest and the context's research run id,
+only when the execution is genuinely `RUNNING` with nothing else already
+running and a research run is actually bound — otherwise it falls back to
+the plain rejection, because a pause requiring a research run cannot be
+correctly recorded without one. The caller-visible rejection text is
+identical whether or not the durable write happens; the durable side
+effect changes no response. `rebind_restored` threads `authority_pause`
+from the snapshot into the reconstructed state. A new event,
+`research.plan.execution.authority_required` (`attempted: False, charged:
+False`), and matching `ResponseComposer` rendering in both the live-status
+and restored-snapshot text paths complete the wiring.
+
+No new terminal execution status, no new store, no schema/version bump
+beyond the one additive optional codec field, no automatic resumption, no
+widened authority, no new Brain intent beyond the existing advance path.
+
+Security invariants (restated, unchanged by this milestone): MODEL OUTPUT
+!= AUTHORITY; SUBAGENT OUTPUT != AUTHORITY; PAUSE != PERMISSION; RESUME
+STATE != AUTHORITY TO RESUME; RESTART != FRESH AUTHORITY; RESTART != FRESH
+BUDGET. `authority_pause` is pure control-plane naming; starting a step
+still goes through the full, unchanged authorization-consumption and
+allowance-accounting flow exactly as it did before this milestone.
+
+Review findings and how each was resolved:
+- **hypatia-security** (independent, read-only): PASS, no findings.
+- **hypatia-runtime** (implementer): reported two non-blocking
+  observations about its own implementation. The session that produced
+  them was interrupted before their exact wording was written down
+  anywhere durable; that wording is not reconstructed or guessed at here.
+  Re-running hypatia-runtime to recover it was deliberately not done, per
+  this process's own rule against repeating already-done work when no
+  subsequent code change affects what it covered — only test-only files
+  changed since.
+- **hypatia-qa** (independent): PASS. Verified the separation of
+  execution state from authority-control state (`authority_pause` is
+  never read as a verdict anywhere, only compared against or rendered);
+  the codec round-trip and fail-closed handling of adversarial/malformed
+  documents (both-fields-present, unknown step id, bad digest, bad enum,
+  missing/extra fields); that only `start_step` ever clears a pause; that
+  `_paused_for_authority` charges nothing and consumes no allowance; and
+  that cancellation/block/fail paths stay distinct from an authority
+  pause. Mutation-tested every boundary check (mutual exclusion, step-id
+  membership, the `restored()` carve-out, the RUNNING/no-running-step/
+  research-run guard) by deleting each in turn and confirming the suite
+  catches it. Found two real gaps the existing suite did not catch —
+  deleting the `restored()` carve-out, and deleting
+  `_paused_for_authority`'s RUNNING/running-step guard (the latter
+  produced an uncaught `ResearchError` crash out of `process_advance`,
+  not merely a wrong value) — and closed both with new, independently
+  verified non-vacuous regression tests, test-only, no production code
+  touched: `test_authority_pause_on_a_later_step_survives_a_concurrent_interrupt`
+  in `tests/research/test_research_plan_execution_snapshot.py` and
+  `test_blocked_execution_with_a_later_authority_gap_does_not_pause_or_crash`
+  in `tests/cognition/test_research_plan_execution_application_service.py`.
+  Also confirmed, as a non-blocking observation of its own: `cancel()` and
+  `block_step()` do not clear a live `authority_pause`, which can leave a
+  stale "paused for authority" line in a CANCELLED/BLOCKED execution's
+  rendered status — identical, intentional parity with the pre-existing
+  `advance_refusal_*` behavior, and the one consumer that reads a restored
+  pause (`rebind_restored`) is already gated to `RUNNING`/`INTERRUPTED`
+  executions only, so no stale pause is ever read as live authority.
+
+Verification (2026-10-01, Windows canonical environment): 7786 tests, `OK`
+— 31 net new over v0.3.428's 7755 (29 from the implementation itself, plus
+2 added during this session's QA pass). Black, Ruff, MyPy (`src`) all
+clean. `git diff --check` clean (informational CRLF-normalization notices
+only).
+
+## Historical scope: v0.3.428 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Security Finding evidence assessment / confidence foundation (M1 — Finding Lifecycle Closure, addresses the remaining confidence gap) |
 | Base SHA | 40fa7db (origin/main tip, v0.3.427 delivered) |
 | Branch | `feature/finding-evidence-assessment-v0.3.428`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 097868aecb436549b1103d137dca7067b169eab0 |
+| Status | delivered |
 | Specialists | hypatia-lead: sole implementer; hypatia-epistemics: independent review, PASS — designated primary/gating reviewer for this milestone's central design decision (Path A vs Path B), confirmed Path A is genuinely repository-grounded; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, found and closed one real test-coverage gap (asymmetric-count precedence) before this delivery |
+| PR | #407, MERGED 2026-09-29T15:49:53Z, standard merge commit `c435d6dc9a081020aec7fce909eb0ff490fe5e40` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 097868aecb43 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.429 resumed session): PR #407 base `main`, head
+`feature/finding-evidence-assessment-v0.3.428`, state `MERGED`, merge
+commit `c435d6dc9a081020aec7fce909eb0ff490fe5e40`, matching the
+independently-fetched `origin/main` tip exactly.
 
 Rationale: v0.3.406-427 delivered every other M1 lifecycle piece (evidence
 links, validation gate, cross-store replay integrity, contradiction
