@@ -2,10 +2,30 @@
 
 ## Runtime Version
 
-`v0.3.436 (Genesis)`
+`v0.3.437 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.437 makes the runtime capability instruction sent to the chat
+model also state Hypatia's own running version as one plain fact
+(`Hypatia version: 0.3.437 (Genesis).`). Root cause, confirmed live against
+a real EVREN-backed chat completion on the v0.3.436 build: `core.Version`
+was already read for the research mission audit export, but never reached
+the ordinary chat path, so asking "which version are you running" in chat
+correctly got "I don't know" rather than a wrong answer -- an honest gap,
+not a hallucination. The version is now carried as a plain string on
+`RuntimeCapabilityEvidence`/`RuntimeCapabilityContext`, read once by
+`CognitiveEngine`; a missing or non-string value omits the line instead of
+stating a wrong one. Also audited and confirmed still accurate as shipped:
+the `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP` Kali capability report
+(simulation-only unless `HYPATIA_KALI_OPERATION_EXECUTION_ENABLED=true`,
+which this install does not set) and the "not implemented" report for
+broad penetration testing (never wired by any configuration). 6 new
+regression tests (unit projection tests plus one real end-to-end
+`CognitiveEngine`/Bootstrap integration test); re-verified live against the
+real EVREN bridge before and after the fix. Windows canonical environment:
+7875 tests, `OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.436 delivers the first slice of Safe Tool Gateway v2:
 centralizing the existing `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP`

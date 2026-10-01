@@ -143,6 +143,10 @@ class RuntimeCapabilityEvidence:
     #: of `kali_operation_kinds`: the simulation requires only a scope and an
     #: authorization store, never the real runtime probe or process adapter.
     kali_simulation_available: bool = False
+    #: The running build's own version string (e.g. "0.3.437 (Genesis)"), read
+    #: once from `core.Version` by the composition root. Plain descriptive
+    #: text, not authority: stating it enables nothing and unblocks nothing.
+    hypatia_version: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +155,7 @@ class RuntimeCapabilityContext:
 
     states: tuple[tuple[RuntimeCapability, RuntimeCapabilityState], ...]
     kali_operation_kinds: tuple[str, ...] = ()
+    hypatia_version: str = ""
 
     def state_of(self, capability: RuntimeCapability) -> RuntimeCapabilityState:
         """Return the recorded state; anything unrecorded is unknown."""
@@ -186,6 +191,8 @@ class RuntimeCapabilityContext:
         a different honest answer than "Hypatia cannot do that at all".
         """
         sections: list[str] = ["Hypatia runtime capabilities.", _IDENTITY]
+        if self.hypatia_version:
+            sections.append(f"Hypatia version: {self.hypatia_version}.")
         groups: tuple[tuple[str, list[str]], ...] = (
             ("Available now:", []),
             ("Simulated only, no real action performed:", []),
@@ -253,6 +260,8 @@ def project_runtime_capabilities(
         isinstance(kind, str) and kind.strip() for kind in kinds
     ):
         return RuntimeCapabilityContext.conservative()
+    version = evidence.hypatia_version
+    version = version.strip() if isinstance(version, str) else ""
 
     research = _proven(evidence.research_approvals) and bool(
         operations - {Cap.LOCAL_KNOWLEDGE_SEARCH}
@@ -299,6 +308,7 @@ def project_runtime_capabilities(
             for capability in RuntimeCapability
         ),
         kali_operation_kinds=kinds,
+        hypatia_version=version,
     )
 
 

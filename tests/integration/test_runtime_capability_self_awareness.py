@@ -29,6 +29,7 @@ from cognition.RuntimeCapabilityProjection import (
     RuntimeCapabilityState,
 )
 from core.Bootstrap import Bootstrap
+from core.Version import VERSION
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
@@ -120,6 +121,15 @@ class RuntimeCapabilitySelfAwarenessTests(unittest.TestCase):
             self.assertIs(
                 context.state_of(capability), RuntimeCapabilityState.UNAVAILABLE
             )
+
+    def test_the_real_runtime_can_truthfully_state_its_own_version(self) -> None:
+        engine, _ = self._engine()
+
+        self.assertEqual(engine.runtime_capabilities.hypatia_version, VERSION.full)
+        self.assertIn(
+            f"Hypatia version: {VERSION.full}.",
+            engine.runtime_capabilities.instruction(),
+        )
 
     def test_chat_receives_the_default_prompt_and_the_capability_context(
         self,

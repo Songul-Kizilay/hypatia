@@ -291,6 +291,23 @@ class ConservativeUnknownTests(unittest.TestCase):
             UNKNOWN,
         )
 
+    def test_version_is_carried_through_as_a_plain_string(self) -> None:
+        context = project_runtime_capabilities(
+            wired(hypatia_version="0.3.437 (Genesis)")
+        )
+
+        self.assertEqual(context.hypatia_version, "0.3.437 (Genesis)")
+
+    def test_version_is_omitted_when_not_supplied(self) -> None:
+        context = project_runtime_capabilities(wired())
+
+        self.assertEqual(context.hypatia_version, "")
+
+    def test_non_string_version_is_not_stated(self) -> None:
+        context = project_runtime_capabilities(wired(hypatia_version=436))
+
+        self.assertEqual(context.hypatia_version, "")
+
 
 class InstructionContentTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -342,6 +359,20 @@ class InstructionContentTests(unittest.TestCase):
         self.assertLess(len(self.text.split()), 300)
         for internal in ("src", ".py", "Engine", "Service", "Manager", "_", "http"):
             self.assertNotIn(internal, self.text)
+
+
+class VersionInstructionTests(unittest.TestCase):
+    def test_version_is_stated_as_a_plain_fact_when_provided(self) -> None:
+        text = project_runtime_capabilities(
+            wired(hypatia_version="0.3.437 (Genesis)")
+        ).instruction()
+
+        self.assertIn("Hypatia version: 0.3.437 (Genesis).", text)
+
+    def test_version_line_is_absent_when_not_provided(self) -> None:
+        text = project_runtime_capabilities(wired()).instruction()
+
+        self.assertNotIn("Hypatia version:", text)
 
 
 if __name__ == "__main__":

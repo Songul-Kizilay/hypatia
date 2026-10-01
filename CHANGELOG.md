@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.437] - 2026-10-01
+
+### Changed
+
+- Runtime capability self-awareness now also states Hypatia's own running
+  version as one plain descriptive fact (`Hypatia version: 0.3.437
+  (Genesis).`) inside the deterministic capability instruction sent to the
+  chat model, alongside the existing available/simulated/not-implemented
+  sections. Root cause: `core.Version.VERSION` was already read by a
+  separate feature (the research mission audit export) but was never
+  reached by the ordinary chat path, so the model had no way to answer "what
+  version are you running" other than correctly saying it did not know --
+  confirmed live against a real EVREN-backed chat completion, not just by
+  source inspection. The version is read once by the composition root
+  (`CognitiveEngine`) and carried as a plain string on
+  `RuntimeCapabilityEvidence`/`RuntimeCapabilityContext`; a missing or
+  non-string value omits the line rather than stating a wrong one. States
+  nothing else, grants no permission, and changes no other capability
+  state.
+
+### Security
+
+- No authority, scope or persistence change: this is a description-only
+  addition to an existing description-only instruction string. The version
+  line fails closed (omitted, never fabricated) exactly like every other
+  field on `RuntimeCapabilityEvidence`.
+
 ## [0.3.436] - 2026-10-01
 
 ### Changed
