@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime
 from itertools import count
 from pathlib import Path
@@ -16,6 +17,7 @@ from brain.BrainRequest import BrainRequest
 from cognition.ResearchPlanExecutionApplicationService import (
     RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT,
     RESEARCH_PLAN_EXECUTION_CANCEL_INTENT,
+    RESEARCH_PLAN_EXECUTION_PAUSED_INTENT,
     RESEARCH_PLAN_EXECUTION_START_INTENT,
     RESEARCH_PLAN_EXECUTION_STATUS_INTENT,
     ResearchPlanExecutionApplicationService,
@@ -817,6 +819,125 @@ class ResearchPlanExecutionAuthorityPauseTests(unittest.TestCase):
         assert first_pause is not None and second_pause is not None
         self.assertNotEqual(first_pause.research_run_id, second_pause.research_run_id)
         self.assertNotEqual(first_pause, second_pause)
+
+    def _paused(self, service: ResearchPlanExecutionApplicationService) -> object:
+        return service.process_paused(
+            BrainRequest(
+                message="List executions paused for authority",
+                metadata={"intent": RESEARCH_PLAN_EXECUTION_PAUSED_INTENT},
+            )
+        )
+
+    def test_recognizes_the_paused_listing_intent(self) -> None:
+        service = self._service()
+        request = BrainRequest(
+            message="x", metadata={"intent": RESEARCH_PLAN_EXECUTION_PAUSED_INTENT}
+        )
+
+        self.assertTrue(service.is_paused_request(request))
+        self.assertFalse(
+            service.is_paused_request(
+                BrainRequest(message="x", metadata={"intent": "other"})
+            )
+        )
+
+    def test_nothing_paused_is_an_explicit_empty_listing(self) -> None:
+        service = self._service()
+
+        response = self._paused(service)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.research_paused_execution_ids, ())
+        self.assertIn(
+            "No execution is currently paused for authority", response.message
+        )
+
+    def test_a_live_pause_is_listed_with_its_requirement_and_run(self) -> None:
+        service = self._service()
+        plan_id = self._started(service)
+        service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        response = self._paused(service)
+
+        self.assertEqual(response.research_paused_execution_ids, (plan_id,))
+        self.assertEqual(response.research_paused_execution_run_ids, ("run-1",))
+        self.assertIn(
+            f"requires {ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION.value} "
+            "on step-1",
+            response.message,
+        )
+
+    def test_a_running_but_unpaused_execution_is_not_listed(self) -> None:
+        service = self._service()
+        self._started(service)
+
+        response = self._paused(service)
+
+        self.assertEqual(response.research_paused_execution_ids, ())
+
+    def test_listing_performs_no_work_and_changes_nothing(self) -> None:
+        service = self._service()
+        plan_id = self._started(service)
+        service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+        before = service._executions[plan_id]
+
+        for _ in range(3):
+            self._paused(service)
+
+        self.assertEqual(service._executions[plan_id], before)
+        self.assertIs(
+            service._executions[plan_id].status, ResearchPlanExecutionStatus.RUNNING
+        )
+
+    def test_a_restored_pause_survives_a_persisted_restart_with_a_new_instance(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store_path = Path(directory) / "executions.json"
+            first = self._service(
+                execution_store=JsonFileResearchExecutionStore(store_path)
+            )
+            plan_id = self._started(first)
+            first.process_advance(
+                plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+            )
+
+            second = self._service(
+                execution_store=JsonFileResearchExecutionStore(store_path)
+            )
+            self.assertNotIn(plan_id, second._executions)
+
+            response = self._paused(second)
+
+            self.assertEqual(response.research_paused_execution_ids, (plan_id,))
+            self.assertEqual(response.research_paused_execution_run_ids, ("run-1",))
+
+    def test_a_live_pause_takes_precedence_over_a_stale_restored_entry(self) -> None:
+        """If a plan_id is somehow both live and restored, the live, current
+        pause must win -- never a stale one left over from before restart.
+        """
+        service = self._service()
+        plan_id = self._started(service)
+        service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+        live_pause = service._executions[plan_id].authority_pause
+        assert live_pause is not None
+        stale_snapshot = service._live_snapshot(plan_id, service._clock())
+        service._restored[plan_id] = replace(
+            stale_snapshot,
+            authority_pause=replace(live_pause, detail="Stale pre-restart detail."),
+        )
+
+        response = self._paused(service)
+
+        self.assertEqual(response.research_paused_execution_ids, (plan_id,))
+        self.assertIn(live_pause.detail, response.message)
+        self.assertNotIn("Stale pre-restart detail.", response.message)
 
     def test_blocked_execution_with_a_later_authority_gap_does_not_pause_or_crash(
         self,

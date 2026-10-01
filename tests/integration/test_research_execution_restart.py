@@ -140,6 +140,15 @@ class RestartFixture(unittest.TestCase):
             capability="local_knowledge_search",
         )
 
+    @staticmethod
+    def paused(engine: CognitiveEngine):  # type: ignore[no-untyped-def]
+        return engine.process(
+            BrainRequest(
+                message="List executions paused for authority",
+                metadata={"intent": "research_plan_execution_paused"},
+            )
+        )
+
 
 class ResearchExecutionRestartTests(RestartFixture):
     def test_completed_work_survives_and_is_never_replayed(self) -> None:
@@ -159,6 +168,28 @@ class ResearchExecutionRestartTests(RestartFixture):
         self.assertIn("step-2: pending", response.message)
         self.assertIn("cannot be advanced", response.message)
         self.assertEqual(events, [])
+
+    def test_paused_listing_is_reachable_through_real_engine_dispatch(self) -> None:
+        """Proves the dispatch wiring itself, not just the pure-service logic.
+
+        `ResearchPlanExecutionAuthorityPauseTests` in
+        `test_research_plan_execution_application_service.py` already proves
+        `process_paused`'s own dedup and restart-survival logic directly;
+        this is the one place that proves `CognitiveEngine.process()` -> the
+        real `is_paused_request`/`process_paused` route the desktop button
+        actually uses -- is wired at all. A dropped or misrouted dispatch
+        would fall through to an unrelated response here instead.
+        """
+        engine, _, _ = self.build_runtime()
+
+        response = self.paused(engine)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "research_plan_execution_paused")
+        self.assertEqual(response.research_paused_execution_ids, ())
+        self.assertIn(
+            "No execution is currently paused for authority", response.message
+        )
 
     def test_running_step_restores_as_interrupted(self) -> None:
         snapshot = ResearchPlanExecutionSnapshot(

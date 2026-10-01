@@ -1259,6 +1259,22 @@ class DesktopController:
             )
         )
 
+    def paused_research_executions(self) -> BrainResponse:
+        """List executions paused for authority, live or merely restored.
+
+        A plain, non-mission authority pause is not a mission-recovery
+        outcome, so without this it stays invisible after a restart
+        unless the operator already remembers its exact execution ID.
+        Advances, resumes and authorizes nothing.
+        """
+        return self._brain.process(
+            BrainRequest(
+                message="List executions paused for authority",
+                source="desktop",
+                metadata={"intent": "research_plan_execution_paused"},
+            )
+        )
+
     def advance_research_execution(self, execution_id: str) -> BrainResponse:
         """Attempt exactly one step. Never two, and never a loop.
 

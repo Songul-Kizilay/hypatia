@@ -688,6 +688,10 @@ class BoundaryTests(AuthorizedStartFixture):
             "research_plan_execution_status",
             "research_plan_execution_advance",
             "research_plan_execution_cancel",
+            # Read-only: lists what is paused, authorizes and advances
+            # nothing on its own, but it is still a press like the three
+            # above, not something that runs on its own schedule.
+            "research_plan_execution_paused",
             # One turn of the existing scheduler, asked for each time. It
             # advances nothing on its own: no timer, no recurrence, and no
             # second cycle without a second press.

@@ -103,6 +103,9 @@ from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
+from research.ResearchPlanExecutionAuthorityPause import (
+    ResearchPlanExecutionAuthorityPause,
+)
 from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanExecutionSnapshot import (
     MAX_MISSION_REQUEST_ID_CHARACTERS,
@@ -139,6 +142,7 @@ RESEARCH_PLAN_EXECUTION_CONTINUE_INTENT = "research_plan_execution_continue"
 RESEARCH_PLAN_EXECUTION_CANCEL_INTENT = "research_plan_execution_cancel"
 RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT = "research_plan_execution_advance"
 RESEARCH_PLAN_EXECUTION_RECOVERED_INTENT = "research_plan_execution_recovered"
+RESEARCH_PLAN_EXECUTION_PAUSED_INTENT = "research_plan_execution_paused"
 
 MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS = 20
 
@@ -827,6 +831,48 @@ class ResearchPlanExecutionApplicationService:
                     )
                 )
         return self._response_composer.research_plan_execution_recovered_missions(
+            request, tuple(entries)
+        )
+
+    @staticmethod
+    def is_paused_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_PAUSED_INTENT
+
+    def process_paused(self, request: BrainRequest) -> BrainResponse:
+        """List every execution -- live or merely restored -- that is
+        currently paused for a named, unmet authority requirement.
+
+        An authority pause leaves `status` at RUNNING (only the pending
+        step is blocked, not the whole execution), so it is not what
+        `process_recovered` lists either way: that listing is scoped to
+        *mission* recovery outcomes specifically (`record_mission_recovery_
+        report`/`_refusal`, written only by the mission-scoped startup
+        driver), not to every execution. A plain, non-mission pause is
+        invisible after a restart unless the operator already remembers
+        its exact execution ID; this is the complementary read that
+        covers both mission and non-mission pauses by the one fact they
+        actually share -- a live `authority_pause`. Read-only: advances,
+        resumes, authorizes and persists nothing. A plan_id live in
+        `self._executions` always reports its current in-session state;
+        one found only in `self._restored` reports its state as of the
+        last restart.
+        """
+        entries: list[tuple[str, ResearchPlanExecutionAuthorityPause, str]] = []
+        seen: set[str] = set()
+        for plan_id, state in self._executions.items():
+            seen.add(plan_id)
+            if state.authority_pause is not None:
+                entries.append(
+                    (plan_id, state.authority_pause, self.mission_run_id(plan_id) or "")
+                )
+        for plan_id, restored in self._restored.items():
+            if plan_id in seen or restored.authority_pause is None:
+                continue
+            entries.append(
+                (plan_id, restored.authority_pause, restored.research_run_id or "")
+            )
+        entries.sort(key=lambda entry: entry[0])
+        return self._response_composer.research_plan_execution_paused(
             request, tuple(entries)
         )
 
