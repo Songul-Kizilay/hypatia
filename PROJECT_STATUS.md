@@ -2,10 +2,33 @@
 
 ## Runtime Version
 
-`v0.3.432 (Genesis)`
+`v0.3.433 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.433 lets chat honestly distinguish a Kali simulation from real
+execution and from no capability at all. `RuntimeCapabilityProjection` (the
+module that derives a short, truthful "what can Hypatia do" instruction
+from immutable wiring facts, sent alongside the configured system prompt on
+every chat turn) previously reported `REVIEWED_KALI_LOOKUPS` as only
+`AVAILABLE` (the real WSL/dig/curl adapter wired) or `UNAVAILABLE` --
+meaning the always-present, no-process preview/fake-run workflow was never
+mentioned, and chat said Hypatia had no Kali capability at all rather than
+distinguishing "I can simulate this for review" from "I cannot do this."
+New `RuntimeCapabilityState.SIMULATED` state, a `kali_simulation_available`
+evidence fact wired from `CognitiveEngine`'s existing fake-runner-service
+presence check, and `_kali_lookup_state()` (real execution always outranks
+the simulation fact) fix this; the rendered instruction now carries a
+"Simulated only, no real action performed:" section with an explicit rule
+never to describe a simulated result as real. The old single "Not
+available:" heading is also split into "Not implemented in Hypatia:" (the
+unchanged, never-wired set) versus "Not enabled in this configuration:"
+(implemented but not wired in this process) -- both grounded only in
+existing immutable evidence, never in file/roadmap/module-layout inference.
+Independent hypatia-security and hypatia-qa reviews both PASS; QA mutation
+-tested every new branch and confirmed each test is load-bearing.
+Windows canonical environment: 7837 tests, `OK`; Black/Ruff/MyPy clean.
 
 Version v0.3.432 replaces the desktop shell's crowded, 16-tab top-level
 `ttk.Notebook` with a collapsible, scrollable left sidebar grouped into

@@ -23,6 +23,7 @@ from cognition.RuntimeCapabilityProjection import (
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
 
 AVAILABLE = RuntimeCapabilityState.AVAILABLE
+SIMULATED = RuntimeCapabilityState.SIMULATED
 UNAVAILABLE = RuntimeCapabilityState.UNAVAILABLE
 UNKNOWN = RuntimeCapabilityState.UNKNOWN
 
@@ -144,9 +145,71 @@ class RuntimeProjectionTests(unittest.TestCase):
             "dns record lookup, https header lookup",
             text,
         )
-        available = text.split("Available now:")[1].split("Not available:")[0]
+        available = text.split("Available now:")[1].split(
+            "Not implemented in Hypatia:"
+        )[0]
         for forbidden in ("penetration", "scanning", "exploit", "monitoring"):
             self.assertNotIn(forbidden, available)
+
+    def test_kali_simulation_alone_is_simulated_not_available(self) -> None:
+        context = project_runtime_capabilities(
+            wired(kali_operation_kinds=(), kali_simulation_available=True)
+        )
+
+        self.assertIs(
+            context.state_of(RuntimeCapability.REVIEWED_KALI_LOOKUPS), SIMULATED
+        )
+        text = context.instruction()
+        self.assertIn("Simulated only, no real action performed:", text)
+        self.assertIn(
+            "it performs no real DNS or HTTPS request",
+            text,
+        )
+        available = text.split("Available now:")[1].split(
+            "Simulated only, no real action performed:"
+        )[0]
+        self.assertNotIn("Kali", available)
+
+    def test_a_real_runner_always_outranks_the_simulation_fact(self) -> None:
+        """Both facts can be true at once; the real one must still win."""
+        context = project_runtime_capabilities(
+            wired(
+                kali_operation_kinds=("dns_record_lookup",),
+                kali_simulation_available=True,
+            )
+        )
+
+        self.assertIs(
+            context.state_of(RuntimeCapability.REVIEWED_KALI_LOOKUPS), AVAILABLE
+        )
+        self.assertNotIn("Simulated only", context.instruction())
+
+    def test_neither_real_nor_simulated_kali_is_unavailable_not_simulated(
+        self,
+    ) -> None:
+        context = project_runtime_capabilities(
+            wired(kali_operation_kinds=(), kali_simulation_available=False)
+        )
+
+        self.assertIs(
+            context.state_of(RuntimeCapability.REVIEWED_KALI_LOOKUPS), UNAVAILABLE
+        )
+        self.assertNotIn("Simulated only", context.instruction())
+
+    def test_not_implemented_and_not_enabled_are_reported_separately(self) -> None:
+        context = project_runtime_capabilities(wired(memory=False))
+
+        text = context.instruction()
+        self.assertIn("Not implemented in Hypatia:", text)
+        self.assertIn("Not enabled in this configuration:", text)
+        not_enabled = text.split("Not enabled in this configuration:")[1].split(
+            "Not confirmed"
+        )[0]
+        self.assertIn("remembering facts", not_enabled)
+        not_implemented = text.split("Not implemented in Hypatia:")[1].split(
+            "Not enabled in this configuration:"
+        )[0]
+        self.assertIn("penetration", not_implemented)
 
 
 class NoRoadmapInferenceTests(unittest.TestCase):
@@ -201,6 +264,15 @@ class ConservativeUnknownTests(unittest.TestCase):
             self.assertIs(context.state_of(capability), UNKNOWN, capability)
         self.assertIn("Not confirmed (do not claim):", context.instruction())
 
+    def test_non_boolean_kali_simulation_fact_stays_unknown(self) -> None:
+        context = project_runtime_capabilities(
+            wired(kali_operation_kinds=(), kali_simulation_available="maybe")
+        )
+
+        self.assertIs(
+            context.state_of(RuntimeCapability.REVIEWED_KALI_LOOKUPS), UNKNOWN
+        )
+
     def test_malformed_evidence_falls_back_to_claiming_nothing(self) -> None:
         for evidence in (
             None,
@@ -235,8 +307,17 @@ class InstructionContentTests(unittest.TestCase):
         )
 
     def test_small_models_are_told_not_to_invent_capabilities(self) -> None:
-        self.assertIn("Describe only the capabilities listed as available.", self.text)
+        self.assertIn(
+            "Describe only the capabilities listed as available or simulated.",
+            self.text,
+        )
         self.assertIn("say Hypatia cannot do it; never invent a capability", self.text)
+
+    def test_a_simulated_result_must_never_be_described_as_real(self) -> None:
+        self.assertIn(
+            "A capability listed as simulated performs no real action", self.text
+        )
+        self.assertIn("never describe a simulated result as a real one", self.text)
 
     def test_description_is_not_authority_and_chat_is_not_research(self) -> None:
         self.assertIn("it grants no permission and starts nothing", self.text)
