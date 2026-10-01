@@ -29,6 +29,7 @@ from research.CuriosityResearchProposal import CuriosityResearchProposal
 from research.FailureMemoryRecallMatch import FailureMemoryRecallMatch
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisHistoryView import HypothesisHistoryView
+from research.KaliToolGatewayFailure import KaliToolGatewayFailure
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
@@ -2574,22 +2575,44 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         message: str,
+        *,
+        gateway_failure: KaliToolGatewayFailure | None = None,
     ) -> BrainResponse:
-        """Report a reviewed operation-run refusal before target work."""
-        return BrainResponse(
-            message="\n".join(
+        """Distinguish a pre-dispatch refusal from an unknown adapter outcome."""
+        lines = ["Kali operation run refused:", f"Reason: {message}"]
+        if gateway_failure is not None:
+            lines.extend(
                 (
-                    "Kali operation run refused:",
-                    f"Reason: {message}",
-                    "Execution: not started",
-                    "Process: not created",
-                    "Evidence: not recorded",
+                    f"Gateway stage: {gateway_failure.stage.value}",
+                    "Authorization consumption: "
+                    f"{gateway_failure.authorization_consumption}",
                 )
-            ),
+            )
+        if gateway_failure is not None and gateway_failure.adapter_invoked:
+            lines[0] = "Kali operation outcome unknown:"
+            lines.extend(
+                (
+                    "Execution: adapter invoked; completion unknown",
+                    "Process: creation and outcome not confirmed",
+                    "Do not assume nothing happened or retry automatically.",
+                    "Review the target state before a new explicit authorization.",
+                )
+            )
+        else:
+            lines.extend(
+                (
+                    "Execution: not started",
+                    "Process: target operation adapter not invoked",
+                )
+            )
+        lines.append("Evidence: not recorded")
+        return BrainResponse(
+            message="\n".join(lines),
             request_id=request.request_id,
             intent="kali_operation_run",
             memory_count=0,
             success=False,
+            kali_tool_gateway_failure=gateway_failure,
         )
 
     def learned_memory_audit(

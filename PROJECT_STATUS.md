@@ -2,10 +2,32 @@
 
 ## Runtime Version
 
-`v0.3.435 (Genesis)`
+`v0.3.436 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.436 delivers the first slice of Safe Tool Gateway v2:
+centralizing the existing `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP`
+execution checks (opt-in, digest/scope/policy, exact authorization
+match+expiry+binding, runtime readiness, consume-before-dispatch) behind
+one `KaliToolGateway`, with the exact prior check order preserved. Fixes
+a defect where authorization could be consumed and the process adapter
+could then raise, with the prior code falsely reporting "Execution: not
+started / Process: not created" even though a side effect may already
+have occurred. New `KaliToolGatewayFailure`/`KaliToolGatewayStage`
+distinguish a genuine pre-dispatch refusal from an unknown post-dispatch
+outcome; the response and the desktop Kali panel now both report an
+unknown outcome (Turkish: "Yetki kullanıldı; işlemin sonucu
+doğrulanamadı…") instead of implying nothing happened. No new Kali
+operation, no scope widening, no retry, no automatic re-authorization.
+Independent hypatia-security review PASS, no findings; independent
+hypatia-qa review "QA-ready" (one non-blocking test-rigor note on the
+forged-metadata regression test). 15 new regression tests, including a
+real `CognitiveEngine.process()` dispatch test and a real desktop-panel
+test via an offline fixture (mock adapter, no live WSL/Kali or
+PortSwigger target). Windows canonical environment: 7869 tests,
+`OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.435 closes a safe pause/resume visibility gap: a plain,
 non-mission execution durably paused for a named authority requirement

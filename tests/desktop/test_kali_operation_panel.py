@@ -27,6 +27,7 @@ from cognition.ResearchAssetInventoryApplicationService import (
 from cognition.ResearchHttpEvidenceApplicationService import (
     ResearchHttpEvidenceApplicationService,
 )
+from core.Exceptions import ResearchError
 from desktop.DesktopController import DesktopController
 from desktop.KaliOperationPanel import KaliOperationPanel
 from research.JsonFileResearchAssetInventoryStore import (
@@ -310,6 +311,17 @@ class KaliOperationPanelTests(unittest.TestCase):
             spent.append((preview, current_id))
             self.panel.run()
             self.assertEqual(self.pending, [])
+
+    def test_adapter_error_after_consumption_shows_unknown_outcome_in_turkish(self):
+        self.preview_and_approve()
+        self.adapter.run.side_effect = ResearchError("adapter exploded")
+        self.panel.run()
+        self.finish()
+
+        self.assertIn("Yetki kullanıldı", self.panel.status.get())
+        self.assertIn("sonucu doğrulanamadı", self.panel.status.get())
+        self.assertNotIn("İşlem tamamlanamadı.", self.panel.status.get())
+        self.assertEqual(self.store.load(), [])
 
     def test_cancel_run_keeps_approval_without_starting(self):
         self.preview_and_approve()

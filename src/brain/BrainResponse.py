@@ -23,6 +23,7 @@ from research.CuriosityResearchProposal import CuriosityResearchProposal
 from research.FailureMemoryRecallMatch import FailureMemoryRecallMatch
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisHistoryView import HypothesisHistoryView
+from research.KaliToolGatewayFailure import KaliToolGatewayFailure
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
@@ -264,6 +265,7 @@ class BrainResponse:
     kali_operation_fake_run: ResearchKaliOperationFakeRun | None = None
     kali_runtime_readiness: ResearchKaliRuntimeReadiness | None = None
     kali_operation_run: ResearchKaliOperationRun | None = None
+    kali_tool_gateway_failure: KaliToolGatewayFailure | None = None
     kali_operation_evidence_candidate: ResearchKaliOperationEvidenceCandidate | None = (
         None
     )
