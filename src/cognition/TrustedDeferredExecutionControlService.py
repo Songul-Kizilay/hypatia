@@ -65,8 +65,23 @@ class TrustedDeferredExecutionControlService:
         )
 
     def grant(self, task_id: str) -> DeferredExecutionControlView:
+        """Issue one fresh grant, refusing only while a genuinely live one exists.
+
+        An expired-but-not-revoked prior grant can never again authorize
+        anything -- `has_expired_at` is the same, already-trusted check every
+        other consumer of this type uses -- so it must not be able to block
+        issuing a verified replacement forever. It is never read as live
+        authority here, never extended, and never reactivated: this method
+        still builds an entirely new grant with its own fresh identity and
+        `granted_at`, and still runs it through the exact same eligibility
+        check (`deferred_execution_decision`, unweakened) every grant always
+        has. The only thing that changes is that a dead record stops being
+        able to sit in the way of a live one for the same task forever.
+        """
         task, execution, plan, allowance = self._binding(task_id)
-        if self._active_grant(task.task_id) is not None:
+        grants = self._store.load()
+        existing = self._active_grant(task.task_id, grants)
+        if existing is not None and not existing.has_expired_at(self._clock()):
             raise ResearchError("This task already has an active deferred grant.")
         if not task.status.runnable:
             raise ResearchError("Only a pending scheduler task may be granted.")
@@ -95,7 +110,19 @@ class TrustedDeferredExecutionControlService:
             raise ResearchError(
                 f"Deferred execution is not currently eligible: {decision.reason}."
             )
-        grants = self._store.load()
+        if existing is not None:
+            # Reached only when `existing.has_expired_at` was already true
+            # above. Retiring it here (never rewriting its identity, digest,
+            # capabilities or budget) is what keeps the store's own
+            # at-most-one-active-grant-per-task invariant true, exactly as it
+            # already was before an expiry could ever happen.
+            superseded = existing.revoked(
+                self._clock(), DeferredGrantAuthorizer.SUPERSEDED_BY_RENEWAL
+            )
+            grants = [
+                superseded if candidate.grant_id == existing.grant_id else candidate
+                for candidate in grants
+            ]
         grants.append(grant)
         self._store.save(grants)
         return self.preview(task.task_id)

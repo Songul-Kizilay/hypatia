@@ -10,16 +10,94 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.430
+## Current — v0.3.431
+
+| Field | Value |
+| --- | --- |
+| Milestone | Authority Lifecycle Fixes: clear stale authority-control bookkeeping on every terminal/blocked transition, and let a verified renewal past an expired `DeferredExecutionGrant` through |
+| Base SHA | 44cfe41 (origin/main tip, v0.3.430 delivered) |
+| Branch | `feature/authority-lifecycle-fixes-v0.3.431`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: audit, sole implementer; hypatia-runtime: independent review, found a genuine completeness gap (closed same session, re-verified PASS); hypatia-security: independent review, PASS, no findings (one gap independently cross-confirmed, two non-blocking observations); hypatia-qa: independent review, PASS, no coverage gap found worth adding to |
+| Blockers | none |
+
+Rationale, Fix A (stale authority pauses): v0.3.429 introduced `authority_pause`/`advance_refusal_*` as durable, non-authoritative bookkeeping on `ResearchPlanExecutionState`, cleared automatically only when the exact named step successfully starts. v0.3.429's own QA pass had already flagged, as a non-blocking observation, that `cancel()` and `block_step()` did not clear either field on their own terminal/blocked transitions, risking a stale "paused for authority"/"advance refused" line surviving in a `CANCELLED`/`BLOCKED` execution's rendered status. This milestone closes that gap — and, per independent review during this same session, two more call sites with the identical bug class that the original audit missed: `fail_step()` (terminal `FAILED`) and `resolve_interrupted_step()`'s `PERFORMED_RESULT_UNKNOWN` branch (a second, separate route to `BLOCKED`, distinct from `block_step()`'s). All four now unconditionally clear both fields on their existing success path, regardless of which step either field named — necessary because a pause/refusal can only ever have been recorded on whichever step was "next pending" at recording time, while `block_step()`/`fail_step()`/the ruling branch can each target a *different* step (an earlier RUNNING one, or an arbitrary PENDING one) without that precondition ever being violated. Two sibling branches of `resolve_interrupted_step` (`REMAINS_UNKNOWN`, staying `INTERRUPTED`; the "never happened" branch, returning to `RUNNING`) were deliberately left untouched, since neither transitions to a terminal or `BLOCKED` status — independently re-verified true by both hypatia-runtime and hypatia-qa, not merely asserted. Clearing either field drops nothing that grants anything: if authority is still genuinely missing once a block/failure is resolved, the next real advance attempt re-records it exactly as the first attempt did. Per CLAUDE.md's "no backfilled legacy fields" invariant, this fix changes only what happens going forward; no already-persisted pre-fix snapshot is retroactively rewritten, and `rebind_restored`'s `_RESUMABLE_EXECUTION_STATUSES = {RUNNING, INTERRUPTED}` gate independently prevents any such legacy snapshot from ever being read as resumable authority regardless of this fix.
+
+Rationale, Fix B (expired grant renewal): v0.3.430 gave `DeferredExecutionGrant` a hard seven-day expiry, but `TrustedDeferredExecutionControlService.grant()` still refused to issue a fresh grant whenever *any* non-revoked grant already existed for a task — including one already past its own `expires_at` and therefore permanently inert. `grant()` now refuses only when the existing grant is not yet expired (`existing is not None and not existing.has_expired_at(self._clock())`). When the blocking grant is expired, the method still builds an entirely new grant from the *current* plan/task state (fresh `grant_id`, fresh `granted_at`, nothing copied from the old record), still runs it through the full, unweakened `deferred_execution_decision` eligibility gate, and only once that passes retires the old grant (`revoked_at`/`revoked_by` only — identity, digest, capabilities, and budget untouched) under a new, honest provenance, `DeferredGrantAuthorizer.SUPERSEDED_BY_RENEWAL`, added specifically so this automatic retirement is never misattributed to `TRUSTED_LOCAL_OPERATOR`, which would falsely imply a human reviewed and chose to revoke it. The retirement step is required, not optional: `JsonFileDeferredExecutionGrantStore` enforces a hard "at most one non-revoked grant per task" invariant at `save()` time, counted purely by revocation, not expiry — reproduced directly by hypatia-runtime (without the retirement step, persisting the new grant crashes that invariant).
+
+Review findings and how each was resolved:
+- **hypatia-runtime** (independent): initial pass found a genuine
+  completeness gap — `fail_step()` and `resolve_interrupted_step()`'s
+  `PERFORMED_RESULT_UNKNOWN` branch had the identical staleness bug
+  `cancel()`/`block_step()` were patched for, demonstrated by direct
+  reproduction against the pure state machine (a hand-built sequence:
+  start step-1, record a pause/refusal on step-2, then fail/rule step-1).
+  Confirmed not currently reachable through
+  `ResearchPlanExecutionApplicationService`'s own guarded call sites, and
+  bounded by `rebind_restored`'s resumable-status gate — a
+  correctness/defense-in-depth gap, not a live authority or replay issue.
+  Closed same session (see Fix A rationale above); a follow-up pass
+  independently re-verified both new call sites, confirmed the two
+  deliberately-untouched sibling branches (`REMAINS_UNKNOWN`, "never
+  happened") genuinely don't transition to terminal/`BLOCKED`, mutated
+  and reverted both fixes to confirm the new regression tests are
+  non-vacuous, and reran the full canonical suite and gates. Final
+  verdict: PASS.
+- **hypatia-security** (independent): PASS, no findings. Independently
+  cross-confirmed the same `fail_step()` gap hypatia-runtime found.
+  Traced that neither the expired nor the renewed grant's identity,
+  `granted_at`, or `expires_at` derives from the other; confirmed
+  `has_expired_at` is only ever called with the trusted clock, never a
+  caller-supplied timestamp; confirmed `SUPERSEDED_BY_RENEWAL` has
+  exactly one construction site in the whole codebase (no external input
+  can supply it) and that no reader treats it as weaker/stronger
+  authority than `TRUSTED_LOCAL_OPERATOR`; confirmed a schedule armed
+  against a now-superseded grant fails closed (exact `grant_id` identity
+  match) rather than inheriting the new grant's authority. Two
+  non-blocking observations, left open: `fail_step()`'s original gap
+  (closed, per above, before this was reported), and that `grant()`'s
+  load-check-save sequence has no mutex (pre-existing, predates this
+  diff, and the store's own uniqueness invariant fails closed on a race
+  rather than silently granting extra authority).
+- **hypatia-qa** (independent): PASS. Mutation-tested (then exactly
+  reverted, confirmed via byte-identical `git diff --stat`) the
+  different-step clearing in `cancel()`/`block_step()`, and the expired
+  -grant-still-blocks-renewal guard in `grant()` — all three mutations
+  produced exactly the expected, narrowly-scoped test failures. Hand
+  -constructed a corrupted real-store document with two non-revoked
+  grants for one task and confirmed the store's own uniqueness
+  invariant still refuses it, unweakened by this diff. Confirmed
+  `ResearchPlanExecutionSnapshot.capture()` and the codec are untouched
+  pass-throughs, so no post-fix terminal/blocked snapshot can carry a
+  stale field and no pre-fix persisted snapshot is retroactively
+  rewritten. Ran the full existing test surface for both fixes (308
+  tests across the state machine, deferred-grant, and application
+  -service suites) with zero regressions. No coverage gap found worth
+  adding to.
+
+Verification (2026-10-01, Windows canonical environment): 7809 tests,
+`OK` — 14 net new over v0.3.430's 7795. Black, Ruff, MyPy (`src`, 616
+source files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.430 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Authority Control: a real, hard expiry for `DeferredExecutionGrant` (second M2 authority-control step, found by auditing — and rejecting — the originally-scoped "second `ResearchAuthorityRequirementKind` member" ask; see rationale) |
 | Base SHA | 0f32035 (origin/main tip, v0.3.429 delivered) |
 | Branch | `feature/second-authority-boundary-v0.3.430`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 18c82ffb171c6772a6f80183b67d644da09aff0f |
+| Status | delivered |
+| PR | #409, MERGED 2026-10-01T11:13:56Z, standard merge commit `44cfe41cf1278d76ffaad6efbfcc2db4e91317b8` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 18c82ffb171c origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Specialists | hypatia-lead: repository-grounded audit, scope selection, sole implementer; hypatia-runtime: independent review, PASS, no findings; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, no coverage gap found worth adding to |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.431 session): PR #409 base `main`, head
+`feature/second-authority-boundary-v0.3.430`, state `MERGED`, merge
+commit `44cfe41cf1278d76ffaad6efbfcc2db4e91317b8`, matching the
+independently-fetched `origin/main` tip exactly.
 
 Rationale: the milestone was originally scoped as binding a second
 `ResearchAuthorityRequirementKind` member — `DeferredExecutionGrant` or

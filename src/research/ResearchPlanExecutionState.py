@@ -285,6 +285,12 @@ class ResearchPlanExecutionState:
         ``work_performed`` lets a genuine attempt be recorded as work even
         though the step did not succeed, so an attempted transaction is never
         confused with an achieved outcome.
+
+        Also clears any live `advance_refusal_*`/`authority_pause`, same as
+        `cancel`/`block_step`: `FAILED` is terminal, so whichever step either
+        field named -- which can differ from the one that just failed, since
+        a pause/refusal only ever named whatever was next-pending while this
+        one was running -- can never start again either way.
         """
         self._require_running()
         self._require_step_status(step_id, ResearchPlanStepStatus.RUNNING)
@@ -299,6 +305,9 @@ class ResearchPlanExecutionState:
             updated,
             status=ResearchPlanExecutionStatus.FAILED,
             detail=detail,
+            advance_refusal_step_id=None,
+            advance_refusal_detail="",
+            authority_pause=None,
         )
 
     def resolve_interrupted_step(
@@ -346,16 +355,25 @@ class ResearchPlanExecutionState:
                 status=ResearchPlanExecutionStatus.INTERRUPTED,
             )
         if resolution is ResearchAttemptResolution.PERFORMED_RESULT_UNKNOWN:
-            return self._with_ruling(
-                current,
-                resolution,
-                ResearchPlanStepStatus.BLOCKED,
-                moment,
-                resolved_by,
-                "The operator confirmed the operation ran; its result is unknown.",
-                work_performed=True,
-                operation=current.operation,
-                status=ResearchPlanExecutionStatus.BLOCKED,
+            # This is the ruling branch's own route to BLOCKED, distinct from
+            # `block_step`'s but subject to the exact same staleness: clear
+            # any live advance_refusal_*/authority_pause regardless of which
+            # step it named, same reasoning and same fix as `block_step`.
+            return replace(
+                self._with_ruling(
+                    current,
+                    resolution,
+                    ResearchPlanStepStatus.BLOCKED,
+                    moment,
+                    resolved_by,
+                    "The operator confirmed the operation ran; its result is unknown.",
+                    work_performed=True,
+                    operation=current.operation,
+                    status=ResearchPlanExecutionStatus.BLOCKED,
+                ),
+                advance_refusal_step_id=None,
+                advance_refusal_detail="",
+                authority_pause=None,
             )
         return self._with_ruling(
             current,
@@ -582,7 +600,18 @@ class ResearchPlanExecutionState:
         step_id: str,
         detail: str,
     ) -> ResearchPlanExecutionState:
-        """Record one step that cannot proceed and block the plan for review."""
+        """Record one step that cannot proceed and block the plan for review.
+
+        Clears any live `advance_refusal_*`/`authority_pause` regardless of
+        which step it named. Both can only ever point at the step that was
+        the next pending one when they were recorded; once the execution is
+        blocked, nothing can reach that step (or any step after it) until an
+        operator resolves the block, so the recorded explanation is stale the
+        instant it stops matching why the execution cannot currently advance.
+        This drops nothing that grants anything: if authority is genuinely
+        still missing once the block is resolved, the very next advance
+        attempt records it again, exactly as it would have the first time.
+        """
         self._require_running()
         current = self._step(step_id)
         if current.status not in (
@@ -601,10 +630,21 @@ class ResearchPlanExecutionState:
             updated,
             status=ResearchPlanExecutionStatus.BLOCKED,
             detail=detail,
+            advance_refusal_step_id=None,
+            advance_refusal_detail="",
+            authority_pause=None,
         )
 
     def cancel(self, detail: str = "") -> ResearchPlanExecutionState:
-        """Cancel every unfinished step without rewriting finished history."""
+        """Cancel every unfinished step without rewriting finished history.
+
+        Clears any live `advance_refusal_*`/`authority_pause` unconditionally:
+        `CANCELLED` is a terminal status with no path back, so whatever step
+        either field named can never start, successfully or otherwise, and
+        carrying either forward would only let a terminal execution's
+        rendered status keep describing a requirement nothing will ever act
+        on again.
+        """
         if self.status.terminal:
             raise ResearchError(
                 "Research plan execution is already in a terminal status."
@@ -627,6 +667,9 @@ class ResearchPlanExecutionState:
             status=ResearchPlanExecutionStatus.CANCELLED,
             steps=steps,
             detail=detail,
+            advance_refusal_step_id=None,
+            advance_refusal_detail="",
+            authority_pause=None,
         )
 
     def snapshot(self) -> tuple[tuple[str, str, str, bool], ...]:

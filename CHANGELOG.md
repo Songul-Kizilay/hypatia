@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.431] - 2026-10-01
+
+### Fixed
+
+- Stale authority-control bookkeeping: `ResearchPlanExecutionState.cancel()`,
+  `block_step()`, `fail_step()`, and `resolve_interrupted_step()`'s
+  `PERFORMED_RESULT_UNKNOWN` ruling branch now all clear any live
+  `advance_refusal_*`/`authority_pause` on their existing success path,
+  regardless of which step either field named. A pause/refusal can only
+  ever have been recorded on whichever step was next-pending at recording
+  time, while each of these four transitions can target a *different*
+  step without violating that precondition -- previously leaving a stale
+  "paused for authority"/"advance refused" line able to survive a
+  terminal (`CANCELLED`/`FAILED`) or blocked execution's rendered status.
+  Clearing either field drops nothing that grants anything: a genuinely
+  still-missing authority requirement is re-recorded on the next real
+  advance attempt exactly as before.
+- Expired `DeferredExecutionGrant` renewal: `TrustedDeferredExecutionControlService
+  .grant()` no longer refuses to issue a fresh grant for a task merely
+  because an already-expired (per v0.3.430's `expires_at`), never-revoked
+  prior grant exists. It still refuses while an existing grant is not yet
+  expired; once expired, it builds an entirely new grant from the
+  *current* plan/task state (fresh identity, nothing copied from the old
+  record), runs it through the full, unweakened eligibility check, and
+  only then retires the old grant (`revoked_at`/`revoked_by` only) under
+  a new, honest provenance, `DeferredGrantAuthorizer.SUPERSEDED_BY_RENEWAL`
+  -- never `TRUSTED_LOCAL_OPERATOR`, which would falsely imply a human
+  reviewed and chose to revoke it. Required to preserve
+  `JsonFileDeferredExecutionGrantStore`'s existing "at most one
+  non-revoked grant per task" invariant, which is counted purely by
+  revocation and would otherwise reject the fresh grant at persistence
+  time.
+
+### Security
+
+- Neither fix touches budget/allowance accounting, persistence schema,
+  or any execution-triggering code path. The retired grant's identity,
+  digest, capabilities, and budget are never rewritten -- only
+  `revoked_at`/`revoked_by` move from unset to set. Independent
+  hypatia-runtime, hypatia-security, and hypatia-qa reviews all PASS, no
+  findings requiring a fix.
+
 ## [0.3.430] - 2026-10-01
 
 ### Added
