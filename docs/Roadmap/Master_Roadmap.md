@@ -297,9 +297,18 @@ Kali bounded operations:
       process calls on DNS drift:
       `tests/cognition/test_kali_operation_authorization_application_service.py::test_https_header_run_refuses_when_the_resolution_changes_before_run`
       (`adapter.calls == 0`, authorization remains unconsumed in the store)
+- [x] v0.3.436 Safe Tool Gateway v2, first slice: the existing checks for
+      both operation kinds moved behind one `KaliToolGateway`, same order,
+      none weakened; a prior defect where an adapter exception after
+      authorization consumption was misreported as "Execution: not
+      started / Process: not created" is fixed — the stage at failure now
+      determines whether the outcome is a genuine pre-dispatch refusal or
+      an explicit "unknown outcome" (never "nothing happened")
 
 - [ ] General typed tool-execution framework (confirmed: only two
-      `ResearchKaliOperationKind` values exist repo-wide, no generic dispatcher)
+      `ResearchKaliOperationKind` values exist repo-wide, no generic
+      dispatcher — v0.3.436 centralized existing per-kind checks, it did
+      not generalize the framework)
 
 ## Phase 6 — Evaluate -> Adapt
 

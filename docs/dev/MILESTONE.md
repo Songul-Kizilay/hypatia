@@ -10,16 +10,127 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.435
+## Current — v0.3.436
+
+| Field | Value |
+| --- | --- |
+| Milestone | Safe Tool Gateway v2, first slice: centralize the existing `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP` execution checks behind one `KaliToolGateway`, and fix a defect where authorization could be consumed and then the process adapter could raise, with the prior code falsely reporting "Execution: not started / Process: not created" |
+| Base SHA | 49d9576 (origin/main tip, v0.3.435 delivered) |
+| Branch | `feature/safe-tool-gateway-v0.3.436`, a `git worktree` forked directly from refreshed `origin/main` (worktree `D:\hypatia-worktrees\safe-tool-gateway`) |
+| Status | release |
+| Specialists | hypatia-lead: audit of an uncommitted draft handed off from a prior session, sole implementer of the fixes; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, "QA-ready" — all 9 required regression-coverage items present and mutation-sound except one (forged-metadata test proves the three forged keys are ignored but doesn't structurally rule out broader metadata-trust forgery), judged a non-blocking test-rigor nice-to-have since the gateway's metadata reads are an explicit narrow whitelist |
+| Blockers | none |
+
+Rationale: a prior session (Codex) left an uncommitted draft moving the
+existing inline `KaliOperationRunApplicationService._run` checks (opt-in,
+digest format, preview/scope/policy rebuild, exact authorization
+match+expiry+binding, runtime readiness, consume, dispatch) into a new
+`KaliToolGateway.run`, in the same order, with no check dropped or
+weakened. The genuine new content is `KaliToolGatewayFailure`/
+`KaliToolGatewayStage`/`KaliToolGatewayError` (`src/research/
+KaliToolGatewayFailure.py`): a `stage` is tracked through the gateway's
+single `try` block, and on any `(ResearchError, OSError)` the stage at
+the moment of failure determines the reported semantics —
+`AUTHORIZATION_CONSUMPTION` ("unknown; persistence did not confirm
+completion") and `DISPATCH` ("consumed"; `adapter_invoked=True`) are
+reported as an **unknown outcome**, never as "nothing happened",
+whereas every earlier stage is a genuine pre-dispatch refusal with
+authorization left untouched. `ResponseComposer.kali_operation_run_failure`
+renders the unknown-outcome case as "Kali operation outcome unknown"
+with explicit "do not assume nothing happened" / "do not retry
+automatically" wording instead of the old unconditional "Execution: not
+started / Process: not created" lines; the one other call site
+(`CognitiveEngine`'s "runner is unavailable" refusal, which genuinely
+never reaches the gateway) is unchanged and still correctly reports
+"not started". `KaliOperationPanel`'s desktop status message, on the
+same `adapter_invoked` gate, now shows a distinct Turkish status
+("Yetki kullanıldı; işlemin sonucu doğrulanamadı…") instead of the
+generic failure text; nothing else about the failure path (clearing
+`_preview`/`_authorization_id`) changed. Before implementing, this
+session independently fixed three real defects in the handed-off draft:
+a trailing-blank-line `git diff --check` failure in
+`KaliOperationRunApplicationService.py`, and two import-ordering
+violations (one each in `BrainResponse.py` and `ResponseComposer.py`,
+the latter briefly duplicated mid-fix and caught before formatting).
+Added 15 new regression tests: 13 gateway-unit tests
+(`tests/cognition/test_kali_tool_gateway.py`, covering failed-save
+non-dispatch, non-restoration after an adapter error, never reporting a
+possible side effect as a no-op, single-dispatch persistence across two
+independent `JsonFileResearchKaliOperationAuthorizationStore` instances
+over the same file — a genuine restart simulation, not object reuse —
+distinct failure stages for every pre-dispatch refusal class, rejection
+of an adapter result bound to the wrong command plan, and forged
+request-metadata keys having no effect on the real reported stage), 1
+real-`CognitiveEngine.process()`-dispatch integration test
+(`tests/integration/test_kali_operation_preview_flow.py`), and 1 real
+`KaliOperationPanel` desktop test
+(`tests/desktop/test_kali_operation_panel.py`) demonstrating the Turkish
+status message through an offline fixture (a `Mock` adapter raising
+`ResearchError` after authorization consumption — no live WSL/Kali or
+PortSwigger target involved). No new Kali operation, no scope widening,
+no retry, no automatic re-authorization: the "general typed
+tool-execution framework" item in `docs/Roadmap/Master_Roadmap.md`'s
+Phase 5 checklist remains explicitly unchecked, as this milestone only
+centralizes the two already-reviewed operations' existing controls.
+
+Review findings and how each was resolved:
+- **hypatia-security** (independent): PASS, no findings. Confirmed the
+  moved check order is byte-for-byte equivalent to the prior inline
+  `_run` (diffed against `origin/main`); confirmed exactly one `save(`
+  and one `process_adapter.run(` call, both inside the single `try`
+  block, no loop/retry/second authorization path; confirmed
+  `gateway_failure` is populated on a `BrainResponse` only from the real
+  `KaliToolGatewayError.failure` raised inside the gateway, never from
+  `request.metadata` or model output (the other call site correctly
+  omits it); confirmed the adapter-invoked branch never claims
+  "not started"/"not created" and never suggests retry or
+  re-authorization; confirmed the gateway still only handles the two
+  reviewed operation kinds; confirmed the desktop panel change is purely
+  cosmetic (same `_preview`/`_authorization_id` clearing on both
+  branches); confirmed the restart-simulation test genuinely uses two
+  independent store instances over one file, not the same object.
+- **hypatia-qa** (independent): "QA-ready". For each of the 9 required
+  regression-coverage items, confirmed the existing test's assertions
+  would actually fail under mental mutation of the corresponding
+  production safeguard, with one exception: the forged-metadata test
+  (`test_forged_metadata_cannot_assert_a_trusted_stage_or_consumption`)
+  proves the three specific forged keys used in the test have no effect,
+  but doesn't by itself structurally prove the gateway can never be
+  made to trust arbitrary metadata — judged acceptable given the
+  gateway's narrow, explicit `request.metadata.get(...)` read surface
+  (verified by reading every such call in `KaliToolGateway.run`), and
+  left as a non-blocking future hardening rather than reopened this
+  session. Also confirmed the moved-logic diff preserves identical
+  check semantics, and that no sibling test (reachable-intents
+  allowlist, `ResearchKaliOperationRun`/`ResearchKaliOperationProcessResult`
+  validation tests) needed updating since the `kali_operation_run` intent
+  name and wire contract are unchanged.
+
+Verification (2026-10-01, Windows canonical environment): 7869 tests,
+`OK (skipped=3)` — 15 net new over v0.3.435's 7854 (13 gateway-unit tests,
+1 real-engine dispatch test, 1 desktop test; `skipped=3` is the
+long-standing Windows platform baseline, unrelated to this change).
+Black, Ruff, MyPy (`src`, 620 source files) all clean. `git diff --check`
+clean (fixed the inherited trailing-blank-line defect).
+
+## Historical scope: v0.3.435 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Safe pause/resume visibility: a read-only "paused executions" listing covering non-mission authority pauses after a restart, which the existing mission-scoped recovery listing never covered (Priority 4 of the desktop-UX/capability-awareness/safe-recovery task) |
 | Base SHA | c33d8cb (origin/main tip, v0.3.434 delivered) |
 | Branch | `feature/safe-pause-resume-ux`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 4649874 |
+| Status | delivered |
+| PR | #414, MERGED 2026-10-01T17:40:16Z, standard merge commit `49d95764de8d31ad1d8440c935c1d06a1f7e191b` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 4649874 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review — found one real, closeable gap (the new intent's actual `CognitiveEngine.process()` dispatch had no end-to-end test, and the "parity with every sibling" justification for skipping it was itself incorrect for most siblings), closed same session, independently re-verified |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.436 session): PR #414 base `main`, head `feature/safe-pause-resume-ux`,
+state `MERGED`, merge commit `49d95764de8d31ad1d8440c935c1d06a1f7e191b`,
+matching the independently-fetched `origin/main` tip exactly.
 
 Rationale: v0.3.429-431 already hardened the authority-pause/deferred
 -grant lifecycle itself (stale-pause clearing, hard grant expiry,

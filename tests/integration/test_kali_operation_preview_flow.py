@@ -28,6 +28,7 @@ from cognition.KaliOperationRunApplicationService import KALI_OPERATION_RUN_INTE
 from cognition.KaliRuntimeReadinessApplicationService import (
     KALI_RUNTIME_READINESS_INTENT,
 )
+from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
@@ -38,6 +39,7 @@ from research.JsonFileResearchKaliOperationAuthorizationStore import (
 from research.JsonFileResearchProgramScopeRevisionStore import (
     JsonFileResearchProgramScopeRevisionStore,
 )
+from research.KaliToolGatewayFailure import KaliToolGatewayStage
 from research.ResearchKaliOperationExecution import (
     ResearchKaliOperationProcessResult,
 )
@@ -528,6 +530,130 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         self.assertIn("Evidence candidate status: review-only", response.message)
         self.assertIn("Evidence: not recorded", response.message)
         self.assertIn("Memory: not written", response.message)
+        getaddrinfo.assert_not_called()
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_adapter_error_after_consumption_reports_unknown_outcome(
+        self,
+    ) -> None:
+        """An adapter exception after dispatch must not be reported as a no-op.
+
+        This exercises the real `CognitiveEngine.process()` dispatch path
+        (not just the gateway in isolation): authorization is consumed, the
+        injected adapter then raises, and the composed response must say the
+        outcome is unknown rather than implying nothing happened.
+        """
+
+        class ReadyProbe:
+            def readiness(
+                self,
+                requirement: ResearchKaliRuntimeRequirement,
+            ) -> ResearchKaliRuntimeReadiness:
+                return ResearchKaliRuntimeReadiness(
+                    requirement=requirement,
+                    state=ResearchKaliRuntimeReadinessState.READY,
+                    reason="Fake WSL/Kali runtime is ready.",
+                    observed_distribution=requirement.distribution,
+                    observed_executable_path=requirement.executable_path,
+                    observed_version=f"{requirement.version_prefix}18.36",
+                )
+
+        class FailingAdapter:
+            def run(self, command_plan, *, timeout_seconds: float):
+                raise ResearchError("Kali process adapter failed after dispatch.")
+
+        engine = CognitiveEngine(
+            KnowledgeEngine(),
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+            program_scope_revision_store=self.scope_store,
+            kali_operation_authorization_store=self.authorization_store,
+            kali_runtime_probe=ReadyProbe(),
+            kali_operation_process_adapter=FailingAdapter(),
+        )
+        preview = engine.process(
+            BrainRequest(
+                message="preview Kali DNS operation",
+                metadata={
+                    "intent": KALI_OPERATION_PREVIEW_INTENT,
+                    "program_id": "program-a",
+                    "scope_revision_id": self.revision.revision_id,
+                    "scope_revision_digest": self.revision.revision_digest,
+                    "kali_operation_kind": (
+                        ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                    ),
+                    "hostname": "www.example.test",
+                    "dns_record_type": ResearchDnsRecordType.A.value,
+                },
+            )
+        ).kali_operation_preview
+        assert preview is not None
+        authorization = engine.process(
+            BrainRequest(
+                message="authorize Kali DNS operation",
+                metadata={
+                    "intent": KALI_OPERATION_AUTHORIZATION_INTENT,
+                    "program_id": "program-a",
+                    "scope_revision_id": self.revision.revision_id,
+                    "scope_revision_digest": self.revision.revision_digest,
+                    "kali_operation_kind": (
+                        ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                    ),
+                    "hostname": "www.example.test",
+                    "dns_record_type": ResearchDnsRecordType.A.value,
+                    "operation_digest": preview.operation_digest,
+                },
+            )
+        ).kali_operation_authorization
+        assert authorization is not None
+
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = engine.process(
+                BrainRequest(
+                    message="run Kali DNS operation",
+                    metadata={
+                        "intent": KALI_OPERATION_RUN_INTENT,
+                        "operator_opt_in": True,
+                        "program_id": "program-a",
+                        "scope_revision_id": self.revision.revision_id,
+                        "scope_revision_digest": self.revision.revision_digest,
+                        "kali_operation_kind": (
+                            ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                        ),
+                        "hostname": "www.example.test",
+                        "dns_record_type": ResearchDnsRecordType.A.value,
+                        "operation_digest": preview.operation_digest,
+                        "authorization_id": authorization.authorization_id,
+                    },
+                )
+            )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, KALI_OPERATION_RUN_INTENT)
+        self.assertIsNone(response.kali_operation_run)
+        failure = response.kali_tool_gateway_failure
+        assert failure is not None
+        self.assertIs(failure.stage, KaliToolGatewayStage.DISPATCH)
+        self.assertTrue(failure.adapter_invoked)
+        self.assertEqual(failure.authorization_consumption, "consumed")
+        self.assertIn("Kali operation outcome unknown", response.message)
+        self.assertNotIn("Execution: not started", response.message)
+        self.assertNotIn("Process: not created", response.message)
+        # The durable store proves the authorization is gone, not restored.
+        self.assertEqual(self.authorization_store.load(), [])
         getaddrinfo.assert_not_called()
         run.assert_not_called()
         popen.assert_not_called()

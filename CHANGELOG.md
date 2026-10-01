@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.436] - 2026-10-01
+
+### Changed
+
+- Safe Tool Gateway v2, first slice: centralized the existing
+  `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP` execution checks (opt-in,
+  digest/scope/policy, exact authorization match+expiry+binding, runtime
+  readiness, consume-before-dispatch) behind one new `KaliToolGateway`,
+  preserving the exact prior check order with none dropped or weakened.
+  Fixed a defect where authorization could be consumed and the process
+  adapter could then raise, with the prior code falsely reporting
+  "Execution: not started / Process: not created" even though a side
+  effect may already have occurred. New `KaliToolGatewayFailure`/
+  `KaliToolGatewayStage`/`KaliToolGatewayError` distinguish a genuine
+  pre-dispatch refusal from an unknown post-dispatch outcome;
+  `ResponseComposer.kali_operation_run_failure` now reports "Kali
+  operation outcome unknown" with explicit "do not assume nothing
+  happened" / "do not retry automatically" wording once the adapter was
+  actually invoked, and the desktop Kali panel shows a distinct Turkish
+  status ("Yetki kullanıldı; işlemin sonucu doğrulanamadı…") for the same
+  case. No new Kali operation, no scope widening, no retry, no automatic
+  re-authorization.
+
+### Security
+
+- No new authority, retry, or grant-creation path: exactly one
+  authorization-store `save()` and one process-adapter `run()` call, both
+  inside a single `try` block. `gateway_failure` on a response is only
+  ever populated from the real exception the gateway raises, never from
+  request metadata or model output -- confirmed by a dedicated test that
+  forges gateway-stage/consumption-claim metadata and shows it has no
+  effect. Independent hypatia-security review PASS, no findings.
+  Independent hypatia-qa review: "QA-ready" -- all 9 required regression
+  -coverage items present and mutation-sound, with one non-blocking
+  test-rigor note (the forged-metadata test proves its three specific
+  keys are ignored but doesn't exhaustively rule out broader metadata
+  trust, acceptable given the gateway's narrow explicit metadata-read
+  surface). 15 new regression tests added, including a real
+  `CognitiveEngine.process()` dispatch test and a real desktop-panel
+  test, both using an offline fixture (a mock adapter raising after
+  authorization consumption) -- no live WSL/Kali or PortSwigger target
+  involved.
+
 ## [0.3.435] - 2026-10-01
 
 ### Changed

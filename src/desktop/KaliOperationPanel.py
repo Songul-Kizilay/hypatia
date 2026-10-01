@@ -199,7 +199,15 @@ class KaliOperationPanel:
             if not response.success:
                 self._preview = None
                 self._authorization_id = None
-                self.status.set("İşlem tamamlanamadı. Ayrıntılar aşağıda.")
+                gateway_failure = response.kali_tool_gateway_failure
+                if gateway_failure is not None and gateway_failure.adapter_invoked:
+                    self.status.set(
+                        "Yetki kullanıldı; işlemin sonucu doğrulanamadı. Yeni bir "
+                        "yetkilendirme oluşturmadan önce mevcut durumu ve "
+                        "kayıtları inceleyin."
+                    )
+                else:
+                    self.status.set("İşlem tamamlanamadı. Ayrıntılar aşağıda.")
                 return
             if stage == "Önizle":
                 self._preview = response.kali_operation_preview
