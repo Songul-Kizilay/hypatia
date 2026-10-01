@@ -10,16 +10,114 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.431
+## Current — v0.3.432
+
+| Field | Value |
+| --- | --- |
+| Milestone | Desktop UX: replace the crowded top-level `ttk.Notebook` tab bar with a collapsible, scrollable left sidebar grouped into Home / Research / Web Security & Bug Bounty / System (Priority 1 of the desktop-UX/capability-awareness/safe-recovery task) |
+| Base SHA | cb4a8c0 (origin/main tip, v0.3.431 delivered) |
+| Branch | `feature/desktop-sidebar-navigation`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS — found two real, closeable test-coverage gaps (no direct `SidebarNavigationView` interactive-logic coverage; no isolated `tool_console`-alone registry test), both closed same session and independently re-run green |
+| Blockers | none |
+
+Rationale: the desktop shell's single `ttk.Notebook` had grown to 16
+top-level tabs with truncated/ambiguous labels (`"Security"` for the
+vulnerability-graph taxonomy, `"Learning"` for the hypothesis/failure
+-memory loop, `"Kali"` for the whole bounded Kali workflow) and no
+grouping. Repository-grounded audit of `_build_layout` in
+`src/desktop/TkinterDesktopWindow.py` found every one of the 16 old tabs
+gated behind exactly four existing flags/presence checks (`self
+._program_scope_enrollment_service is not None`,
+`self._tool_console is not None`, `self._weakness_graph_enabled`,
+`self._learning_visible`) and none of these guards were touched —
+`src/desktop/SidebarPageRegistry.py` (new, pure, no Tkinter import) is
+the single place that now decides which conditional page appears in
+which group, fed the same four booleans `_build_layout` already
+computed. `src/desktop/SidebarNavigationView.py` (new) is a Tkinter
+widget that renders that registry's output as collapsible, scrollable
+groups with active-page highlighting and a whole-sidebar collapse/expand
+toggle (for a narrower screen); it calls only `on_select(page_id)` back
+into the window — it reads no controller, store, or feature flag, and
+starts no request of its own. Every old tab frame is now built exactly
+once (same builder functions, same panel constructors, unchanged) into a
+shared `content` container and switched by `tkraise()` instead of being
+destroyed and rebuilt by the Notebook, so in-progress page state (a
+drafted question, a filled form) survives switching away and back. The
+one place old code referenced the notebook by index directly
+(`self._workspace_tabs.select(2)` in `_offer_simple_research_handoff`,
+used when chat hands an unresearched question to the Research panel) was
+replaced with the semantic `self._select_page("research_simple")`.
+
+One regression was caught and fixed before any review: `_build_layout`'s
+own `_collect_request_controls(container)` call recursively collects
+every `ttk.Button` under `container` to auto-disable it while a request
+is in flight, except explicitly registered control-plane buttons. The
+old `ttk.Notebook`'s tab headers were never `ttk.Button` instances, so
+tab-switching was never blocked by a busy request; the new sidebar's
+page/group/collapse controls *are* `ttk.Button` instances, so leaving the
+call scoped to `container` would have newly blocked page navigation
+during any in-flight request — a real regression against "no regressions
+to existing functionality." Fixed by scoping the call to `content`
+(the page-frame container, a sibling of the sidebar, not an ancestor of
+it) instead of `container`, which both specialists independently
+confirmed excludes exactly the sidebar's own controls and nothing else:
+every real action button in every page frame remains a `content`
+descendant and stays swept and disabled while busy, matching
+pre-existing behavior exactly.
+
+Review findings and how each was resolved:
+- **hypatia-security** (independent): PASS, no findings. Confirmed all
+  four conditional-visibility guards are preserved exactly (enumerated
+  all 16 page ids on both the build side and the registry side; 1:1
+  match), confirmed the sidebar widget never calls a controller/store/
+  request method, and independently verified the `_collect_request_
+  controls` rescoping excludes only the sidebar's own buttons.
+- **hypatia-qa** (independent): PASS, with two real coverage gaps found
+  and closed same session. (1) `SidebarNavigationView` — the one
+  genuinely new piece of interactive logic this milestone adds — had no
+  direct test coverage; closed with `tests/desktop/
+  test_sidebar_navigation_view.py` (22 new tests total across both
+  files), built the same way `tests/desktop/
+  test_research_command_bindings.py` already proves the sidebar
+  participates correctly inside the real `_build_layout` — by replacing
+  the real `ttk`/`tk` widget classes with permissive recorders and
+  driving the widget's own selection, active-page-highlighting, per
+  -group-collapse, and whole-sidebar-collapse/expand logic directly,
+  including the specific invariant QA flagged (`expand()` must not
+  resurrect a group the user manually collapsed just because the whole
+  sidebar was cycled). (2) `tool_console` had no isolated positive test
+  in the registry suite (only ever exercised alongside three other
+  flags); closed with one new test. QA independently re-ran the
+  desktop suite, `black --check`, `ruff check`, and `mypy src` and
+  confirmed each is clean; also independently re-swept the whole file
+  for leftover `_workspace_tabs`/tab-index/tab-identity assumptions and
+  found none beyond the one site already fixed.
+
+Verification (2026-10-01, Windows canonical environment): 7831 tests,
+`OK` — 22 net new over v0.3.431's 7809 (10 `SidebarPageRegistry` tests +
+12 `SidebarNavigationView` tests). Black, Ruff, MyPy (`src`, 618 source
+files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.431 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Authority Lifecycle Fixes: clear stale authority-control bookkeeping on every terminal/blocked transition, and let a verified renewal past an expired `DeferredExecutionGrant` through |
 | Base SHA | 44cfe41 (origin/main tip, v0.3.430 delivered) |
 | Branch | `feature/authority-lifecycle-fixes-v0.3.431`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 72836f3b141270147b6c53510de2cbd50353c681 |
+| Status | delivered |
+| PR | #410, MERGED 2026-10-01T15:29:40+03:00, standard merge commit `cb4a8c0b503265753caa773eb615d11f63b219b3` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 72836f3b141270147b6c53510de2cbd50353c681 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Specialists | hypatia-lead: audit, sole implementer; hypatia-runtime: independent review, found a genuine completeness gap (closed same session, re-verified PASS); hypatia-security: independent review, PASS, no findings (one gap independently cross-confirmed, two non-blocking observations); hypatia-qa: independent review, PASS, no coverage gap found worth adding to |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.432 session): PR #410 base `main`, head
+`feature/authority-lifecycle-fixes-v0.3.431`, state `MERGED`, merge
+commit `cb4a8c0b503265753caa773eb615d11f63b219b3`, matching the
+independently-fetched `origin/main` tip exactly.
 
 Rationale, Fix A (stale authority pauses): v0.3.429 introduced `authority_pause`/`advance_refusal_*` as durable, non-authoritative bookkeeping on `ResearchPlanExecutionState`, cleared automatically only when the exact named step successfully starts. v0.3.429's own QA pass had already flagged, as a non-blocking observation, that `cancel()` and `block_step()` did not clear either field on their own terminal/blocked transitions, risking a stale "paused for authority"/"advance refused" line surviving in a `CANCELLED`/`BLOCKED` execution's rendered status. This milestone closes that gap — and, per independent review during this same session, two more call sites with the identical bug class that the original audit missed: `fail_step()` (terminal `FAILED`) and `resolve_interrupted_step()`'s `PERFORMED_RESULT_UNKNOWN` branch (a second, separate route to `BLOCKED`, distinct from `block_step()`'s). All four now unconditionally clear both fields on their existing success path, regardless of which step either field named — necessary because a pause/refusal can only ever have been recorded on whichever step was "next pending" at recording time, while `block_step()`/`fail_step()`/the ruling branch can each target a *different* step (an earlier RUNNING one, or an arbitrary PENDING one) without that precondition ever being violated. Two sibling branches of `resolve_interrupted_step` (`REMAINS_UNKNOWN`, staying `INTERRUPTED`; the "never happened" branch, returning to `RUNNING`) were deliberately left untouched, since neither transitions to a terminal or `BLOCKED` status — independently re-verified true by both hypatia-runtime and hypatia-qa, not merely asserted. Clearing either field drops nothing that grants anything: if authority is still genuinely missing once a block/failure is resolved, the next real advance attempt re-records it exactly as the first attempt did. Per CLAUDE.md's "no backfilled legacy fields" invariant, this fix changes only what happens going forward; no already-persisted pre-fix snapshot is retroactively rewritten, and `rebind_restored`'s `_RESUMABLE_EXECUTION_STATUSES = {RUNNING, INTERRUPTED}` gate independently prevents any such legacy snapshot from ever being read as resumable authority regardless of this fix.
 

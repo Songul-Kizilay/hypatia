@@ -52,6 +52,11 @@ from desktop.ResearchWorkspaceReadModel import (
     ResearchWorkspaceReadModel,
 )
 from desktop.RevalidationResearchDraft import RevalidationResearchDraft
+from desktop.SidebarNavigationView import SidebarNavigationView
+from desktop.SidebarPageRegistry import (
+    SidebarEnabledSurfaces,
+    build_sidebar_groups,
+)
 from desktop.SimpleResearchActivity import SimpleResearchActivity
 from desktop.SimpleResearchPhrasebook import phrase as simple_phrase
 from desktop.SimpleResearchReadModel import SimpleResearchReadModel
@@ -1593,25 +1598,35 @@ class TkinterDesktopWindow:
         container.grid(sticky="nsew")
         self._root.columnconfigure(0, weight=1)
         self._root.rowconfigure(0, weight=1)
-        container.columnconfigure(0, weight=1)
+        container.columnconfigure(0, weight=0)
+        container.columnconfigure(1, weight=1)
         container.rowconfigure(0, weight=1)
 
-        self._workspace_tabs = ttk.Notebook(container)
-        self._workspace_tabs.grid(row=0, column=0, sticky="nsew")
-        chat_tab = ttk.Frame(self._workspace_tabs, padding=10)
-        knowledge_tab = ttk.Frame(self._workspace_tabs, padding=10)
-        simple_research_tab = ttk.Frame(self._workspace_tabs, padding=10)
-        research_tab = ttk.Frame(self._workspace_tabs, padding=10)
-        appearance_tab = ttk.Frame(self._workspace_tabs, padding=10)
-        self._workspace_tabs.add(chat_tab, text="Chat")
-        self._workspace_tabs.add(knowledge_tab, text="Knowledge")
+        #: Every page frame this build constructed, by the stable id
+        #: `SidebarPageRegistry` gave it. Pages are built once here and only
+        #: ever raised or hidden afterward -- switching never destroys or
+        #: rebuilds a page's widgets or the state they hold.
+        self._page_frames: dict[str, ttk.Frame] = {}
+        content = ttk.Frame(container)
+        content.grid(row=0, column=1, sticky="nsew")
+        content.columnconfigure(0, weight=1)
+        content.rowconfigure(0, weight=1)
+
+        def page(page_id: str, *, padding: int = 10) -> ttk.Frame:
+            frame = ttk.Frame(content, padding=padding)
+            frame.grid(row=0, column=0, sticky="nsew")
+            self._page_frames[page_id] = frame
+            return frame
+
+        chat_tab = page("chat")
+        knowledge_tab = page("knowledge")
         # Simple comes first and keeps the plain name. The detailed workflow is
         # not reduced, only relabelled: it is where identifiers, assessments,
         # claims, and failure stages stay, and nothing was removed from it.
-        self._workspace_tabs.add(simple_research_tab, text="Research")
-        self._workspace_tabs.add(research_tab, text="Research (Advanced)")
-        source_preview_tab = ttk.Frame(self._workspace_tabs, padding=10)
-        self._workspace_tabs.add(source_preview_tab, text="Source previews")
+        simple_research_tab = page("research_simple")
+        research_tab = page("research_advanced")
+        appearance_tab = page("appearance")
+        source_preview_tab = page("source_previews")
         self._source_preview_panel = ResearchSourcePreviewPanel(source_preview_tab)
         tabs = [
             chat_tab,
@@ -1621,8 +1636,7 @@ class TkinterDesktopWindow:
             source_preview_tab,
         ]
         if self._program_scope_enrollment_service is not None:
-            kali_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(kali_tab, text="Kali")
+            kali_tab = page("kali_tools")
             tabs.append(kali_tab)
             self._kali_panel = KaliOperationPanel(
                 kali_tab,
@@ -1630,42 +1644,35 @@ class TkinterDesktopWindow:
                 self._program_scope_enrollment_service.revisions,
                 self._start_request,
             )
-            asset_inventory_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(asset_inventory_tab, text="Asset Inventory")
+            asset_inventory_tab = page("asset_inventory")
             tabs.append(asset_inventory_tab)
             self._asset_inventory_panel = ResearchAssetInventoryPanel(
                 asset_inventory_tab,
                 self._controller,
                 self._start_request,
             )
-            session_context_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(session_context_tab, text="Session Contexts")
+            session_context_tab = page("session_contexts")
             tabs.append(session_context_tab)
             self._session_context_panel = ResearchSessionContextPanel(
                 session_context_tab,
                 self._controller,
                 self._start_request,
             )
-            security_hypothesis_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(
-                security_hypothesis_tab, text="Security Hypotheses"
-            )
+            security_hypothesis_tab = page("security_hypotheses")
             tabs.append(security_hypothesis_tab)
             self._security_hypothesis_panel = ResearchSecurityHypothesisPanel(
                 security_hypothesis_tab,
                 self._controller,
                 self._start_request,
             )
-            security_finding_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(security_finding_tab, text="Findings")
+            security_finding_tab = page("findings")
             tabs.append(security_finding_tab)
             self._security_finding_panel = ResearchSecurityFindingPanel(
                 security_finding_tab,
                 self._controller,
                 self._start_request,
             )
-            validation_recipe_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(validation_recipe_tab, text="Validation Recipes")
+            validation_recipe_tab = page("validation_recipes")
             tabs.append(validation_recipe_tab)
             self._security_validation_recipe_panel = (
                 ResearchSecurityValidationRecipePanel(
@@ -1678,32 +1685,40 @@ class TkinterDesktopWindow:
         # panel offering to run nothing would read as a feature that is broken
         # rather than a capability this installation was not given.
         if self._tool_console is not None:
-            tools_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(tools_tab, text="Tools")
+            tools_tab = page("tools")
             tabs.append(tools_tab)
         # Same rule, different capability. Without a durable taxonomy the panel
         # would accept weakness classes and forget them at the next restart.
         if self._weakness_graph_enabled:
-            security_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(security_tab, text="Security")
+            security_tab = page("vulnerability_graph")
             tabs.append(security_tab)
         # Either opt-in earns the tab; each section still checks its own. The
         # two stores are independent, so a build that keeps hypotheses but not
         # lessons should show exactly the half it can honour.
         if self._learning_visible:
-            learning_tab = ttk.Frame(self._workspace_tabs, padding=10)
-            self._workspace_tabs.add(learning_tab, text="Learning")
+            learning_tab = page("security_learning")
             tabs.append(learning_tab)
         # Calibration alone earns this tab, because it stores nothing and is
         # available wherever runs are. Reflection and curiosity each add their
         # own section when kept.
-        review_tab = ttk.Frame(self._workspace_tabs, padding=10)
-        self._workspace_tabs.add(review_tab, text="Review")
+        review_tab = page("review")
         tabs.append(review_tab)
-        self._workspace_tabs.add(appearance_tab, text="Appearance")
         tabs.append(appearance_tab)
         for tab in tabs:
             tab.columnconfigure(0, weight=1)
+        surfaces = SidebarEnabledSurfaces(
+            program_scope=self._program_scope_enrollment_service is not None,
+            tool_console=self._tool_console is not None,
+            vulnerability_graph=self._weakness_graph_enabled,
+            security_learning=self._learning_visible,
+        )
+        self._sidebar = SidebarNavigationView(
+            container,
+            build_sidebar_groups(surfaces),
+            on_select=self._select_page,
+        )
+        self._sidebar.frame.grid(row=0, column=0, sticky="ns")
+        self._select_page("chat")
         self._build_simple_research_tab(simple_research_tab)
         if self._tool_console is not None:
             self._build_tool_console_tab(tools_tab)
@@ -3632,11 +3647,30 @@ class TkinterDesktopWindow:
         self._composer.bind("<Control-Return>", self._send_with_keyboard)
         self._composer.focus_set()
         control_plane = set(map(id, self._control_plane_controls))
+        # Scoped to the page content, not `container`: the sidebar lives
+        # beside it, not inside it, so navigating between pages -- like
+        # switching a Notebook tab before this shell had a sidebar -- stays
+        # available while a request is running instead of graying out.
         self._request_controls = [
             button
-            for button in self._collect_request_controls(container)
+            for button in self._collect_request_controls(content)
             if button is not self._cancel_button and id(button) not in control_plane
         ]
+
+    def _select_page(self, page_id: str) -> None:
+        """Raise one already-built page and mark it active; builds nothing.
+
+        Every page frame was constructed once in `_build_layout` and only
+        ever raised or hidden here -- this never destroys or reconstructs a
+        page's widgets, so in-progress state (a drafted question, a filled
+        form) survives switching away and back.
+        """
+        frame = self._page_frames.get(page_id)
+        if frame is None:
+            return
+        frame.tkraise()
+        if hasattr(self, "_sidebar"):
+            self._sidebar.set_active_page(page_id)
 
     def _change_font_size(self, adjustment: int) -> None:
         """Apply only a bounded, user-initiated text-size preference."""
@@ -3798,6 +3832,48 @@ class TkinterDesktopWindow:
             ],
             foreground=[("disabled", palette.muted_foreground)],
         )
+        self._style.configure(
+            "SidebarGroup.TButton",
+            background=palette.background,
+            foreground=palette.muted_foreground,
+            font=font,
+            anchor="w",
+            relief="flat",
+            padding=(6, 4),
+        )
+        self._style.map(
+            "SidebarGroup.TButton",
+            background=[("active", palette.background)],
+            foreground=[("active", palette.foreground)],
+        )
+        self._style.configure(
+            "SidebarPage.TButton",
+            background=palette.background,
+            foreground=palette.foreground,
+            font=font,
+            anchor="w",
+            relief="flat",
+            padding=(8, 5),
+        )
+        self._style.map(
+            "SidebarPage.TButton",
+            background=[("active", palette.button_background)],
+        )
+        self._style.configure(
+            "SidebarPageActive.TButton",
+            background=palette.active_background,
+            foreground=palette.foreground,
+            font=font,
+            anchor="w",
+            relief="flat",
+            padding=(8, 5),
+        )
+        self._style.map(
+            "SidebarPageActive.TButton",
+            background=[("active", palette.active_background)],
+        )
+        if hasattr(self, "_sidebar"):
+            self._sidebar.set_canvas_background(palette.background)
         self._style.configure(
             "TScrollbar",
             background=palette.button_background,
@@ -9155,8 +9231,8 @@ class TkinterDesktopWindow:
             return
         self._simple_question.set(question.strip())
         self._simple_language = detect_response_language(question)
-        if hasattr(self, "_workspace_tabs"):
-            self._workspace_tabs.select(2)
+        if hasattr(self, "_page_frames"):
+            self._select_page("research_simple")
         self._status.set(self._simple_say("start_research"))
 
     def _discover_research_sources(self) -> None:

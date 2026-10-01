@@ -292,7 +292,7 @@ class TabPresenceTests(unittest.TestCase):
         end = WINDOW_SOURCE.index("chat_tab.rowconfigure")
         section = WINDOW_SOURCE[start:end]
 
-        self.assertIn('text="Review"', section)
+        self.assertIn('page("review")', section)
         self.assertNotIn("if self._review", section)
 
     def test_a_window_defaults_to_neither_kept_surface(self) -> None:

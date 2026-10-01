@@ -252,7 +252,7 @@ class TabPresenceTests(unittest.TestCase):
         section = WINDOW_SOURCE[start:end]
 
         self.assertEqual(section.count("if self._learning_visible:"), 2)
-        self.assertIn('text="Learning"', section)
+        self.assertIn('page("security_learning")', section)
 
     def test_hypothesis_outcomes_are_offered_only_with_a_hypothesis_store(self) -> None:
         """That command reads the durable hypothesis store on every request."""
