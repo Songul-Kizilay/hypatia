@@ -10,16 +10,94 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.433
+## Current — v0.3.434
+
+| Field | Value |
+| --- | --- |
+| Milestone | Authorized-scope registration UX: a direct "register a scope" entry point on the Kali Tools tab, reusing the existing enrollment dialog (Priority 3 of the desktop-UX/capability-awareness/safe-recovery task) |
+| Base SHA | c9a816f (origin/main tip, v0.3.433 delivered) |
+| Branch | `feature/kali-scope-registration-ux`, a `git worktree` forked directly from refreshed `origin/main` |
+| Status | release |
+| Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review — found one real, closeable coverage gap in the new dialog-opening method's happy path, proved exploitable by mutation (dropping the wired enrollment service and the post-close refresh passed every existing gate), closed same session with a test mirroring the sibling method's existing coverage, independently re-verified |
+| Blockers | none |
+
+Rationale: the Kali Tools tab's "Registered program scope" selector had
+no way to register a scope from that tab — just the generic "Select a
+scope and target" message, with the only registration path being a
+separate "Edit target program…" button on Research (Advanced), which
+opens `TargetResearchDraftDialog`'s existing scope-enrollment section
+(preview-create/confirm-create/preview-revoke/confirm-revoke, through the
+unchanged `ProgramScopeEnrollmentProcessor`/
+`ResearchProgramScopeEnrollmentService`). Repository-grounded audit
+confirmed this dialog already fully implements the create/preview/review
+/save flow the task asked for; the gap was purely reachability from Kali.
+Added a new optional `open_scope_registration` constructor parameter to
+`KaliOperationPanel`, wired to a new `"Kapsam kaydet / yönet…"`
+(Register/manage scope…) button that is only built when the parameter is
+provided (so the existing 4-positional-arg test fixture is unaffected).
+`TkinterDesktopWindow._open_kali_scope_registration` opens the exact same
+`TargetResearchDraftDialog`, with the same `_program_scope_enrollment_service`
+Research (Advanced) already passes, `initial=None`, and a deliberately
+inert `on_apply=lambda _draft: None` (Kali's scope selector reads only
+from the enrollment service, never from a plan draft, so there is
+nothing in Kali's own state for "apply to plan" to touch). It then waits
+for the dialog to close (`self._root.wait_window(dialog.window)`) and
+refreshes the Kali panel, so a newly confirmed scope is immediately
+selectable without a separate, easy-to-miss manual step. No new
+registration path, no auto-enrollment, no widened authority:
+`TargetResearchDraftDialog.py` itself is byte-for-byte unchanged by this
+diff, confirmed by both specialists. The panel's initial and
+no-active-scope status text now names the new button directly instead of
+pointing at the other tab.
+
+Review findings and how each was resolved:
+- **hypatia-security** (independent): PASS, no findings. Confirmed the
+  new button's command has no capability beyond invoking the caller
+  -supplied callable; confirmed the inert `on_apply` lambda cannot mutate
+  any Research (Advanced) plan-draft state or create a scope (the only
+  scope-writing path, `_confirm_scope_enrollment`, is untouched); confirmed
+  the same, unwidened enrollment service is passed through; confirmed
+  `refresh()` is a pure read; confirmed `TargetResearchDraftDialog.py`'s
+  diff is empty; confirmed no route from `BrainRequest`/chat-intent
+  dispatch to either new method — this is pure desktop button-click
+  wiring.
+- **hypatia-qa** (independent): found the milestone's own stated
+  justification for its test scope ("the sibling `_open_target_plan_editor`
+  has zero direct test coverage") was factually wrong — a mocked-dialog
+  happy-path test for that sibling already exists
+  (`test_editor_receives_scope_enrollment_service_without_running_it`) —
+  and proved the resulting gap was real and severe: mutating the new
+  method to drop `scope_enrollment_service=service` and the
+  `wait_window`/`refresh()` call (a complete, silent regression of the
+  feature's entire purpose) still passed the full 1168-test desktop
+  suite. Closed same session with
+  `test_with_a_scope_service_the_existing_dialog_is_opened_and_wired`,
+  mirroring the sibling's pattern; re-verified the fix actually catches
+  QA's own exploit, then re-ran the full desktop suite and gates clean.
+
+Verification (2026-10-01, Windows canonical environment): 7843 tests,
+`OK` — 1 net new over v0.3.433's 7842 (QA's flagged happy-path test).
+Black, Ruff, MyPy (`src`, 618 source files) all clean. `git diff --check`
+clean.
+
+## Historical scope: v0.3.433 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Runtime capability awareness: let chat distinguish the Kali simulation from real execution and from no capability at all, and split "not available" into not-implemented versus not-enabled-here (Priority 2 of the desktop-UX/capability-awareness/safe-recovery task) |
 | Base SHA | 8dfd408 (origin/main tip, v0.3.432 delivered) |
 | Branch | `feature/capability-awareness`, a `git worktree` forked directly from refreshed `origin/main` |
-| Status | release |
+| SHA | 103e4b7f3f4544cffe2ee88c7e2d2151eeaf0879 |
+| Status | delivered |
+| PR | #412, MERGED 2026-10-01T15:14:50Z, standard merge commit `c9a816fef836782069669d4c1b94519f87937372` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 103e4b7f3f4544cffe2ee88c7e2d2151eeaf0879 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 | Specialists | hypatia-lead: audit, sole implementer; hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, no findings — mutation-tested five new tests directly against `_kali_lookup_state`/`instruction()`, each confirmed load-bearing |
 | Blockers | none |
+
+Post-merge verification (2026-10-01, performed at the start of the
+v0.3.434 session): PR #412 base `main`, head `feature/capability-awareness`,
+state `MERGED`, merge commit `c9a816fef836782069669d4c1b94519f87937372`,
+matching the independently-fetched `origin/main` tip exactly.
 
 Rationale: Hypatia already had `RuntimeCapabilityProjection.py`, a module
 that derives a short, honest "what can Hypatia do" instruction from

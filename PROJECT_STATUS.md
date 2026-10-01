@@ -2,10 +2,28 @@
 
 ## Runtime Version
 
-`v0.3.433 (Genesis)`
+`v0.3.434 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.434 gives the Kali Tools tab a direct way to register an
+authorized program scope. Previously its "Registered program scope"
+selector had no path to registering one from that tab -- just "Select a
+scope and target," with the only route being a separate "Edit target
+program…" button on Research (Advanced). A new "Kapsam kaydet / yönet…"
+(Register / manage scope…) button on the Kali tab opens the exact same
+authoritative, already-reviewed `TargetResearchDraftDialog` enrollment
+form -- no new registration path, no auto-enrollment; a scope is only
+ever created when the operator fills in and explicitly confirms it
+inside that unchanged dialog, with its "apply to plan" action
+deliberately inert when reached from Kali. The Kali panel refreshes
+automatically once the dialog closes, so a newly confirmed scope is
+immediately selectable. Independent hypatia-security review PASS, no
+findings; independent hypatia-qa review found and this session closed
+one real coverage gap in the new dialog-opening method's happy path,
+mirroring the existing sibling test for `_open_target_plan_editor`.
+Windows canonical environment: 7842 tests, `OK`; Black/Ruff/MyPy clean.
 
 Version v0.3.433 lets chat honestly distinguish a Kali simulation from real
 execution and from no capability at all. `RuntimeCapabilityProjection` (the

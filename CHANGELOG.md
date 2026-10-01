@@ -2,6 +2,41 @@
 
 All notable project changes are recorded here.
 
+## [0.3.434] - 2026-10-01
+
+### Changed
+
+- Kali Tools authorized-scope UX: the Kali tab's "Registered program
+  scope" selector previously had no way to register a scope from that tab
+  -- just the generic "Select a scope and target" message, with the only
+  registration path being a separate "Edit target program…" button on
+  Research (Advanced). Added a "Kapsam kaydet / yönet…" (Register / manage
+  scope…) button directly on the Kali tab (`KaliOperationPanel`) that
+  opens the exact same authoritative, already-reviewed `TargetResearchDraftDialog`
+  enrollment form -- no new registration path, no auto-enrollment, no
+  widened authority. A scope is only ever created when the operator fills
+  in and explicitly confirms it inside that unchanged dialog. After the
+  dialog closes, the Kali panel refreshes automatically so a newly
+  confirmed scope is immediately selectable without a separate, easy-to
+  -miss manual step. The panel's initial and no-active-scope status text
+  now names this button directly instead of pointing at another tab.
+
+### Security
+
+- No new registration path, writer, or authority surface: the new button
+  only ever opens the pre-existing `TargetResearchDraftDialog`, with its
+  scope-creating code (`_confirm_scope_enrollment`) completely untouched,
+  and the dialog's "apply to plan" action deliberately inert when opened
+  from Kali (Kali's scope selector reads only from the enrollment service,
+  never from a plan draft). Independent hypatia-security review PASS, no
+  findings. Independent hypatia-qa review found and this session closed
+  one real coverage gap: the happy path of the new, side-effecting dialog
+  -opening method had no test proving the enrollment service was actually
+  wired through or that the panel refreshes after the dialog closes --
+  closed with a test mirroring the existing sibling coverage for
+  `_open_target_plan_editor`, and QA's own exploit (dropping the wired
+  service and the refresh) now fails that test.
+
 ## [0.3.433] - 2026-10-01
 
 ### Changed

@@ -410,6 +410,59 @@ class KaliOperationPanelTests(unittest.TestCase):
         self.finish()
 
 
+class KaliOperationPanelScopeRegistrationButtonTests(unittest.TestCase):
+    """The direct "register a scope" entry point into the Kali tab."""
+
+    def _build(self, open_scope_registration):
+        module = "desktop.KaliOperationPanel"
+        RecordingWidget.instances = []
+        with ExitStack() as stack:
+            for name in ("Frame", "Label", "Entry", "Combobox", "Button"):
+                stack.enter_context(patch(f"{module}.ttk.{name}", RecordingWidget))
+            stack.enter_context(patch(f"{module}.tk.StringVar", TracedVariable))
+            stack.enter_context(
+                patch(f"{module}.scrolledtext.ScrolledText", RecordingWidget)
+            )
+            panel = KaliOperationPanel(
+                RecordingWidget(),
+                Mock(),
+                lambda: (),
+                lambda action, complete, label: None,
+                open_scope_registration,
+            )
+        return panel, list(RecordingWidget.instances)
+
+    def test_the_button_calls_back_into_the_provided_opener(self):
+        opened = []
+        panel, widgets = self._build(lambda: opened.append(True))
+
+        button = next(
+            widget for widget in widgets if widget.text == "Kapsam kaydet / yönet…"
+        )
+        self.assertIs(button.command, panel._open_scope_registration)
+        button.command()
+        self.assertEqual(opened, [True])
+
+    def test_without_an_opener_no_such_button_is_built(self):
+        _panel, widgets = self._build(None)
+
+        self.assertFalse(
+            any(widget.text == "Kapsam kaydet / yönet…" for widget in widgets)
+        )
+
+    def test_the_initial_status_already_names_the_button_before_any_refresh(self):
+        panel, _widgets = self._build(lambda: None)
+
+        self.assertIn("Kapsam kaydet / yönet…", panel.status.get())
+
+    def test_an_empty_scope_list_after_refresh_also_names_the_button(self):
+        panel, _widgets = self._build(lambda: None)
+
+        panel.refresh()
+
+        self.assertIn("Kapsam kaydet / yönet…", panel.status.get())
+
+
 class KaliOperationPanelDnsIngestionTests(unittest.TestCase):
     """Step 4 ("Envantere aktar"), built on the same real-widget fixture.
 

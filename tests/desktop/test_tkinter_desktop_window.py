@@ -8058,3 +8058,46 @@ class RecordingSessionRenameController:
     ) -> BrainResponse:
         self.calls.append(("rename", source_session_id, target_session_id))
         return self._renamed
+
+
+class KaliScopeRegistrationOpenerTests(unittest.TestCase):
+    """Without a scope service, the opener is a no-op; it never crashes or
+    reaches for a dialog that has nothing real to enroll into."""
+
+    def test_without_a_scope_service_nothing_is_opened(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._program_scope_enrollment_service = None
+
+        window._open_kali_scope_registration()
+
+    def test_with_a_scope_service_the_existing_dialog_is_opened_and_wired(
+        self,
+    ) -> None:
+        """Mirrors `test_editor_receives_scope_enrollment_service_without_
+        running_it` for the sibling `_open_target_plan_editor`: the same
+        happy-path proof that the real, side-effecting dialog construction
+        is wired correctly, plus the wait-then-refresh this method adds.
+        """
+        window: Any = object.__new__(TkinterDesktopWindow)
+        service = object()
+        window._program_scope_enrollment_service = service
+        window._theme_mode = Mock(get=Mock(return_value="eye_comfort"))
+        window._root = Mock()
+        window._kali_panel = Mock()
+
+        with patch(
+            "desktop.TkinterDesktopWindow.TargetResearchDraftDialog"
+        ) as dialog_type:
+            window._open_kali_scope_registration()
+
+        dialog_type.assert_called_once()
+        call = dialog_type.call_args
+        self.assertIs(call.args[0], window._root)
+        self.assertIsNone(call.args[1])
+        self.assertIs(call.kwargs["scope_enrollment_service"], service)
+        # The dialog's "apply to plan" action is deliberately inert here --
+        # Kali's own state has no plan draft for it to touch.
+        self.assertIsNone(call.args[2]("anything"))
+        dialog_instance = dialog_type.return_value
+        window._root.wait_window.assert_called_once_with(dialog_instance.window)
+        window._kali_panel.refresh.assert_called_once()
