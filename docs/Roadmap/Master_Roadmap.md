@@ -1056,6 +1056,18 @@ all. `DeferredExecutionGrant.expires_at` (a derived property of
 unattended execution, not merely its decision-helper) close that gap.
 Item 8 itself, and the rest of M2, remain exactly as unscoped as before.
 
+v0.3.431 hardened both prior steps rather than extending M2's own scope:
+`cancel()`/`block_step()`'s already-identified stale-pause bug (v0.3.429's
+own QA observation) turned out, under independent review, to also apply
+to `fail_step()` and one of `resolve_interrupted_step()`'s two routes to
+`BLOCKED` — all four now clear `authority_pause`/`advance_refusal_*`
+unconditionally on their existing terminal/blocked transition. Separately,
+the expired-`DeferredExecutionGrant` UX gap (an expired-but-not-revoked
+grant blocking a fresh one) is closed: a verified renewal is now let
+through, the old grant retired under its own honest provenance
+(`DeferredGrantAuthorizer.SUPERSEDED_BY_RENEWAL`) rather than reusing the
+human-operator one. Neither fix touches item 8 or widens M2's scope.
+
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a
 teaching/companion assistant for the operator. Personality and

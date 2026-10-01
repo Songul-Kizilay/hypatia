@@ -2,10 +2,30 @@
 
 ## Runtime Version
 
-`v0.3.430 (Genesis)`
+`v0.3.431 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.431 fixes two authority-lifecycle gaps. First, stale
+authority-control bookkeeping: `ResearchPlanExecutionState.cancel()`,
+`block_step()`, `fail_step()`, and `resolve_interrupted_step()`'s
+`PERFORMED_RESULT_UNKNOWN` branch now all clear any live
+`advance_refusal_*`/`authority_pause` on their existing success path,
+regardless of which step either field named -- closing a gap v0.3.429's
+own QA pass first flagged for `cancel()`/`block_step()`, and that
+independent review this session found also applied, unaddressed, to
+`fail_step()` and the ruling branch's own separate route to `BLOCKED`.
+Second, expired `DeferredExecutionGrant` renewal: `TrustedDeferredExecutionControlService
+.grant()` no longer lets an already-expired, never-revoked prior grant
+block issuing a fresh one -- the new grant is built entirely from the
+current plan/task state and still passes the full, unweakened
+eligibility check; the old grant is retired (`revoked_at`/`revoked_by`
+only) under a new, honest provenance (`SUPERSEDED_BY_RENEWAL`) rather
+than the human-operator one, and `JsonFileDeferredExecutionGrantStore`'s
+at-most-one-active-grant invariant is preserved throughout. Independent
+hypatia-runtime, hypatia-security, and hypatia-qa reviews all PASS.
+Windows canonical environment: 7809 tests, `OK`; Black/Ruff/MyPy clean.
 
 Version v0.3.430 adds a real, hard expiry for `DeferredExecutionGrant`.
 It was originally scoped as binding a second `ResearchAuthorityRequirementKind`

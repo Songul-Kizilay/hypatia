@@ -150,6 +150,23 @@ class ResearchPlanExecutionStateTests(unittest.TestCase):
         self.assertIs(state.steps[1].status, ResearchPlanStepStatus.FAILED)
         self.assertEqual(state.completed_steps, 1)
 
+    def test_fail_step_clears_a_refusal_naming_a_different_pending_step(self) -> None:
+        """`fail_step` targets whichever step is RUNNING, which can never be
+        the one a live refusal names (a refusal only ever names the
+        next-pending step, and starting a step already clears its own
+        refusal) -- so a refusal surviving on a later pending step must still
+        be dropped once the execution becomes terminally FAILED."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        started = state.start_step("step-1")
+        refused = started.refuse_advance("step-2", "insufficient allowance")
+        self.assertEqual(refused.advance_refusal_step_id, "step-2")
+
+        failed = refused.fail_step("step-1", "source unavailable")
+
+        self.assertIs(failed.status, ResearchPlanExecutionStatus.FAILED)
+        self.assertIsNone(failed.advance_refusal_step_id)
+        self.assertEqual(failed.advance_refusal_detail, "")
+
     def test_terminal_plan_rejects_further_transitions(self) -> None:
         state = ResearchPlanExecutionState.prepare(build_plan(1)).start()
         state = state.start_step("step-1").complete_step("step-1")
@@ -406,6 +423,47 @@ class ResearchPlanExecutionAdvanceRefusalTests(unittest.TestCase):
                 advance_refusal_detail="reason",
             )
 
+    def test_cancel_clears_a_live_advance_refusal(self) -> None:
+        """A terminal cancel drops a stale refusal regardless of which step
+        it named -- a cancelled execution can never start any step again, so
+        the refusal's own step identity stops mattering the instant it
+        terminates."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        refused = state.refuse_advance("step-1", "insufficient allowance")
+
+        cancelled = refused.cancel("user cancelled")
+
+        self.assertIs(cancelled.status, ResearchPlanExecutionStatus.CANCELLED)
+        self.assertIsNone(cancelled.advance_refusal_step_id)
+        self.assertEqual(cancelled.advance_refusal_detail, "")
+
+    def test_block_step_clears_its_own_live_advance_refusal(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        refused = state.refuse_advance("step-1", "insufficient allowance")
+
+        blocked = refused.block_step("step-1", "needs operator review")
+
+        self.assertIs(blocked.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertIsNone(blocked.advance_refusal_step_id)
+        self.assertEqual(blocked.advance_refusal_detail, "")
+
+    def test_block_step_clears_a_refusal_naming_a_different_pending_step(self) -> None:
+        """A refusal can only ever name the next-pending step, so a later
+        pending step can still be blocked directly while it is live -- and
+        the block must drop it rather than leave a step that cannot be
+        reached until the block is resolved still described as refused."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        refused = state.refuse_advance("step-1", "insufficient allowance")
+        self.assertEqual(refused.advance_refusal_step_id, "step-1")
+
+        blocked = refused.block_step("step-2", "needs operator review")
+
+        self.assertIs(blocked.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertIsNone(blocked.advance_refusal_step_id)
+        self.assertEqual(blocked.advance_refusal_detail, "")
+        self.assertIs(blocked.steps[0].status, ResearchPlanStepStatus.PENDING)
+        self.assertIs(blocked.steps[1].status, ResearchPlanStepStatus.BLOCKED)
+
 
 class ResearchPlanExecutionAuthorityPauseTests(unittest.TestCase):
     """`require_authority` records a named requirement without stranding."""
@@ -646,6 +704,115 @@ class ResearchPlanExecutionAuthorityPauseTests(unittest.TestCase):
         self.assertNotEqual(plan_digest(other_plan), PLAN_DIGEST)
         self.assertNotEqual(paused.authority_pause.plan_digest, plan_digest(other_plan))
         self.assertNotEqual(paused.authority_pause.research_run_id, "run-2")
+
+    def test_cancel_clears_a_live_authority_pause(self) -> None:
+        """A terminal cancel drops a stale pause regardless of which step it
+        named -- a cancelled execution can never start any step again, so the
+        pause's own step identity stops mattering the instant it terminates."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+
+        cancelled = paused.cancel("user cancelled")
+
+        self.assertIs(cancelled.status, ResearchPlanExecutionStatus.CANCELLED)
+        self.assertIsNone(cancelled.authority_pause)
+        self.assertIs(cancelled.steps[0].status, ResearchPlanStepStatus.CANCELLED)
+        self.assertIs(cancelled.steps[1].status, ResearchPlanStepStatus.CANCELLED)
+
+    def test_block_step_clears_its_own_live_authority_pause(self) -> None:
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+
+        blocked = paused.block_step("step-1", "needs operator review")
+
+        self.assertIs(blocked.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertIsNone(blocked.authority_pause)
+
+    def test_block_step_clears_a_pause_naming_a_different_pending_step(self) -> None:
+        """A pause can only ever name the next-pending step, so a later
+        pending step can still be blocked directly while it is live -- and
+        the block must drop it rather than leave a step that cannot be
+        reached until the block is resolved still described as paused."""
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        paused = state.require_authority(
+            "step-1",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+        assert paused.authority_pause is not None
+        self.assertEqual(paused.authority_pause.step_id, "step-1")
+
+        blocked = paused.block_step("step-2", "needs operator review")
+
+        self.assertIs(blocked.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertIsNone(blocked.authority_pause)
+        self.assertIs(blocked.steps[0].status, ResearchPlanStepStatus.PENDING)
+        self.assertIs(blocked.steps[1].status, ResearchPlanStepStatus.BLOCKED)
+
+    def test_resolving_an_interrupted_step_as_performed_unknown_clears_a_pause(
+        self,
+    ) -> None:
+        """This is `resolve_interrupted_step`'s own, separate route to
+        BLOCKED -- distinct from `block_step`'s -- and is subject to the
+        exact same staleness: a pause naming a different, still-pending step
+        must not survive it either."""
+        from research.ResearchAttemptResolution import ResearchAttemptResolution
+
+        state = ResearchPlanExecutionState.prepare(build_plan()).start()
+        started = state.start_step("step-1")
+        paused = started.require_authority(
+            "step-2",
+            ResearchAuthorityRequirementKind.PLAN_AUTHORIZATION,
+            PLAN_DIGEST,
+            "run-1",
+            "reason",
+        )
+        assert paused.authority_pause is not None
+        self.assertEqual(paused.authority_pause.step_id, "step-2")
+        # No `ResearchPlanExecutionState` method itself performs the
+        # RUNNING -> INTERRUPTED transition (only a restored durable snapshot
+        # does), so it is force-constructed here, exactly as the existing
+        # scoping-guard tests elsewhere in this file do for their own
+        # otherwise-unreachable shapes.
+        interrupted = ResearchPlanExecutionState(
+            plan_id=paused.plan_id,
+            status=ResearchPlanExecutionStatus.INTERRUPTED,
+            steps=tuple(
+                (
+                    step.with_status(
+                        ResearchPlanStepStatus.INTERRUPTED, operation="search"
+                    )
+                    if step.step_id == "step-1"
+                    else step
+                )
+                for step in paused.steps
+            ),
+            authority_pause=paused.authority_pause,
+        )
+
+        blocked = interrupted.resolve_interrupted_step(
+            "step-1",
+            ResearchAttemptResolution.PERFORMED_RESULT_UNKNOWN,
+            datetime(2026, 1, 1, tzinfo=UTC),
+        )
+
+        self.assertIs(blocked.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertIsNone(blocked.authority_pause)
+        self.assertIs(blocked.steps[1].status, ResearchPlanStepStatus.PENDING)
 
 
 if __name__ == "__main__":

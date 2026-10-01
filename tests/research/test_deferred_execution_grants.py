@@ -179,6 +179,137 @@ class TrustedControlTests(unittest.TestCase):
             self.service.grant("task-1")
 
 
+class MutableClock:
+    def __init__(self, now: datetime = NOW) -> None:
+        self.now = now
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+class GrantRenewalTests(unittest.TestCase):
+    """An expired, never-revoked grant must never block a verified renewal,
+    and a renewal must never extend, reactivate, or otherwise read the old
+    grant as live authority."""
+
+    def setUp(self) -> None:
+        self.context = Context()
+        self.store = MemoryGrantStore()
+        self.clock = MutableClock()
+        self.ids = iter(["grant-1", "grant-2"])
+        self.service = TrustedDeferredExecutionControlService(
+            self.context,
+            self.store,
+            clock=self.clock,
+            id_factory=lambda: next(self.ids),
+        )
+
+    def test_a_live_grant_still_blocks_renewal(self) -> None:
+        self.service.grant("task-1")
+        with self.assertRaisesRegex(ResearchError, "already has an active"):
+            self.service.grant("task-1")
+
+    def test_an_expired_grant_allows_a_verified_renewal(self) -> None:
+        self.service.grant("task-1")
+        self.clock.now = NOW + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+
+        view = self.service.grant("task-1")
+
+        self.assertTrue(view.decision.allowed)
+        assert view.grant is not None
+        self.assertEqual(view.grant.grant_id, "grant-2")
+        self.assertEqual(view.grant.granted_at, self.clock.now)
+
+    def test_renewal_retires_the_old_grant_without_rewriting_its_identity(
+        self,
+    ) -> None:
+        self.service.grant("task-1")
+        original = self.store.records[0]
+        self.clock.now = NOW + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+
+        self.service.grant("task-1")
+
+        retired = next(g for g in self.store.records if g.grant_id == "grant-1")
+        self.assertFalse(retired.active)
+        self.assertEqual(
+            retired.revoked_by, DeferredGrantAuthorizer.SUPERSEDED_BY_RENEWAL
+        )
+        self.assertEqual(retired.revoked_at, self.clock.now)
+        # Nothing about the retired grant's own identity or validity window
+        # was rewritten -- only revoked_at/revoked_by moved from unset.
+        self.assertEqual(retired.granted_at, original.granted_at)
+        self.assertEqual(retired.expires_at, original.expires_at)
+        self.assertEqual(retired.task_id, original.task_id)
+        self.assertEqual(retired.execution_id, original.execution_id)
+        self.assertEqual(retired.plan_digest, original.plan_digest)
+        self.assertEqual(retired.task_budget, original.task_budget)
+        self.assertTrue(retired.has_expired_at(self.clock.now))
+
+    def test_renewal_leaves_exactly_one_active_grant_for_the_task(self) -> None:
+        """The store's own at-most-one-active-grant-per-task invariant must
+        hold after a renewal -- proven against the real persisted store, not
+        only the in-memory fixture, since that invariant is enforced there."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "deferred.json"
+            store = JsonFileDeferredExecutionGrantStore(path)
+            service = TrustedDeferredExecutionControlService(
+                self.context,
+                store,
+                clock=self.clock,
+                id_factory=lambda: next(self.ids),
+            )
+            service.grant("task-1")
+            self.clock.now = NOW + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+            service.grant("task-1")
+
+            persisted = JsonFileDeferredExecutionGrantStore(path).load()
+        active = [g for g in persisted if g.active]
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].grant_id, "grant-2")
+        self.assertEqual({g.grant_id for g in persisted}, {"grant-1", "grant-2"})
+
+    def test_renewal_still_requires_a_meaningful_eligible_execution(self) -> None:
+        """The fix removes the stale-grant obstacle, never the underlying
+        eligibility gate every grant has always had to pass."""
+        self.service.grant("task-1")
+        self.clock.now = NOW + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+        self.context.allowance = ResearchExecutionAllowance(
+            ResearchAutonomyBudget(),
+            ResearchExecutionSpend(step_advances=5),
+        )
+
+        with self.assertRaisesRegex(ResearchError, "allowance_exhausted"):
+            self.service.grant("task-1")
+
+    def test_renewed_grant_binds_the_current_plan_not_the_old_one(self) -> None:
+        """A renewal is a brand new grant derived from the plan as it is now
+        -- it does not inherit or copy anything from the expired record."""
+        self.service.grant("task-1")
+        self.clock.now = NOW + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+        changed_plan = replace(
+            self.context.plan,
+            steps=self.context.plan.steps
+            + (
+                ResearchPlanStep(
+                    step_id="step-2",
+                    instruction="Fetch a source",
+                    capability=ResearchPlanStepCapability.SOURCE_FETCH,
+                ),
+            ),
+        )
+        self.context.plan = changed_plan
+        self.context.task = replace(
+            self.context.task, budget=ResearchAutonomyBudget(max_step_advances=9)
+        )
+
+        view = self.service.grant("task-1")
+
+        assert view.grant is not None
+        self.assertEqual(view.grant.plan_digest, plan_digest(changed_plan))
+        self.assertEqual(view.grant.capabilities, capabilities_of(changed_plan))
+        self.assertEqual(view.grant.task_budget.max_step_advances, 9)
+
+
 class PureEligibilityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.context = Context()
