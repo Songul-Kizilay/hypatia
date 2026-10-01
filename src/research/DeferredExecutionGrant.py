@@ -1,9 +1,22 @@
-"""Durable permission for one exact task to be considered automatically later."""
+"""Durable permission for one exact task to be considered automatically later.
+
+Every other named authority domain in this codebase (``ResearchPlanAuthorization``,
+``ResearchKaliOperationAuthorization``) carries a hard expiry, because a stale
+approval for a sensitive action is a liability even when nobody misuses it on
+purpose. This one is the odd member out despite authorizing the highest-stakes
+case of the three: fully unattended execution with no human present to notice
+anything wrong. ``expires_at`` closes that gap. It is deliberately a derived
+property of ``granted_at``, never a stored field: a persisted value could be
+set arbitrarily far in the future by whatever wrote the document, while a
+value computed from an already-validated, already-immutable timestamp cannot
+be engineered to outlive the one fixed rule everyone is held to, including
+every grant already on disk before this rule existed.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core.Exceptions import ResearchError
 from research.DeferredGrantAuthorizer import DeferredGrantAuthorizer
@@ -13,6 +26,14 @@ from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_DEFERRED_GRANT_ID_CHARACTERS = 200
+
+#: Chosen to match this codebase's one existing consumer's own scheduling
+#: horizon (``TrustedOneShotDeferredExecutionScheduler.MAX_ONE_SHOT_DEFERRED_DELAY``,
+#: also seven days): a grant is never the reason a one-shot run that was
+#: otherwise valid to schedule turns out unrunnable. A structural test asserts
+#: the two constants stay in that relationship so they cannot silently drift
+#: apart.
+MAX_DEFERRED_EXECUTION_GRANT_VALIDITY = timedelta(days=7)
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +111,25 @@ class DeferredExecutionGrant:
     @property
     def active(self) -> bool:
         return self.revoked_at is None
+
+    @property
+    def expires_at(self) -> datetime:
+        """Return when this exact grant stops being able to authorize anything.
+
+        Computed from ``granted_at``, never stored and never settable: a
+        restart that reloads this record computes the identical answer it
+        would have given the moment it was granted, so resuming a process
+        can neither revive nor extend a grant past its original window.
+        """
+        return self.granted_at + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+
+    def has_expired_at(self, moment: datetime) -> bool:
+        """Return whether this grant's validity window has passed."""
+        if not isinstance(moment, datetime) or moment.utcoffset() is None:
+            raise ResearchError(
+                "Deferred execution grant expiry check requires an aware time."
+            )
+        return moment >= self.expires_at
 
     @property
     def approved_restrictions_text(self) -> str:

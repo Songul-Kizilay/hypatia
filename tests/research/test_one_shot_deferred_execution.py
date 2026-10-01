@@ -21,6 +21,7 @@ from core.CancellationSignal import CancellationSignal
 from core.Exceptions import ResearchError
 from desktop.DesktopController import DesktopController
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
+from research.DeferredExecutionGrant import MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
 from research.DeferredExecutionGrantStore import DeferredExecutionGrantReader
 from research.DeferredGrantAuthorizer import DeferredGrantAuthorizer
 from research.JsonFileOneShotDeferredExecutionScheduleStore import (
@@ -197,6 +198,20 @@ class OneShotFireTests(OneShotFixture):
         self.clock.now = RUN_AT
         finished = self.service.fire(schedule.schedule_id)
         self.assertEqual(finished.outcome, "trusted_grant_unavailable_at_fire_time")
+        self.assertEqual(self.runner.calls, [])
+
+    def test_expired_grant_is_skipped_at_fire_time_with_its_own_reason(self) -> None:
+        schedule = self.schedule()
+        # The schedule's own grant ID is still on record and still active
+        # (never revoked) -- only its fixed validity window has passed.
+        self.clock.now = (
+            self.grants.records[0].granted_at + MAX_DEFERRED_EXECUTION_GRANT_VALIDITY
+        )
+        finished = self.service.fire(schedule.schedule_id)
+        self.assertEqual(finished.outcome, "trusted_grant_expired_at_fire_time")
+        self.assertEqual(self.runner.calls, [])
+        with self.assertRaises(ResearchError):
+            self.service.fire(schedule.schedule_id)
         self.assertEqual(self.runner.calls, [])
 
     def test_live_refusal_is_consumed_without_fallback(self) -> None:
@@ -397,6 +412,21 @@ class StructuralBoundaryTests(unittest.TestCase):
         self.assertNotIn("DeferredExecutionGrant(", source)
         self.assertNotIn(".grant(", source)
         self.assertNotIn(".revoke(", source)
+
+    def test_a_grant_outlives_the_one_schedule_horizon_it_backs(self) -> None:
+        """A grant's own validity must never be the thing that makes an
+        otherwise-valid one-shot schedule unrunnable at fire time.
+
+        If this ever regresses (someone shortens the grant's window below the
+        scheduler's own future-delay ceiling, or widens the ceiling past the
+        grant without widening the grant to match), a schedule created at the
+        latest moment `preview`/`schedule` still allow could already be
+        unrunnable the instant it becomes due -- a user-visible correctness
+        regression, not merely an inconsistency between two numbers.
+        """
+        self.assertGreaterEqual(
+            MAX_DEFERRED_EXECUTION_GRANT_VALIDITY, MAX_ONE_SHOT_DEFERRED_DELAY
+        )
 
 
 if __name__ == "__main__":

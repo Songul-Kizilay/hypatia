@@ -124,6 +124,7 @@ def decide(context: Context, grant: DeferredExecutionGrant | None):
         context.plan,
         context.allowance,
         grant,
+        NOW,
     )
 
 

@@ -2,10 +2,36 @@
 
 ## Runtime Version
 
-`v0.3.429 (Genesis)`
+`v0.3.430 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.430 adds a real, hard expiry for `DeferredExecutionGrant`.
+It was originally scoped as binding a second `ResearchAuthorityRequirementKind`
+member into v0.3.429's `authority_pause` mechanism; repository-grounded
+audit found neither `DeferredExecutionGrant` nor
+`ResearchKaliOperationAuthorization` has a legitimate integration point
+with that specific mechanism (Kali has no execution/step/plan-digest
+binding and isn't a plan-step capability at all; the grant's own
+authorization check runs one layer above `process_advance`, as a
+scheduler-level precondition, with no existing cross-layer signal to
+hook into without an artificial new flag or violating
+`ResearchPlanExecutionApplicationService`'s sole ownership of execution
+state). Redirected instead to a different, real gap the same audit
+found: `DeferredExecutionGrant` was the only one of Hypatia's three named
+authority domains with no expiry at all, despite authorizing fully
+unattended execution -- the highest-stakes case since no human is
+present when it fires. `expires_at` is a derived property of
+`granted_at` (never a stored field, seven-day window matched to the one
+existing consumer's own scheduling horizon), so a restart cannot revive
+or extend a grant and every grant already on disk is retroactively
+bound. The fix lands at `TrustedOneShotDeferredExecutionScheduler.fire`
+-- the actual trigger for unattended execution -- not only at the
+decision helper nothing production calls on that live path. Independent
+hypatia-runtime, hypatia-security, and hypatia-qa reviews all PASS, no
+findings requiring a fix. Windows canonical environment: 7795 tests,
+`OK`; Black/Ruff/MyPy clean.
 
 Version v0.3.429 adds Authority Control State + Durable Pause Foundation:
 a durable, non-authoritative way for `ResearchPlanExecutionState` to name

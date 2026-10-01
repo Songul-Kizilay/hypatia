@@ -1030,6 +1030,32 @@ step successfully starts and never by presenting any authorization,
 correct or not. M2 as a whole remains unscoped: this milestone is a
 foundation step, not a claim that any numbered roadmap item is complete.
 
+v0.3.430 was originally scoped as binding a second
+`ResearchAuthorityRequirementKind` member — `DeferredExecutionGrant` or
+`ResearchKaliOperationAuthorization` — into that same `authority_pause`
+mechanism. Repository-grounded audit found neither candidate has a
+legitimate integration point with it: Kali operations carry no
+execution/step/plan-digest binding and are not even a
+`ResearchPlanStepCapability` member, so there is no plan step for a
+pause to attach to; `DeferredExecutionGrant`'s own authorization check
+runs one layer above `ResearchPlanExecutionApplicationService
+.process_advance`, as a scheduler-level precondition with no existing
+cross-layer signal to hook into without inventing an artificial flag or
+breaking `ResearchPlanExecutionApplicationService`'s sole ownership of
+execution state. Forcing either in would have been exactly the kind of
+fabricated, non-reachable feature this process exists to refuse. The
+milestone was redirected instead to a different, real gap the same
+audit surfaced: of Hypatia's three named authority domains
+(`ResearchPlanAuthorization`, `ResearchKaliOperationAuthorization`,
+`DeferredExecutionGrant`), only `DeferredExecutionGrant` — the one
+authorizing fully *unattended* execution, arguably the highest-stakes
+case since no human is present when it fires — carried no expiry at
+all. `DeferredExecutionGrant.expires_at` (a derived property of
+`granted_at`, never a stored field) and a matching check inserted at
+`TrustedOneShotDeferredExecutionScheduler.fire` (the actual trigger for
+unattended execution, not merely its decision-helper) close that gap.
+Item 8 itself, and the rest of M2, remain exactly as unscoped as before.
+
 **Companion product principle** (preserve for future UI/roadmap work):
 Hypatia is intended to be both a bounded security research partner and a
 teaching/companion assistant for the operator. Personality and
