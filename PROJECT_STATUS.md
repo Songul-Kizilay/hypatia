@@ -2,10 +2,37 @@
 
 ## Runtime Version
 
-`v0.3.431 (Genesis)`
+`v0.3.432 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.432 replaces the desktop shell's crowded, 16-tab top-level
+`ttk.Notebook` with a collapsible, scrollable left sidebar grouped into
+Home, Research, Web Security & Bug Bounty, and System. Every conditional
+page (Kali/Asset Inventory/Session Contexts/Security Hypotheses/Findings/
+Validation Recipes behind `ProgramScopeEnrollmentProcessor` presence,
+Tools behind the tool console, Vulnerability Graph behind
+`weakness_graph_enabled`, Security Learning behind `learning_visible`)
+keeps its exact existing gate, unwidened; new pure module
+`src/desktop/SidebarPageRegistry.py` is the single place that now decides
+which page appears in which group, and new widget
+`src/desktop/SidebarNavigationView.py` only ever calls back
+`on_select(page_id)` -- it reads no controller, store, or feature flag,
+and starts no request of its own. Each page is now built once and raised
+with `tkraise()` instead of being destroyed and rebuilt by the Notebook on
+every switch, so in-progress page state survives navigating away and
+back. A real regression was caught and fixed before any review: the
+existing busy-request button-disable sweep (`_collect_request_controls`)
+would have newly caught the sidebar's own navigation buttons (unlike the
+old Notebook's tab headers, which were never `ttk.Button` instances) and
+blocked page switching while a request was in flight; fixed by scoping
+the sweep to the page-content container, a sibling of the sidebar rather
+than an ancestor of it. Independent hypatia-security and hypatia-qa
+reviews both PASS; QA's review found and closed two real test-coverage
+gaps (no direct test of the new sidebar widget's own interactive logic;
+no isolated `tool_console`-alone registry test) same session.
+Windows canonical environment: 7831 tests, `OK`; Black/Ruff/MyPy clean.
 
 Version v0.3.431 fixes two authority-lifecycle gaps. First, stale
 authority-control bookkeeping: `ResearchPlanExecutionState.cancel()`,

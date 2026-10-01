@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.432] - 2026-10-01
+
+### Changed
+
+- Desktop shell navigation: the top-level `ttk.Notebook` tab bar (16 tabs,
+  several with truncated or ambiguous labels — `"Security"` for the
+  vulnerability-graph taxonomy, `"Learning"` for the hypothesis/failure
+  -memory loop, `"Kali"` for the whole bounded Kali workflow — and no
+  grouping) is replaced by a collapsible, scrollable left sidebar grouped
+  into Home (Chat, Knowledge), Research (Research, Advanced Research,
+  Source Previews, Session Contexts), Web Security & Bug Bounty (Asset
+  Inventory, Kali Tools, Security Hypotheses, Findings, Validation
+  Recipes, and — only when their own existing feature flag is set —
+  Vulnerability Graph, Security Learning), and System (Tools, Review,
+  Appearance / Settings). Every conditional page keeps the exact same
+  gating flag it had before (`ProgramScopeEnrollmentProcessor` presence,
+  tool console presence, `weakness_graph_enabled`, `learning_visible`);
+  none were widened, and the sidebar cannot itself enable a disabled
+  surface. Each page frame is now built once and switched by `tkraise()`
+  instead of being destroyed and rebuilt by the Notebook, so in-progress
+  page state survives switching away and back. New pure page/group layout
+  module `src/desktop/SidebarPageRegistry.py` and new Tkinter widget
+  `src/desktop/SidebarNavigationView.py` (collapsible groups, scrollable
+  canvas, active-page highlighting, whole-sidebar collapse/expand for a
+  narrower screen).
+
 ## [0.3.431] - 2026-10-01
 
 ### Fixed

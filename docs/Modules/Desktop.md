@@ -7,9 +7,14 @@ overview and explicit selection, selected-session details/recent/activity, and
 explicit lexical/semantic recall, bounded cited knowledge context, and
 semantic-runtime status. It also provides explicit local Markdown/text source
 loading, source-catalog/graph views, source-relation controls, and guarded
-session rename/delete flows. Chat, Knowledge, Research, and Appearance are
-separate tabs so ordinary conversation is not crowded by specialist controls.
-Within Research, four ordered workflow tabs separate overview, sources/evidence,
+session rename/delete flows. Top-level navigation is a collapsible,
+scrollable left sidebar grouped into Home (Chat, Knowledge), Research,
+Web Security & Bug Bounty, and System, replacing the earlier flat
+top-level tab bar; each page is still built once and switched by
+`tkraise()` rather than destroyed and rebuilt, so ordinary conversation
+stays uncrowded by specialist controls without losing in-progress page
+state when navigating away and back. Within Research, four ordered
+workflow tabs separate overview, sources/evidence,
 authored analysis, and review/export. Authored analysis uses four smaller tabs
 for saved records, comparison, assessment, and claims/contradictions. This is a
 presentation-only reparenting of the existing controls: all 59 command bindings
