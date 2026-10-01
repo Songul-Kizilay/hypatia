@@ -49,10 +49,12 @@ class KaliOperationPanel:
         dispatch: Callable[
             [Callable[[], BrainResponse], Callable[[BrainResponse], None], str], None
         ],
+        open_scope_registration: Callable[[], None] | None = None,
     ) -> None:
         self._controller = controller
         self._revisions = revisions
         self._dispatch = dispatch
+        self._open_scope_registration = open_scope_registration
         self._generation = 0
         self._preview: ResearchKaliOperationPreview | None = None
         self._authorization_id: str | None = None
@@ -62,7 +64,14 @@ class KaliOperationPanel:
         self.hostname = tk.StringVar(master=parent)
         self.operation = tk.StringVar(master=parent, value=next(iter(_OPERATIONS)))
         self.record_type = tk.StringVar(master=parent, value="A")
-        self.status = tk.StringVar(master=parent, value="Bir kapsam ve hedef seç.")
+        self.status = tk.StringVar(
+            master=parent,
+            value=(
+                "Bir kapsam ve hedef seç. Henüz kayıtlı kapsamın yoksa "
+                "'Kapsam kaydet / yönet…' ile kaydet, sonra 'Kapsamları "
+                "yenile' ile yükle."
+            ),
+        )
         parent.columnconfigure(1, weight=1)
         parent.rowconfigure(7, weight=1)
         ttk.Label(
@@ -79,6 +88,16 @@ class KaliOperationPanel:
         ttk.Button(parent, text="Kapsamları yenile", command=self.refresh).grid(
             row=1, column=2
         )
+        # Opens the same authoritative enrollment form Research (Advanced)
+        # already offers -- no separate or shortcut registration path, and
+        # no scope is ever created without the operator explicitly filling
+        # in and confirming it there.
+        if self._open_scope_registration is not None:
+            ttk.Button(
+                parent,
+                text="Kapsam kaydet / yönet…",
+                command=self._open_scope_registration,
+            ).grid(row=1, column=3, padx=(4, 0))
         ttk.Label(parent, text="Hedef alan adı").grid(row=2, column=0, sticky="w")
         ttk.Entry(parent, textvariable=self.hostname).grid(
             row=2, column=1, columnspan=2, sticky="ew", padx=8, pady=5
@@ -158,8 +177,10 @@ class KaliOperationPanel:
         self.status.set(
             "Kapsamı seç ve alan adını yaz."
             if self._scope_choices
-            else "Etkin kapsam bulunamadı. Research (Advanced) içindeki Target program "
-            "formundan kapsam kaydedebilirsin."
+            else (
+                "Etkin kapsam bulunamadı. 'Kapsam kaydet / yönet…' ile bir "
+                "program ve hedef kaydet, sonra tekrar yenile."
+            )
         )
 
     def _submit(self, action: Callable[[], BrainResponse], stage: str) -> None:

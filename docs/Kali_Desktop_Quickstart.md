@@ -5,8 +5,10 @@ Hypatia v0.3.319, kayıtlı program kapsamları bulunan masaüstü kurulumların
 `curl` ile HTTPS yanıt başlıklarını okuma.
 
 1. **Kapsamları yenile** düğmesine bas. Etkin, kayıtlı program kapsamını seç.
-   Liste boşsa Research (Advanced) içindeki Target program formundan kapsam
-   kaydet. Programın işlem politikası seçtiğin kontrole izin vermelidir;
+   Liste boşsa **Kapsam kaydet / yönet…** düğmesiyle aynı sekmeden bir
+   program ve hedef kaydet (aynı form, Research (Advanced) içindeki Target
+   program formuyla aynı kapsam kaydı servisini kullanır), sonra yeniden
+   yenile. Programın işlem politikası seçtiğin kontrole izin vermelidir;
    HTTPS başlıkları için HTTPS kontrolü ve 443 portu gerekir.
 2. Kapsam içindeki alan adını yaz ve işlem türünü seç. DNS için A, AAAA veya
    CNAME seçebilirsin; HTTPS işleminde bu alan devre dışıdır.

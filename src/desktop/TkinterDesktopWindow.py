@@ -1643,6 +1643,7 @@ class TkinterDesktopWindow:
                 self._controller,
                 self._program_scope_enrollment_service.revisions,
                 self._start_request,
+                self._open_kali_scope_registration,
             )
             asset_inventory_tab = page("asset_inventory")
             tabs.append(asset_inventory_tab)
@@ -4764,6 +4765,40 @@ class TkinterDesktopWindow:
             field_background=palette.field_background,
             foreground=palette.foreground,
         )
+
+    def _open_kali_scope_registration(self) -> None:
+        """Open the same authoritative enrollment form, reached directly from Kali.
+
+        Reuses `TargetResearchDraftDialog`'s existing scope-enrollment
+        section unchanged -- the same preview/confirm path Research
+        (Advanced) already offers, through the same
+        `_program_scope_enrollment_service`. No new registration path, no
+        auto-enrollment: a scope is only ever created when the operator
+        fills in and explicitly confirms it there. The dialog's own
+        "apply to plan" action is deliberately inert here (its callback
+        does nothing): the Kali tab's scope selector reads straight from
+        the enrollment service, never from a plan draft, so there is
+        nothing in Kali's own state for that action to apply to. Waits for
+        the dialog to close, then refreshes the Kali panel so a newly
+        confirmed scope is immediately selectable without a separate,
+        easy-to-miss manual step.
+        """
+        service = self._program_scope_enrollment_service
+        if service is None:
+            return
+        palette = _accessibility_palette(self._theme_mode.get())
+        dialog = TargetResearchDraftDialog(
+            self._root,
+            None,
+            lambda _draft: None,
+            scope_enrollment_service=service,
+            background=palette.background,
+            field_background=palette.field_background,
+            foreground=palette.foreground,
+        )
+        self._root.wait_window(dialog.window)
+        if hasattr(self, "_kali_panel"):
+            self._kali_panel.refresh()
 
     def _apply_target_plan_draft(self, draft: TargetResearchDraft) -> None:
         if getattr(self, "_question_plan_draft", None) is not None:
