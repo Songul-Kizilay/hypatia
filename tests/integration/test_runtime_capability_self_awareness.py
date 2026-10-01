@@ -21,6 +21,7 @@ for entry in (SRC_DIR, ROOT_DIR):
     if str(entry) not in sys.path:
         sys.path.append(str(entry))
 
+from brain.Brain import Brain
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine
 from cognition.RuntimeCapabilityProjection import (
@@ -30,6 +31,7 @@ from cognition.RuntimeCapabilityProjection import (
 )
 from core.Bootstrap import Bootstrap
 from core.Version import VERSION
+from desktop.DesktopController import DesktopController
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
@@ -130,6 +132,39 @@ class RuntimeCapabilitySelfAwarenessTests(unittest.TestCase):
             f"Hypatia version: {VERSION.full}.",
             engine.runtime_capabilities.instruction(),
         )
+
+    def test_the_real_desktop_chat_handler_states_the_real_version(self) -> None:
+        """The exact chain the packaged desktop EXE uses, not just the engine.
+
+        `TkinterDesktopWindow` never calls `CognitiveEngine` directly -- it
+        calls `DesktopController.submit_message`, which calls `Brain.process`,
+        which calls `CognitiveEngine.process`. All three must be the same
+        Bootstrap-resolved singletons the window itself resolves, or this
+        test would not catch a regression specific to that chain.
+        """
+        with (
+            patch(
+                "core.Bootstrap.load_llm_process_environment_settings",
+                return_value=(ENABLED, "test-api-key"),
+            ),
+            patch("core.Bootstrap.load_llm_process_system_prompt", return_value=None),
+        ):
+            bootstrap = Bootstrap.from_process_environment(
+                self.root / "desktop-memory.json", self.root / "desktop-sessions.json"
+            )
+            bootstrap.initialize()
+        self.addCleanup(bootstrap.shutdown)
+        engine = bootstrap.container.resolve(CognitiveEngine)
+        transport = Mock(return_value=ANSWER)
+        engine._llm_provider._transport = transport  # type: ignore[attr-defined]
+        brain = bootstrap.container.resolve(Brain)
+        controller = DesktopController(brain, None, None)
+
+        response = controller.submit_message("What can you actually do?")
+
+        self.assertTrue(response.success)
+        system_message = transport.call_args.args[2]["messages"][0]["content"]
+        self.assertIn(f"Hypatia version: {VERSION.full}.", system_message)
 
     def test_chat_receives_the_default_prompt_and_the_capability_context(
         self,

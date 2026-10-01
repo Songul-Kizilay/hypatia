@@ -17,6 +17,7 @@ from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
 from core.Exceptions import HypatiaError, ResearchError
+from core.Version import VERSION
 from desktop.AcquisitionResearchDraft import AcquisitionResearchDraft
 from desktop.DesktopController import (
     ADVISORY_RESTRICTION_LABEL,
@@ -1278,7 +1279,7 @@ class TkinterDesktopWindow:
         if "clam" in self._style.theme_names():
             self._style.theme_use("clam")
 
-        self._root.title("Hypatia")
+        self._root.title(f"Hypatia {VERSION.short}")
         screen_width = self._root.winfo_screenwidth()
         screen_height = self._root.winfo_screenheight()
         window_width, window_height = _initial_window_size(
