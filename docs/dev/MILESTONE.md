@@ -10,16 +10,81 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.437
+## Current — v0.3.438
+
+| Field | Value |
+| --- | --- |
+| Milestone | Desktop window title states the running build (`Hypatia 0.3.438`), after investigating a user report that desktop chat still answered "I don't know my version" shortly after v0.3.437 shipped |
+| Base SHA | 8a298b3 (origin/main tip, v0.3.437 delivered) |
+| Branch | `fix/desktop-window-title-version`, a `git worktree` forked directly from verified `origin/main` (worktree `D:\hypatia-worktrees\desktop-version-title`) |
+| Status | release |
+| Specialists | none — single bounded fix, investigated and implemented directly in the main session |
+| Blockers | none |
+
+Rationale: after v0.3.437 shipped (runtime capability instruction states
+Hypatia's own version), the user reported the real desktop chat still
+answering "Sürüm numaramı bilmiyorum; bana bildirilmiş bir sürüm yok."
+Investigation, not assumption: (1) re-ran the real desktop chat handler
+chain -- `HypatiaApplication.from_process_environment` ->
+`bootstrap.container.resolve(Brain)` -> `DesktopController(brain, ...)`
+.submit_message(...) -> `Brain.process` -> `CognitiveEngine.process` --
+the exact chain `TkinterDesktopWindow` calls (`desktop_main.py` traced
+line by line), not the bare `CognitiveEngine.process()` call the prior
+milestone's live test used, against the user's own real, already-running
+EVREN bridge: it correctly answered "0.3.437 (Genesis)" / "0.3.438
+(Genesis)". (2) Rebuilt the v0.3.437 Windows package from the verified
+`origin/main` SHA with `PyInstaller` (empty `git diff` between the
+worktree HEAD and `origin/main` before building, SHA-256-verified,
+bit-identical after copying to the stable `D:\Hypatia` location),
+replacing the launcher's prior pointer at a Codex session's temporary
+output folder; smoke-tested the packaged EXE launching standalone in an
+isolated temp data directory (window opens, `Bootstrap` initializes).
+(3) Read the user's actual `memory.json`/`sessions.json` under
+`%LOCALAPPDATA%\Hypatia-v0.3.435-EVREN`: the exact failing exchange is
+timestamped 2026-10-01T21:09:19Z, a few minutes after the v0.3.437
+deployment (~21:04-21:05Z) -- consistent with an already-open Hypatia
+window from an earlier exchange at 20:24Z, not a fresh launch of the
+updated build. `CognitiveEngine._runtime_capabilities` (and therefore the
+version line) is computed once at construction and held for the
+process's lifetime by design (wiring facts do not change at runtime);
+replacing files on disk cannot retroactively patch an already-running
+process's loaded code, which is ordinary behavior for any compiled
+desktop application, not specific to Hypatia. No defect was found in the
+v0.3.437 version-reporting code itself, and nothing there was changed.
+Fix: `TkinterDesktopWindow.__init__` now sets
+`self._root.title(f"Hypatia {VERSION.short}")` instead of the bare
+`"Hypatia"`, so a user can see at a glance, from any already-open window,
+which build it is actually running -- a direct, narrow mitigation against
+the exact confusion just diagnosed, without touching the version-report
+mechanism that was already proven correct. Also closed a real regression-
+coverage gap the investigation surfaced: no existing test called
+`DesktopController.submit_message` against a real `Brain`/`CognitiveEngine`
+chain -- every prior capability-awareness test called
+`CognitiveEngine.process` directly, one layer short of what
+`TkinterDesktopWindow` actually calls. Added one integration test
+(`test_the_real_desktop_chat_handler_states_the_real_version`) closing
+that gap, and one unit test (`WindowTitleTests`, using the existing
+`RecordingRoot`/`build_real_window` desktop-test fixture, extended with a
+`title()` recorder) asserting the title. A one-off GUI-automation attempt
+during this investigation (SendKeys to a Hypatia window) mistakenly typed
+into an unrelated foreground browser tab instead, because
+`SetForegroundWindow` silently failed to raise the target window from a
+background process -- harmless (no destructive action, no data sent), but
+abandoned in favor of the safe, direct `DesktopController.submit_message`
+call used above; no code in this repository was changed because of it.
+
+Verification (2026-10-02, Windows canonical environment): 7877 tests,
+`OK (skipped=3)` -- 2 net new over v0.3.437's 7875. Black, Ruff, MyPy
+(`src`, 620 source files) all clean. `git diff --check` clean.
+
+## Historical scope: v0.3.437 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Runtime capability instruction also states Hypatia's own running version as one plain fact, so the chat model can truthfully answer "which version are you running" instead of correctly saying it does not know |
 | Base SHA | adb3127 (origin/main tip, v0.3.436 delivered) |
 | Branch | `fix/runtime-version-capability-reporting`, a `git worktree` forked directly from verified `origin/main` (worktree `D:\hypatia-worktrees\version-capability-reporting`) |
-| Status | release |
-| Specialists | none — single bounded fix, investigated and implemented directly in the main session |
-| Blockers | none |
+| Status | delivered (SHA `ae86f8ea7b7893f19e0d395c7221031fe685c68b`, reachable from `origin/main`) |
 
 Rationale: the user reported that Hypatia, launched through the desktop
 EVREN launcher, answered "which version are you running? what

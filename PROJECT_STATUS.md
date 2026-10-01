@@ -2,10 +2,28 @@
 
 ## Runtime Version
 
-`v0.3.437 (Genesis)`
+`v0.3.438 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.438 adds the running build to the desktop window title
+(`Hypatia 0.3.438`). A user reported the desktop chat still answering "I
+don't know my version" shortly after v0.3.437 was deployed. Re-verified
+live, through the exact real desktop handler chain
+(`DesktopController.submit_message` -> `Brain.process` ->
+`CognitiveEngine.process`, against the user's actual running EVREN
+bridge), that a freshly started v0.3.437/v0.3.438 process answers
+correctly; cross-checked against the user's real `memory.json`, the
+failing exchange was timestamped a few minutes after the v0.3.437
+deployment but is consistent with an already-open window from before
+that deployment, which keeps the version it started with for its whole
+process lifetime -- normal behavior for any compiled desktop app, not a
+code defect. No version-reporting code was changed. 2 new regression
+tests: one proving `DesktopController.submit_message` end-to-end states
+the real version (closing a coverage gap -- no prior test exercised that
+exact method), one proving the window title. Windows canonical
+environment: 7877 tests, `OK (skipped=3)`; Black/Ruff/MyPy clean.
 
 Version v0.3.437 makes the runtime capability instruction sent to the chat
 model also state Hypatia's own running version as one plain fact

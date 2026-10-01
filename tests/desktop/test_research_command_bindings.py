@@ -38,6 +38,7 @@ for entry in (SRC_DIR, ROOT_DIR):
     if str(entry) not in sys.path:
         sys.path.append(str(entry))
 
+from core.Version import VERSION
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 from research.ResearchSourceEvidenceType import ResearchSourceEvidenceType
 from tests.desktop.test_paired_research_journey import (
@@ -123,6 +124,10 @@ class RecordingStyle(RecordingWidget):
 class RecordingRoot(RecordingWidget):
     """A root that answers the few questions the window asks about the screen."""
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.title_text = ""
+
     def winfo_screenwidth(self) -> int:
         return 1920
 
@@ -131,6 +136,11 @@ class RecordingRoot(RecordingWidget):
 
     def winfo_children(self) -> list[Any]:
         return []
+
+    def title(self, value: str | None = None) -> str:
+        if value is not None:
+            self.title_text = value
+        return self.title_text
 
 
 class RecordingFont:
@@ -195,6 +205,19 @@ def build_real_window(**features: bool) -> tuple[Any, list[RecordingWidget]]:
         stack.enter_context(patch(f"{module}.font.Font", RecordingFont))
         window = TkinterDesktopWindow(object(), root=RecordingRoot(), **features)
     return window, list(RecordingWidget.instances)
+
+
+class WindowTitleTests(unittest.TestCase):
+    """The title names the running build, so an already-open window is never
+    mistaken for a freshly launched one after an update (the version itself
+    is still only ever stated to the chat model via
+    `RuntimeCapabilityContext.instruction()`; this is a visual cross-check,
+    not a second source of truth)."""
+
+    def test_window_title_states_the_running_version(self) -> None:
+        window, _widgets = build_real_window()
+
+        self.assertEqual(window._root.title_text, f"Hypatia {VERSION.short}")
 
 
 class ResearchCommandBindingTests(unittest.TestCase):

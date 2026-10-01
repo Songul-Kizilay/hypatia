@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.438] - 2026-10-02
+
+### Changed
+
+- The desktop window title now states the running build
+  (`Hypatia 0.3.438`) instead of a bare `"Hypatia"`. Motivation: after
+  v0.3.437 fixed the chat model never being told its own version, a user
+  still saw the old "I don't know my version" answer from the desktop
+  app shortly after that fix was deployed. Investigation (real desktop
+  handler chain re-verified live against the user's running EVREN
+  bridge, process/memory-record timestamp forensics) found the deployed
+  code was already correct; the chat the user quoted was answered by an
+  already-open Hypatia window from before the update, which -- like any
+  compiled desktop application -- keeps the version it was started with
+  for its entire process lifetime regardless of what is later written to
+  disk. No code defect was found or needed fixing in the version-report
+  itself. The title is a narrow, visual mitigation so a user can always
+  see at a glance which build a given window is actually running,
+  instead of needing to ask chat (which answers from that one process's
+  own view, not from the files on disk) or guess whether an old window
+  was ever actually closed.
+- Added regression coverage for a gap the investigation surfaced:
+  no existing test exercised `DesktopController.submit_message` (the
+  exact method `TkinterDesktopWindow` calls) end-to-end against a real
+  `Brain`/`CognitiveEngine` chain; every prior capability-awareness test
+  called `CognitiveEngine.process` directly. Added one integration test
+  doing so, and one test asserting the window title.
+
+### Security
+
+- No authority, scope, or persistence change. The title is read-only,
+  cosmetic text; it enables nothing and reads only `core.Version`.
+
 ## [0.3.437] - 2026-10-01
 
 ### Changed
