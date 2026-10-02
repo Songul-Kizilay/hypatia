@@ -19,6 +19,9 @@ from cognition.CalibrationApplicationService import (
 from cognition.ConversationResearchClaimGuard import (
     ConversationResearchClaimGuard,
 )
+from cognition.CrossSessionRecallRequestDetector import (
+    CrossSessionRecallRequestDetector,
+)
 from cognition.CuriosityApplicationService import (
     CuriosityApplicationService,
 )
@@ -162,6 +165,7 @@ from knowledge.KnowledgeContextPrompt import (
 )
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
+from memory.CrossSessionRecallContext import build_cross_session_recall_context
 from memory.HybridSemanticMemoryRanker import HybridSemanticMemoryRanker
 from memory.LearnedMemoryCandidateExtractionError import (
     LearnedMemoryCandidateExtractionError,
@@ -3769,6 +3773,129 @@ class CognitiveEngine:
             "session_id", "default"
         ) == session_id
 
+    @staticmethod
+    def _is_other_session_conversation_record(
+        record: MemoryRecord, session_id: str
+    ) -> bool:
+        """Mirror `_is_session_conversation_record` with the filter inverted."""
+        return {"brain", "conversation"}.issubset(record.tags) and record.metadata.get(
+            "session_id", "default"
+        ) != session_id
+
+    def _cross_session_semantic_records(
+        self,
+        matches: tuple[SemanticMemoryMatch, ...],
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        records: list[tuple[MemoryRecord, float]] = []
+        for match in matches:
+            record = self._memory_manager.get(match.memory_id)
+            if record is None or not self._is_other_session_conversation_record(
+                record, session_id
+            ):
+                continue
+            records.append((record, match.score))
+        return records
+
+    def _cross_session_hybrid_records(
+        self,
+        semantic_records: list[tuple[MemoryRecord, float]],
+        lexical_records: list[MemoryRecord],
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        """Fuse already cross-session candidates, then re-check live records."""
+        ranked_matches = self._hybrid_semantic_memory_ranker.rank(
+            tuple(
+                SemanticMemoryMatch(memory_id=record.memory_id, score=score)
+                for record, score in semantic_records
+            ),
+            tuple(lexical_records),
+        )
+        records: list[tuple[MemoryRecord, float]] = []
+        for match in ranked_matches:
+            record = self._memory_manager.get(match.memory_id)
+            if record is None or not self._is_other_session_conversation_record(
+                record, session_id
+            ):
+                continue
+            records.append((record, match.score))
+        return records
+
+    def _cross_session_lexical_recall_records(
+        self,
+        query: str,
+        session_id: str,
+    ) -> list[MemoryRecord]:
+        records = self._memory_manager.search(
+            query,
+            tags={"brain", "conversation"},
+            limit=None,
+        )
+        return [
+            record
+            for record in records
+            if self._is_other_session_conversation_record(record, session_id)
+        ]
+
+    def _cross_session_recall_records(
+        self,
+        query: str,
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        """Return up to 5 most-recent matching turns from genuinely other sessions.
+
+        Modeled on `_semantic_session_records` / `_hybrid_session_records` /
+        `_lexical_recall_records`, but scoped to records whose session_id is
+        *not* the caller's session, and ordered by recency (reusing
+        `_record_created_at`) rather than by score, so the most recent
+        matching turn in each matched session surfaces first. Fails safe to
+        no cross-session context on any `MemoryError`, never failing the
+        whole turn.
+        """
+        records: list[tuple[MemoryRecord, float]] = []
+        runtime = self._semantic_memory_index_runtime
+        if runtime is not None:
+            try:
+                matches = runtime.search(query, limit=None)
+                semantic_records = self._cross_session_semantic_records(
+                    matches, session_id
+                )
+            except MemoryError:
+                semantic_records = []
+            if semantic_records:
+                try:
+                    lexical_records = self._cross_session_lexical_recall_records(
+                        query, session_id
+                    )
+                except MemoryError:
+                    lexical_records = []
+                if lexical_records:
+                    hybrid_records = self._cross_session_hybrid_records(
+                        semantic_records,
+                        lexical_records,
+                        session_id,
+                    )
+                    if hybrid_records:
+                        records = hybrid_records
+                if not records:
+                    records = semantic_records
+
+        if not records:
+            try:
+                lexical_records = self._cross_session_lexical_recall_records(
+                    query, session_id
+                )
+            except MemoryError:
+                lexical_records = []
+            records = [(record, 0.0) for record in lexical_records]
+
+        sorted_records = sorted(
+            records,
+            key=lambda pair: self._record_created_at(pair[0]),
+            reverse=True,
+        )
+        return sorted_records[:5]
+
     def _process_conversation(self, request: BrainRequest) -> BrainResponse:
         """Process the deterministic greeting and message conversation flow."""
         try:
@@ -3805,9 +3932,24 @@ class CognitiveEngine:
                 learned_memory_context = self._learned_memory_context_service(
                     request
                 ).build(self._memory_manager, request.message)
+                cross_session_recall_context = ""
+                if CrossSessionRecallRequestDetector().detect(request.message):
+                    cross_session_recall_context = build_cross_session_recall_context(
+                        tuple(
+                            self._cross_session_recall_records(
+                                request.message, session_id
+                            )
+                        )
+                    )
+                augmented_prompt_kwargs: dict[str, str] = {}
+                if cross_session_recall_context:
+                    augmented_prompt_kwargs["cross_session_recall_context"] = (
+                        cross_session_recall_context
+                    )
                 provider_prompt = build_learned_memory_augmented_prompt(
                     user_message=request.message,
                     learned_memory_context=learned_memory_context,
+                    **augmented_prompt_kwargs,
                 )
                 generated = self._llm_provider.generate(
                     provider_prompt,

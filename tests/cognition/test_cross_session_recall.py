@@ -1,0 +1,316 @@
+"""`CognitiveEngine.process` offers bounded, labeled reference context from a
+genuinely different session only when the natural-language recall detector
+fires -- never silently, never as a rewrite of same-session history.
+"""
+
+from __future__ import annotations
+
+import sys
+import time
+import unittest
+from pathlib import Path
+
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.append(str(SRC_DIR))
+
+from brain.BrainRequest import BrainRequest
+from cognition.CognitiveEngine import CognitiveEngine
+from core.Exceptions import MemoryError
+from eventbus.EventBus import EventBus
+from knowledge.KnowledgeEngine import KnowledgeEngine
+from llm.LLMConversationMessage import LLMConversationMessage
+from memory.Embedding import Embedding
+from memory.MemoryManager import MemoryManager
+from memory.SemanticMemoryIndexBuilder import SemanticMemoryIndexBuilder
+from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
+from planner.Planner import Planner
+from response.ResponseComposer import ResponseComposer
+from session.SessionManager import SessionManager
+from session.SessionRenameTransactionService import SessionRenameTransactionService
+
+
+class MappingEmbeddingProvider:
+    """Deterministic stand-in embedding provider keyed by exact source text."""
+
+    def __init__(self, embeddings: dict[str, Embedding]) -> None:
+        self._embeddings = embeddings
+        self.calls: list[str] = []
+
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
+        self.calls.append(source_text)
+        try:
+            return self._embeddings[source_text]
+        except KeyError:
+            raise MemoryError(f"No embedding fixture for: {source_text!r}") from None
+
+
+class QueuedLLMProvider:
+    """Records every call and returns one canned reply per call, in order."""
+
+    def __init__(self, responses: list[str]) -> None:
+        self._responses = list(responses)
+        self.calls: list[tuple[str, tuple[LLMConversationMessage, ...], str | None]] = (
+            []
+        )
+
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
+    ) -> str:
+        self.calls.append((prompt, history, system_instruction))
+        return self._responses.pop(0)
+
+
+class CrossSessionRecallTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.event_bus = EventBus()
+        self.memory_manager = MemoryManager(self.event_bus)
+        self.session_manager = SessionManager(self.event_bus)
+        self.response_composer = ResponseComposer()
+        self.session_rename_service = SessionRenameTransactionService(
+            session_manager=self.session_manager,
+            memory_manager=self.memory_manager,
+            event_bus=self.event_bus,
+        )
+
+    def _engine(
+        self,
+        llm_provider: QueuedLLMProvider,
+        runtime: SemanticMemoryIndexRuntime | None = None,
+    ) -> CognitiveEngine:
+        return CognitiveEngine(
+            KnowledgeEngine(),
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            semantic_memory_index_runtime=runtime,
+        )
+
+    def test_recall_phrase_quotes_the_other_sessions_turn_with_its_session_id(
+        self,
+    ) -> None:
+        lesson_question = "What is a UNION-based SQL injection?"
+        lesson_answer = (
+            "It combines two queries with UNION SELECT so an attacker can "
+            "read data from other tables."
+        )
+        lesson_turn_content = f"User: {lesson_question}\nHypatia: {lesson_answer}"
+        recall_message = "Let's continue the SQL injection lesson."
+        recall_answer = "Sure, picking back up where we left off."
+
+        provider = MappingEmbeddingProvider(
+            {
+                lesson_turn_content: Embedding((1, 0)),
+                recall_message: Embedding((1, 0)),
+            }
+        )
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        llm_provider = QueuedLLMProvider([lesson_answer, recall_answer])
+        engine = self._engine(llm_provider, runtime)
+        self.session_manager.create("sql-injection-lesson")
+        self.session_manager.create("new-session")
+
+        lesson_response = engine.process(
+            BrainRequest(
+                message=lesson_question,
+                metadata={"session_id": "sql-injection-lesson"},
+            )
+        )
+        self.assertTrue(lesson_response.success)
+        self.assertEqual(lesson_response.message, lesson_answer)
+        runtime.refresh(self.memory_manager)
+
+        recall_response = engine.process(
+            BrainRequest(
+                message=recall_message,
+                metadata={"session_id": "new-session"},
+            )
+        )
+
+        self.assertTrue(recall_response.success)
+        self.assertEqual(len(llm_provider.calls), 2)
+        recall_prompt = llm_provider.calls[1][0]
+        self.assertIn("[session: sql-injection-lesson]", recall_prompt)
+        self.assertIn(lesson_question, recall_prompt)
+        self.assertIn(lesson_answer, recall_prompt)
+        self.assertIn("Cross-session recall context", recall_prompt)
+        self.assertIn(recall_message, recall_prompt)
+
+    def test_recall_phrase_with_nothing_found_states_it_plainly(self) -> None:
+        recall_message = "Where did we leave off last time?"
+        reply = "I could not find anything relevant from another session."
+        llm_provider = QueuedLLMProvider([reply])
+        engine = self._engine(llm_provider)
+
+        response = engine.process(BrainRequest(message=recall_message))
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(llm_provider.calls), 1)
+        prompt = llm_provider.calls[0][0]
+        self.assertIn("No matching information was found in any other session", prompt)
+        self.assertIn("do not invent", prompt)
+
+    def test_the_most_recent_matching_turn_surfaces_before_an_older_one(self) -> None:
+        """Two relevant turns in the same other session: newest must lead.
+
+        Closes a coverage gap: `_cross_session_recall_records` sorts by
+        recency before truncating, but with only one candidate turn no test
+        could tell a reverse-sort regression from a non-regression. This
+        test fails if the sort direction is flipped.
+        """
+        recall_query = "Let's continue the SQL injection lesson."
+        old_turn_message = f"{recall_query} (first attempt, blind SQLi)"
+        new_turn_message = f"{recall_query} (second attempt, union-based)"
+        llm_provider = QueuedLLMProvider(
+            ["First attempt notes.", "Second attempt notes.", "Continuing now."]
+        )
+        engine = self._engine(llm_provider)
+        self.session_manager.create("sql-injection-lesson")
+        self.session_manager.create("asker-session")
+
+        engine.process(
+            BrainRequest(
+                message=old_turn_message,
+                metadata={"session_id": "sql-injection-lesson"},
+            )
+        )
+        time.sleep(0.01)
+        engine.process(
+            BrainRequest(
+                message=new_turn_message,
+                metadata={"session_id": "sql-injection-lesson"},
+            )
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message=recall_query,
+                metadata={"session_id": "asker-session"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        prompt = llm_provider.calls[-1][0]
+        self.assertIn(new_turn_message, prompt)
+        self.assertIn(old_turn_message, prompt)
+        self.assertLess(
+            prompt.index(new_turn_message),
+            prompt.index(old_turn_message),
+        )
+
+    def test_the_askers_own_session_is_excluded_even_when_its_content_matches(
+        self,
+    ) -> None:
+        """A matching turn already in the asker's own session must not leak
+
+        into the cross-session block labeled as if it came from elsewhere.
+        Closes a coverage gap: every existing fixture left the asking
+        session empty, so the inverted session filter was never actually
+        exercised against a same-session false positive.
+        """
+        recall_query = "Let's continue the SQL injection lesson."
+        other_session_message = f"{recall_query} (the real other-session lesson)"
+        own_session_prior_message = (
+            f"{recall_query} (asked earlier in this very session)"
+        )
+        llm_provider = QueuedLLMProvider(
+            ["Noted in the other session.", "Noted in the asking session.", "Hi."]
+        )
+        engine = self._engine(llm_provider)
+        self.session_manager.create("sql-injection-lesson")
+        self.session_manager.create("asker-session")
+
+        engine.process(
+            BrainRequest(
+                message=other_session_message,
+                metadata={"session_id": "sql-injection-lesson"},
+            )
+        )
+        engine.process(
+            BrainRequest(
+                message=own_session_prior_message,
+                metadata={"session_id": "asker-session"},
+            )
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message=recall_query,
+                metadata={"session_id": "asker-session"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        prompt = llm_provider.calls[-1][0]
+        self.assertIn("[session: sql-injection-lesson]", prompt)
+        self.assertIn(other_session_message, prompt)
+        self.assertNotIn(own_session_prior_message, prompt)
+        self.assertNotIn("[session: asker-session]", prompt)
+
+    def test_nothing_found_is_plain_even_with_unrelated_content_elsewhere(
+        self,
+    ) -> None:
+        """Another session has real content, but none of it matches the
+
+        query: the explicit not-found note must still appear, and the
+        unrelated content must never be quoted. Closes a coverage gap: the
+        original not-found test had zero other sessions and zero records,
+        never exercising the "records existed but none matched" branch of
+        `_cross_session_recall_records`.
+        """
+        unrelated_message = "What is reflected XSS and how do I test for it?"
+        recall_message = "Where did we leave off last time?"
+        llm_provider = QueuedLLMProvider(
+            [
+                "Reflected XSS echoes unsanitized input back into the page.",
+                "I could not find anything relevant from another session.",
+            ]
+        )
+        engine = self._engine(llm_provider)
+        self.session_manager.create("xss-session")
+
+        engine.process(
+            BrainRequest(
+                message=unrelated_message,
+                metadata={"session_id": "xss-session"},
+            )
+        )
+
+        response = engine.process(BrainRequest(message=recall_message))
+
+        self.assertTrue(response.success)
+        prompt = llm_provider.calls[-1][0]
+        self.assertIn("No matching information was found in any other session", prompt)
+        self.assertIn("do not invent", prompt)
+        self.assertNotIn(unrelated_message, prompt)
+
+    def test_ordinary_message_has_no_cross_session_block_at_all(self) -> None:
+        message = "What is reflected XSS?"
+        reply = "It reflects unsanitized input back into the page."
+        llm_provider = QueuedLLMProvider([reply])
+        engine = self._engine(llm_provider)
+
+        response = engine.process(BrainRequest(message=message))
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(llm_provider.calls), 1)
+        prompt, _history, _system = llm_provider.calls[0]
+        self.assertEqual(prompt, message)
+        self.assertNotIn("Cross-session recall", prompt)
+
+
+if __name__ == "__main__":
+    unittest.main()
