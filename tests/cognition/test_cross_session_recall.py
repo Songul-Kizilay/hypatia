@@ -149,6 +149,11 @@ class CrossSessionRecallTests(unittest.TestCase):
         self.assertIn(lesson_answer, recall_prompt)
         self.assertIn("Cross-session recall context", recall_prompt)
         self.assertIn(recall_message, recall_prompt)
+        # The fixture deliberately omits attribution from generated prose.
+        # The application must still show the actual source to the user.
+        self.assertIn(recall_answer, recall_response.message)
+        self.assertIn('"sql-injection-lesson"', recall_response.message)
+        self.assertIn("Source sessions", recall_response.message)
 
     def test_recall_phrase_with_nothing_found_states_it_plainly(self) -> None:
         recall_message = "Where did we leave off last time?"
@@ -161,6 +166,7 @@ class CrossSessionRecallTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(len(llm_provider.calls), 0)
         self.assertIn("could not find", response.message)
+        self.assertNotIn("Source sessions", response.message)
 
     def test_the_most_recent_matching_turn_surfaces_before_an_older_one(self) -> None:
         """Two relevant turns in the same other session: newest must lead.
@@ -306,6 +312,7 @@ class CrossSessionRecallTests(unittest.TestCase):
         prompt, _history, _system = llm_provider.calls[0]
         self.assertEqual(prompt, message)
         self.assertNotIn("Cross-session recall", prompt)
+        self.assertNotIn("Source sessions", response.message)
 
     def test_no_match_cannot_be_replaced_by_a_fabricated_model_memory(self) -> None:
         provider = QueuedLLMProvider(["You independently mastered SQL last time."])

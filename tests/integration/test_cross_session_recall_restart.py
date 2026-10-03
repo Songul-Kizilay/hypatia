@@ -104,13 +104,22 @@ class CrossSessionRecallRestartTests(unittest.TestCase):
                 engine._session_manager.create("fresh-session")
                 desktop.select_session("fresh-session")
                 learned_before = load_learned_memories(engine._memory_manager)
-                self.assertTrue(
-                    desktop.submit_message(
-                        "Let's continue the SQL injection lesson."
-                    ).success
+                recall_response = desktop.submit_message(
+                    "Let's continue the SQL injection lesson."
                 )
+                self.assertTrue(recall_response.success)
+                self.assertIn('"lesson-source"', recall_response.message)
+                self.assertIn("Source sessions", recall_response.message)
+                self.assertEqual(recall_response.message.count('"lesson-source"'), 1)
                 prompt = transport.call_args.args[2]["messages"][-1]["content"]
                 self.assertIn("[session: lesson-source]", prompt)
+                original_times = {
+                    r.created_at.isoformat()
+                    for r in engine._memory_manager.all()
+                    if r.memory_id in original_ids and r.created_at is not None
+                }
+                for timestamp in original_times:
+                    self.assertIn(timestamp, prompt)
                 self.assertIn("With that help", prompt)
                 self.assertIn("Hint: SQL injection", prompt)
                 self.assertIn("externally assisted, not independent", prompt)
@@ -127,6 +136,7 @@ class CrossSessionRecallRestartTests(unittest.TestCase):
                 )
                 self.assertIn("could not find", response.message)
                 self.assertNotIn("lesson-source", response.message)
+                self.assertNotIn("Source sessions", response.message)
             finally:
                 reopened.stop()
 
