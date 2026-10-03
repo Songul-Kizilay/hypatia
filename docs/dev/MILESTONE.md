@@ -10,14 +10,58 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.440
+## Current — v0.3.441
+
+| Field | Value |
+| --- | --- |
+| Milestone | Named-session recall must respect an explicitly requested topic: a source ID is not proof of relevance. |
+| Base SHA | `7f7d4880410d4afbe3ebe36aa2941723f437c2ca` (verified origin/main, v0.3.440 delivered) |
+| Branch | `fix/named-recall-topic-v0.3.441`, separate worktree `D:\hypatia-worktrees\named-recall-topic` |
+| Status | release |
+| Blockers | none |
+
+The user's continued-development request follows a verified v0.3.440 desktop
+package update. Repository characterization reproduced a concrete bug: asking
+to continue quantum cryptography in a named SQL-only session returned SQL
+excerpts and invoked the model. A new regression fails on the base. Fix only
+the named-session branch by removing named IDs from the lexical topic query,
+reusing existing lexical retrieval, and intersecting results with the named
+sources. Topic-free named recall retains its recent-turn behavior.
+
+File scope: CognitiveEngine, its recall tests and desktop restart test, version
+files, README/PROJECT_STATUS/CHANGELOG and this ledger. No new authority,
+provider, scheduler, schema, research execution or private-data access. The
+local EXE/launcher deployment is separately authorized and verified with
+synthetic data; it does not widen product scope or touch EVREN configuration.
+
+Required verification: absent named topic bypasses the model; matching topic
+excludes unrelated turns and other sessions; multiple named sources still
+require topic relevance; original topic-free behavior remains; same behavior
+after real application restart. Then all canonical gates, exact-SHA and PR CI,
+standard merge, provenance verification and the authorized package update.
+
+Review: named-source filtering reuses the existing lexical matcher, retains the
+other-session conversation validator and five-record bound, and never trusts
+model-generated source IDs. No authority, persistence schema or provider path
+changes. The actual desktop handler restart regression verifies a missing named
+topic returns without another transport call; assisted-learning exclusion and
+source attribution remain covered by the focused suite. The base regression
+failed before the fix. Focused tests: 42 passed.
+
+Canonical Windows gates (2026-10-03): full unittest 7909 tests in 162.041s,
+OK (skipped=3), exit 0; Black 1062 files unchanged; Ruff all checks passed;
+MyPy 622 source files clean; git diff --check clean. Existing non-fatal suite
+ResourceWarnings remain. Exact-SHA/PR/main CI and standard-merge provenance are
+verified after commit and recorded in the next milestone per ledger convention.
+
+## Historical scope: v0.3.440 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Deterministic source attribution for conversational recall: the application displays the actual retrieved session IDs even when the model omits them; existing observation timestamps are carried as historical context, never invented. |
 | Base SHA | `ee7e86d4bc13e1d833577c0ead6825ef2470e7db` (verified origin/main, v0.3.439 delivered) |
 | Branch | `feature/recall-source-attribution-v0.3.440`, separate worktree `D:\hypatia-worktrees\recall-source-attribution` |
-| Status | release |
+| Status | delivered |
 | Blockers | none |
 
 User continuation on 2026-10-03 follows completed v0.3.439 delivery. A synthetic
@@ -25,6 +69,14 @@ real-engine characterization reproduced the bounded defect: retrieved context
 contains `[session: lesson-source]`, while model text `We can continue.` yields
 a final response with no source. This milestone closes that source-visibility
 gap without treating generated text as source authority.
+
+Delivered evidence: release `ae0e2d20503f142fe87c58c27366ae2821fa8d90`, PR #419,
+standard merge `7f7d4880410d4afbe3ebe36aa2941723f437c2ca`, verified parents
+`ee7e86d` and `ae0e2d2`. Release/PR/main tree identity:
+`56e97e11b0a0c5b1756f6d7e4f732fe1a5a227ff`. Exact-SHA CI Linux `37110312169`,
+Windows `37110313631`; PR CI Linux `37110558824`, Windows `37110558828`;
+main CI Linux `37110814459`, Windows `37110814462`; all succeeded. Original
+v0.3.439/WIP commits remain reachable with authorship unchanged.
 
 File scope: `src/memory/CrossSessionRecallContext.py`, its cognitive call site,
 corresponding memory/cognition/desktop-restart tests, version files, CHANGELOG,
