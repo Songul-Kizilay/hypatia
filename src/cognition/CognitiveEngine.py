@@ -3883,18 +3883,30 @@ class CognitiveEngine:
         records: list[tuple[MemoryRecord, float]] = []
         # An explicitly named registered session narrows the candidate set;
         # its ID is provenance, not necessarily text inside a conversation.
+        query_words = query[:4000].split()
+        named_words = {word.casefold().strip(".,!?;:\"'()[]") for word in query_words}
         named_sessions = {
             session.session_id
             for session in self._session_manager.list()
-            if session.session_id.casefold()
-            in {word.strip(".,!?;:\"'()[]") for word in query[:4000].casefold().split()}
+            if session.session_id.casefold() in named_words
         }
         if named_sessions:
+            named_ids = {source.casefold() for source in named_sessions}
+            topic_query = " ".join(
+                word
+                for word in query_words
+                if word.casefold().strip(".,!?;:\"'()[]") not in named_ids
+            )
+            # Naming a source never establishes topic relevance. Only a request
+            # without a topic may use that source's recent conversation turns.
+            candidates = (
+                self._cross_session_lexical_recall_records(topic_query, session_id)
+                if recall_query_terms(topic_query)
+                else self._memory_manager.search("", tags={"brain", "conversation"})
+            )
             named_records = [
                 record
-                for record in self._memory_manager.search(
-                    "", tags={"brain", "conversation"}
-                )
+                for record in candidates
                 if self._is_other_session_conversation_record(record, session_id)
                 and record.metadata["session_id"] in named_sessions
             ]

@@ -422,6 +422,83 @@ class CrossSessionRecallTests(unittest.TestCase):
         self.assertIn("recall is unavailable", response.message)
         self.assertNotIn("invented", response.message)
 
+    def test_named_session_with_absent_topic_does_not_call_model(self) -> None:
+        self.session_manager.create("lesson-source")
+        self.memory_manager.add(
+            "SQL injection uses UNION.",
+            tags={"brain", "conversation"},
+            metadata={
+                "session_id": "lesson-source",
+                "user_message": "SQL injection",
+                "assistant_message": "Use UNION.",
+            },
+        )
+        provider = QueuedLLMProvider(["An invented cryptography memory."])
+        response = self._engine(provider).process(
+            BrainRequest(
+                message="Let's continue quantum cryptography in lesson-source."
+            )
+        )
+        self.assertTrue(response.success)
+        self.assertEqual(provider.calls, [])
+        self.assertIn("could not find", response.message)
+        self.assertNotIn("Source sessions", response.message)
+
+    def test_named_session_topic_excludes_unrelated_turns_and_other_sessions(
+        self,
+    ) -> None:
+        self.session_manager.create("lesson-source")
+        for source, question, answer in (
+            ("lesson-source", "Explain SQL injection", "Matching SQL explanation."),
+            (
+                "lesson-source",
+                "Explain quantum cryptography",
+                "Unrelated quantum explanation.",
+            ),
+            ("elsewhere", "Explain SQL injection", "Outside named source."),
+        ):
+            self.memory_manager.add(
+                f"User: {question}\nHypatia: {answer}",
+                tags={"brain", "conversation"},
+                metadata={
+                    "session_id": source,
+                    "user_message": question,
+                    "assistant_message": answer,
+                },
+            )
+        provider = QueuedLLMProvider(["Continuing."])
+        response = self._engine(provider).process(
+            BrainRequest(message="Let's continue SQL injection in 'lesson-source'.")
+        )
+        self.assertTrue(response.success)
+        prompt = provider.calls[-1][0]
+        self.assertIn("Matching SQL explanation.", prompt)
+        self.assertNotIn("Unrelated quantum explanation.", prompt)
+        self.assertNotIn("Outside named source.", prompt)
+        self.assertIn('"lesson-source"', response.message)
+
+    def test_multiple_named_sessions_still_require_the_requested_topic(self) -> None:
+        for source, topic in (
+            ("lesson-one", "SQL injection"),
+            ("lesson-two", "cryptography"),
+        ):
+            self.session_manager.create(source)
+            self.memory_manager.add(
+                topic,
+                tags={"brain", "conversation"},
+                metadata={
+                    "session_id": source,
+                    "user_message": topic,
+                    "assistant_message": "explanation",
+                },
+            )
+        result = self._engine(QueuedLLMProvider([]))._cross_session_recall_records(
+            "Let's continue SQL injection in lesson-one and lesson-two.", "default"
+        )
+        self.assertEqual(
+            [record.metadata["session_id"] for record, _ in result], ["lesson-one"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

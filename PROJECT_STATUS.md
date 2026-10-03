@@ -2,10 +2,18 @@
 
 ## Runtime Version
 
-`v0.3.440 (Genesis)`
+`v0.3.441 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.441 closes a reproduced named-session relevance bug: specifying a
+source session no longer causes unrelated turns from that session to count as
+matches for an absent topic. Existing lexical matching is applied to the topic
+after removing the named source IDs; results remain source-scoped and bounded.
+An absent named topic uses the existing deterministic not-found response without
+a model call. Topic-free named recall keeps its prior recent-turn behavior.
+This is a retrieval correctness fix, not new research or execution authority.
 
 Version v0.3.440 closes a reproduced source-visibility gap in v0.3.439: the
 model received a source session but could omit it from its reply. The application

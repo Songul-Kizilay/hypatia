@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.441] - 2026-10-03
+
+### Fixed
+
+- Named-session recall now requires the requested topic to match the retrieved
+  conversation. Previously, naming a SQL-only session while asking about quantum
+  cryptography could send unrelated SQL turns to the model. Explicit session IDs
+  are now removed from the topic query, existing lexical search is reused, and
+  the result is restricted to the named sources.
+- Topic-free named recall still returns bounded recent turns. An absent topic
+  returns the existing deterministic not-found response without a model call,
+  including after desktop application restart. No new authority or schema.
+
+### Tests
+
+- Reproduced the absent-topic defect before fixing it; added absent-topic,
+  named-topic isolation and multiple-named-source regressions, and extended
+  the real desktop restart regression with the same absent-topic scenario.
+
 ## [0.3.440] - 2026-10-03
 
 ### Fixed

@@ -132,11 +132,12 @@ class CrossSessionRecallRestartTests(unittest.TestCase):
                 messages = transport.call_args.args[2]["messages"]
                 self.assertEqual(len([m for m in messages if m["role"] == "user"]), 1)
                 response = desktop.submit_message(
-                    "Let's continue the quantum cryptography lesson."
+                    "Let's continue quantum cryptography in lesson-source."
                 )
                 self.assertIn("could not find", response.message)
                 self.assertNotIn("lesson-source", response.message)
                 self.assertNotIn("Source sessions", response.message)
+                self.assertEqual(transport.call_count, 1)
             finally:
                 reopened.stop()
 

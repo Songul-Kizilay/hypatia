@@ -77,6 +77,8 @@ To create the world's most capable personal AI research companion.
   to the visible response, even if the model omits them. Stored recording dates
   are provided as historical context; missing dates stay unknown and do not
   establish that recalled information is still current.
+  Since v0.3.441, a named session also must contain the requested topic; naming
+  it does not make unrelated conversation turns relevant.
 - Session creation, activation, targeted overview/details/activity/recent views,
   conversation search, rename, and guarded deletion
 - A bounded session registry with atomic UTF-8 snapshots, deterministic order,
