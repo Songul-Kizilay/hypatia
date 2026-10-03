@@ -171,6 +171,7 @@ from memory.CrossSessionRecallContext import (
     NOT_FOUND_RESPONSE,
     UNAVAILABLE_RESPONSE,
     build_cross_session_recall_context,
+    build_cross_session_recall_sources,
 )
 from memory.HybridSemanticMemoryRanker import HybridSemanticMemoryRanker
 from memory.LearnedMemoryCandidateExtractionError import (
@@ -4022,11 +4023,15 @@ class CognitiveEngine:
                         # Descriptive truth; it enables and authorizes nothing.
                         system_instruction=self._runtime_capabilities.instruction(),
                     )
+                response_message = self._conversation_research_claim_guard.annotate(
+                    generated,
+                    self._research_honesty_service.summary(),
+                )
+                recall_sources = build_cross_session_recall_sources(recall_records)
+                if recall_sources:
+                    response_message = f"{response_message}\n\n{recall_sources}"
                 response = BrainResponse(
-                    message=self._conversation_research_claim_guard.annotate(
-                        generated,
-                        self._research_honesty_service.summary(),
-                    ),
+                    message=response_message,
                     request_id=request.request_id,
                     intent="message",
                     memory_count=0,

@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.440] - 2026-10-03
+
+### Fixed
+
+- Cross-session recall responses now end with an application-generated list
+  of the actual retrieved source sessions, even when the model omits attribution.
+  The list uses the same bounded, valid record set as the prompt context and
+  deduplicates session IDs in retrieval order. Empty recall and ordinary chat
+  do not acquire a source list.
+- Recall context includes the stored conversation observation timestamp in UTC.
+  Missing or timezone-naive timestamps remain explicitly unknown. Historical
+  recording time does not establish freshness or present truth.
+
+### Verification boundaries
+
+- Real desktop restart coverage now checks the visible response source, source
+  deduplication and original persisted timestamps, in addition to prompt wiring.
+  Source labels are deterministic; free-form model claims still require judgement.
+- No retrieval-policy, persistence-schema, learning-authority, execution,
+  scheduler, provider, installed desktop package or user-data changes.
+
 ## [0.3.439] - 2026-10-03
 
 ### Added

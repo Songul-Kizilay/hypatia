@@ -2,10 +2,19 @@
 
 ## Runtime Version
 
-`v0.3.439 (Genesis)`
+`v0.3.440 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.440 closes a reproduced source-visibility gap in v0.3.439: the
+model received a source session but could omit it from its reply. The application
+now appends the actual retrieved session IDs itself, deduplicated and bounded
+with the same record validation as the prompt context. Historical conversation
+timestamps are also included in that context, preserving unknown time without
+inventing dates or implying present-day truth. Restart tests verify visible
+response attribution as well as reloaded records. Retrieval and authority
+boundaries remain unchanged; source labels do not certify model-generated prose.
 
 Version v0.3.439 adds explicit cross-session conversational recall, completing
 the preserved `5794038` WIP. The desktop handler can retrieve bounded, quoted,

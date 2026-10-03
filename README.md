@@ -73,6 +73,10 @@ To create the world's most capable personal AI research companion.
   restart through the existing conversation store. Topic-free requests ask for
   clarification; missing matches never authorize invented memories. Excerpts
   are partial reference data, not proof of independent learning or authority.
+  Since v0.3.440, the application also appends the actual source session names
+  to the visible response, even if the model omits them. Stored recording dates
+  are provided as historical context; missing dates stay unknown and do not
+  establish that recalled information is still current.
 - Session creation, activation, targeted overview/details/activity/recent views,
   conversation search, rename, and guarded deletion
 - A bounded session registry with atomic UTF-8 snapshots, deterministic order,

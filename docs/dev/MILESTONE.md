@@ -10,6 +10,52 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
+## Current — v0.3.440
+
+| Field | Value |
+| --- | --- |
+| Milestone | Deterministic source attribution for conversational recall: the application displays the actual retrieved session IDs even when the model omits them; existing observation timestamps are carried as historical context, never invented. |
+| Base SHA | `ee7e86d4bc13e1d833577c0ead6825ef2470e7db` (verified origin/main, v0.3.439 delivered) |
+| Branch | `feature/recall-source-attribution-v0.3.440`, separate worktree `D:\hypatia-worktrees\recall-source-attribution` |
+| Status | release |
+| Blockers | none |
+
+User continuation on 2026-10-03 follows completed v0.3.439 delivery. A synthetic
+real-engine characterization reproduced the bounded defect: retrieved context
+contains `[session: lesson-source]`, while model text `We can continue.` yields
+a final response with no source. This milestone closes that source-visibility
+gap without treating generated text as source authority.
+
+File scope: `src/memory/CrossSessionRecallContext.py`, its cognitive call site,
+corresponding memory/cognition/desktop-restart tests, version files, CHANGELOG,
+PROJECT_STATUS, README and this ledger. No change to retrieval eligibility,
+session stores, learned-memory extraction, authority, execution, scheduler,
+external providers or installed desktop assets. Only the lead edits files.
+
+Required checks: source IDs are derived from the same bounded valid record
+set as context; deduplicated in retrieval order; empty recall/ordinary chat has
+no source footer; missing dates remain unknown; recording time is not freshness;
+real desktop response preserves attribution after application reconstruction.
+Then full unittest, Black, Ruff, MyPy, whitespace checks, exact-SHA Linux/Windows
+CI, PR checks, standard merge and post-merge provenance verification.
+
+Review: the new footer reads only the same bounded valid `MemoryRecord` tuple
+already sent as recall context, never generated source names. It does not add
+an authority or network operation. JSON quoting preserves Unicode session IDs
+while escaping quotes and newlines; the real desktop transcript is plain text.
+Timestamps come only from each record's `created_at` and never from the current
+clock. Missing/naive dates remain unknown. Existing research-honesty annotation
+runs before the source footer; recall learning/exclusion behavior is unchanged.
+The reproduced missing-source regression failed on the base, then passed after
+the change. Focused memory/cognition/desktop coverage: 39 tests, OK.
+
+Canonical Windows gates (2026-10-03): full unittest 7906 tests in 265.724s,
+`OK (skipped=3)`, exit 0. Black: 1062 files unchanged; Ruff: all checks passed;
+MyPy: 622 source files clean; `git diff --check`: clean. The suite retains the
+non-fatal unclosed-file ResourceWarnings observed during v0.3.439 verification.
+Release-SHA CI, PR integration and provenance are verified after committing;
+their identities are recorded in the next milestone per the ledger convention.
+
 ## Historical scope: v0.3.438 (delivered)
 
 | Field | Value |
@@ -84,16 +130,25 @@ CLEAN` before merge, standard merge commit (two parents: `8a298b3`,
 `5935917`), confirming a true merge rather than a squash or rebase.
 Working tree clean after merge.
 
-## Current — v0.3.439
+## Historical scope: v0.3.439 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Reliable cross-session conversational memory: when a user explicitly asks, in ordinary conversation, to recall or continue something from a *different* named session (not the active one), Hypatia retrieves bounded, relevance-ranked quoted turns from that other session, labels each with its source `session_id`, and states plainly when nothing relevant exists anywhere — instead of silently having no access and letting the model guess or invent. |
 | Base SHA | f947aed (origin/main tip, v0.3.438 delivered) |
 | Branch | `feature/cross-session-recall-v0.3.439`, a `git worktree` forked directly from verified `origin/main` (worktree `D:\hypatia-worktrees\cross-session-recall`) |
-| Status | release |
+| Status | delivered |
 | Specialists | hypatia-runtime (detector + retrieval + prompt wiring), hypatia-security (session-isolation / no-authority-widening review), hypatia-qa (independent regression review) |
 | Blockers | none |
+
+Post-merge evidence (2026-10-03): release `c8655d09b6a87a7a8177cbb7e94e2d909cbfb09c`,
+PR #418 MERGED, standard merge `ee7e86d4bc13e1d833577c0ead6825ef2470e7db`.
+Both parents verified (`f947aed`, `c8655d0`); all three carried commits remain
+reachable with authorship unchanged, including preserved WIP `5794038`.
+Exact-head CI: Linux `37106966401`, Windows `37106968094`; PR CI: Linux
+`37107422875`, Windows `37107422896`; main CI: Linux `37107783945`, Windows
+`37107783967`; all successful. Release, PR-merge and main trees all equal
+`7e74095eb4190033a2522ff325523a7497864e09`.
 
 Continuation audit (2026-10-03): local/remote feature HEAD both initially
 `5794038be42dbcdf3acce5af49fc77bebbfb76bf`; `origin/main` remains
@@ -129,7 +184,8 @@ unchanged; Ruff: all checks passed; MyPy: 622 source files clean; `git diff
 --check`: clean. The full suite emitted non-fatal unclosed-file ResourceWarnings
 at interpreter shutdown; no failed tests. Exact-SHA CI and main integration
 are verified after the release commit, per the ledger's next-milestone recording
-convention. No next milestone is authorized here.
+convention. No next milestone was authorized in that bounded request;
+the subsequent user continuation scoped v0.3.440 above.
 
 Rationale: confirmed gap (not assumed) — `CognitiveEngine` already persists
 every turn as a `MemoryRecord` tagged `{"brain","conversation"}` with
