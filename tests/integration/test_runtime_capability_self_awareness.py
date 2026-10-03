@@ -198,7 +198,7 @@ class RuntimeCapabilitySelfAwarenessTests(unittest.TestCase):
         engine._session_manager.create("sql-injection-lesson")
         controller.select_session("sql-injection-lesson")
         lesson_message = (
-            "Let's continue the SQL injection lesson. I understand "
+            "In the SQL injection lesson, I understand "
             "UNION-based attacks now; what about blind SQL injection?"
         )
         lesson_response = controller.submit_message(lesson_message)

@@ -67,6 +67,12 @@ To create the world's most capable personal AI research companion.
 
 - Application bootstrap, configuration, logging, and dependency injection
 - Sessions and persisted structured conversation memory
+- Explicit cross-session recall in ordinary English/Turkish chat (v0.3.439):
+  for example, "Let's continue the SQL injection lesson" or "SQL injection
+  dersine devam edelim". Up to five source-labeled excerpts survive application
+  restart through the existing conversation store. Topic-free requests ask for
+  clarification; missing matches never authorize invented memories. Excerpts
+  are partial reference data, not proof of independent learning or authority.
 - Session creation, activation, targeted overview/details/activity/recent views,
   conversation search, rename, and guarded deletion
 - A bounded session registry with atomic UTF-8 snapshots, deterministic order,

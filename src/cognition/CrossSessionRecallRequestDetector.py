@@ -27,6 +27,8 @@ only needs one boolean signal, not a taxonomy, so unlike
 
 from __future__ import annotations
 
+import re
+
 MAX_INSPECTED_CHARACTERS = 4000
 
 RECALL_PHRASES = (
@@ -62,7 +64,33 @@ RECALL_PHRASES = (
     "ne kalmisti",
     "hangi soruda kalmıştık",
     "hangi soruda kalmistik",
+    "dersine devam",
+    "konusuna devam",
+    "konusuna dön",
+    "konusuna don",
 )
+
+_QUERY_STOP_WORDS = frozenset(
+    "a an the i we you our my me it is was were about in on from to of and "
+    "can could please let lets s continue lesson lessons session previous "
+    "last earlier time what where did do leave left off question before "
+    "hey so exactly yesterday with that this discuss talked explained "
+    "derse dersine ders oturum oturumda önceki onceki geçen gecen devam "
+    "edelim mi ne neydi nerede hangi soruda son sorum kalmıştık kalmistik "
+    "kalmıştı kalmisti öğrendik ogrendik konuşmuştuk konusmustuk".split()
+)
+
+
+def recall_query_terms(message: str) -> tuple[str, ...]:
+    """Bounded lexical topics, excluding the recall request's boilerplate."""
+    normalized = message[:MAX_INSPECTED_CHARACTERS].replace("İ", "i").casefold()
+    return tuple(
+        dict.fromkeys(
+            token
+            for token in re.findall(r"[^\W_]+", normalized)
+            if len(token) > 1 and token not in _QUERY_STOP_WORDS
+        )
+    )[:12]
 
 
 class CrossSessionRecallRequestDetector:

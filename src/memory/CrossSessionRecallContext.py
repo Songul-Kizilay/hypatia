@@ -10,7 +10,24 @@ history and never an authority grant.
 
 from __future__ import annotations
 
+import json
+
 from memory.MemoryRecord import MemoryRecord
+
+MAX_RECALL_RECORDS = 5
+MAX_QUOTE_CHARACTERS = 1600
+MAX_SOURCE_CHARACTERS = 256
+NOT_FOUND_RESPONSE = (
+    "Diğer oturumların kayıtlarında bu isteğe uygun bir bilgi bulamadım. "
+    "Hatırlıyormuş gibi yanıt veremem; lütfen konuyu veya oturum adını belirtin. "
+    "I could not find matching information in other sessions; "
+    "please specify the topic or session."
+)
+UNAVAILABLE_RESPONSE = (
+    "Diğer oturumların kayıtları şu anda okunamadı; önceki konuşmayı "
+    "doğrulayamıyorum. Other-session recall is unavailable; "
+    "I cannot verify the earlier conversation."
+)
 
 NOT_FOUND_CONTEXT = (
     "Cross-session recall result:\n"
@@ -31,6 +48,9 @@ _BOUNDARY_INSTRUCTIONS = (
     "answer or a hint before the user's correct response, treat that as "
     "externally assisted, not independent. Never infer independence beyond "
     "the quoted text.\n"
+    "- These are partial excerpts, not a complete learning assessment. "
+    "Missing earlier hints never proves independent mastery. Do not award "
+    "learning credit or turn recalled answers into independently learned facts.\n"
     "- If asked about a session with no quoted material here, say plainly "
     "that nothing relevant was found rather than guessing."
 )
@@ -40,16 +60,33 @@ def build_cross_session_recall_context(
     records: tuple[tuple[MemoryRecord, float], ...],
 ) -> str:
     """Return a bounded, session-labeled block for the current turn's prompt."""
+    records = tuple(
+        (record, score)
+        for record, score in records[:MAX_RECALL_RECORDS]
+        if isinstance(record.metadata.get("session_id"), str)
+        and 0 < len(record.metadata["session_id"]) <= MAX_SOURCE_CHARACTERS
+        and isinstance(record.metadata.get("user_message"), str)
+        and isinstance(record.metadata.get("assistant_message"), str)
+    )
     if not records:
         return f"{NOT_FOUND_CONTEXT}\n\n{_BOUNDARY_INSTRUCTIONS}"
 
     lines = ["Cross-session recall results (quoted from other sessions):"]
-    for record, _score in records:
-        session_id = record.metadata.get("session_id", "default")
+    for record, _score in records[:MAX_RECALL_RECORDS]:
+        session_id = record.metadata.get("session_id")
+        if not isinstance(session_id, str) or not session_id:
+            continue
         user_message = record.metadata.get("user_message", "")
         assistant_message = record.metadata.get("assistant_message", "")
+        if not isinstance(user_message, str) or not isinstance(assistant_message, str):
+            continue
+        # Escape newlines/quotes so historical content cannot create new roles.
+        session_id = json.dumps(session_id, ensure_ascii=False)[1:-1]
         lines.append(f"[session: {session_id}]")
-        lines.append(f'User: "{user_message}"')
-        lines.append(f'Hypatia: "{assistant_message}"')
+        for role, message in (("User", user_message), ("Hypatia", assistant_message)):
+            quote = message[:MAX_QUOTE_CHARACTERS]
+            if len(message) > MAX_QUOTE_CHARACTERS:
+                quote += " [excerpt truncated]"
+            lines.append(f"{role}: {json.dumps(quote, ensure_ascii=False)}")
 
     return "\n".join(lines) + "\n\n" + _BOUNDARY_INSTRUCTIONS

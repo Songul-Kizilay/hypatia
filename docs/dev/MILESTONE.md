@@ -91,9 +91,45 @@ Working tree clean after merge.
 | Milestone | Reliable cross-session conversational memory: when a user explicitly asks, in ordinary conversation, to recall or continue something from a *different* named session (not the active one), Hypatia retrieves bounded, relevance-ranked quoted turns from that other session, labels each with its source `session_id`, and states plainly when nothing relevant exists anywhere — instead of silently having no access and letting the model guess or invent. |
 | Base SHA | f947aed (origin/main tip, v0.3.438 delivered) |
 | Branch | `feature/cross-session-recall-v0.3.439`, a `git worktree` forked directly from verified `origin/main` (worktree `D:\hypatia-worktrees\cross-session-recall`) |
-| Status | planned |
+| Status | release |
 | Specialists | hypatia-runtime (detector + retrieval + prompt wiring), hypatia-security (session-isolation / no-authority-widening review), hypatia-qa (independent regression review) |
 | Blockers | none |
+
+Continuation audit (2026-10-03): local/remote feature HEAD both initially
+`5794038be42dbcdf3acce5af49fc77bebbfb76bf`; `origin/main` remains
+`f947aedf3252e55e212b14f0d52ceb995856ac78`. No open PR, no WIP exact-SHA CI,
+and no additional published Cloud commit on the feature branch were found.
+The existing WIP and its authorship are preserved. Work is confined to
+`D:\hypatia-worktrees\cross-session-recall`; the dirty primary checkout is untouched.
+
+Completion scope: preserve the detector/context/engine integration; correct
+whole-sentence lexical fallback, relevance ordering, provenance validation,
+bounded/escaped quotes, and deterministic empty/unavailable behavior. Explicit
+registered session IDs constrain recall. Recall skips learned-memory extraction
+and marks its own conversation record as derived recall so future cross-session
+retrieval cannot promote it to fresh evidence. This is optional metadata in the
+existing store, not a schema migration or legacy backfill.
+
+QA/runtime/security review: real `HypatiaApplication` -> `Bootstrap` -> `Brain`
+-> `DesktopController.submit_message` tests stop/reopen the application using
+synthetic disk stores, prove original memory IDs reload, retain hinted answers
+and exact source session labels, and leave learned memories unchanged. Boundary
+tests cover missing provenance, same-session exclusion, semantic relevance over
+recency, irrelevant results, oversized quotes, escaped role-like text, storage
+failure and fabricated model output on an empty result. No authority, budgets,
+execution dispatch or external-provider configuration is modified. Nonempty
+model prose remains subject to model compliance; the tests prove retrieval and
+prompt boundaries, not universal hallucination prevention. There was no live
+provider call or installed-EXE/launcher/private-data test.
+
+Quality gates (2026-10-03, Python 3.14 Windows environment from the existing
+`D:\hypatia-main\.venv`): full unittest **7901 tests in 157.269s**, `OK
+(skipped=3)`, exit 0; 34 focused recall/runtime tests passed. Black: 1062 files
+unchanged; Ruff: all checks passed; MyPy: 622 source files clean; `git diff
+--check`: clean. The full suite emitted non-fatal unclosed-file ResourceWarnings
+at interpreter shutdown; no failed tests. Exact-SHA CI and main integration
+are verified after the release commit, per the ledger's next-milestone recording
+convention. No next milestone is authorized here.
 
 Rationale: confirmed gap (not assumed) — `CognitiveEngine` already persists
 every turn as a `MemoryRecord` tagged `{"brain","conversation"}` with

@@ -9,6 +9,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -158,10 +159,8 @@ class CrossSessionRecallTests(unittest.TestCase):
         response = engine.process(BrainRequest(message=recall_message))
 
         self.assertTrue(response.success)
-        self.assertEqual(len(llm_provider.calls), 1)
-        prompt = llm_provider.calls[0][0]
-        self.assertIn("No matching information was found in any other session", prompt)
-        self.assertIn("do not invent", prompt)
+        self.assertEqual(len(llm_provider.calls), 0)
+        self.assertIn("could not find", response.message)
 
     def test_the_most_recent_matching_turn_surfaces_before_an_older_one(self) -> None:
         """Two relevant turns in the same other session: newest must lead.
@@ -172,8 +171,8 @@ class CrossSessionRecallTests(unittest.TestCase):
         test fails if the sort direction is flipped.
         """
         recall_query = "Let's continue the SQL injection lesson."
-        old_turn_message = f"{recall_query} (first attempt, blind SQLi)"
-        new_turn_message = f"{recall_query} (second attempt, union-based)"
+        old_turn_message = "SQL injection (first attempt, blind SQLi)"
+        new_turn_message = "SQL injection (second attempt, union-based)"
         llm_provider = QueuedLLMProvider(
             ["First attempt notes.", "Second attempt notes.", "Continuing now."]
         )
@@ -222,10 +221,8 @@ class CrossSessionRecallTests(unittest.TestCase):
         exercised against a same-session false positive.
         """
         recall_query = "Let's continue the SQL injection lesson."
-        other_session_message = f"{recall_query} (the real other-session lesson)"
-        own_session_prior_message = (
-            f"{recall_query} (asked earlier in this very session)"
-        )
+        other_session_message = "SQL injection (the real other-session lesson)"
+        own_session_prior_message = "SQL injection (asked earlier in this very session)"
         llm_provider = QueuedLLMProvider(
             ["Noted in the other session.", "Noted in the asking session.", "Hi."]
         )
@@ -292,10 +289,9 @@ class CrossSessionRecallTests(unittest.TestCase):
         response = engine.process(BrainRequest(message=recall_message))
 
         self.assertTrue(response.success)
-        prompt = llm_provider.calls[-1][0]
-        self.assertIn("No matching information was found in any other session", prompt)
-        self.assertIn("do not invent", prompt)
-        self.assertNotIn(unrelated_message, prompt)
+        self.assertEqual(len(llm_provider.calls), 1)
+        self.assertIn("could not find", response.message)
+        self.assertNotIn(unrelated_message, response.message)
 
     def test_ordinary_message_has_no_cross_session_block_at_all(self) -> None:
         message = "What is reflected XSS?"
@@ -310,6 +306,114 @@ class CrossSessionRecallTests(unittest.TestCase):
         prompt, _history, _system = llm_provider.calls[0]
         self.assertEqual(prompt, message)
         self.assertNotIn("Cross-session recall", prompt)
+
+    def test_no_match_cannot_be_replaced_by_a_fabricated_model_memory(self) -> None:
+        provider = QueuedLLMProvider(["You independently mastered SQL last time."])
+        response = self._engine(provider).process(
+            BrainRequest(message="Let's continue the SQL injection lesson.")
+        )
+        self.assertTrue(response.success)
+        self.assertIn("could not find", response.message)
+        self.assertNotIn("mastered", response.message)
+        self.assertEqual(provider.calls, [])
+
+    def test_recalled_answer_is_not_extracted_or_reused_as_new_evidence(self) -> None:
+        provider = QueuedLLMProvider(
+            ["SQL injection uses UNION.", "An assisted answer."]
+        )
+        engine = self._engine(provider)
+        self.session_manager.create("lesson")
+        engine.process(
+            BrainRequest(
+                message="Explain SQL injection", metadata={"session_id": "lesson"}
+            )
+        )
+        extractor = Mock()
+        engine._learned_memory_candidate_extractor = extractor
+        engine.process(BrainRequest(message="Let's continue the SQL injection lesson."))
+        extractor.extract.assert_not_called()
+        retrieved = engine._cross_session_recall_records(
+            "Let's continue the SQL injection lesson.", "lesson"
+        )
+        self.assertEqual(retrieved, [])
+
+    def test_missing_provenance_and_nonconversation_records_are_excluded(self) -> None:
+        for metadata, tags in (
+            ({}, {"brain", "conversation"}),
+            ({"session_id": "elsewhere"}, {"learned"}),
+            ({"session_id": 123}, {"brain", "conversation"}),
+        ):
+            self.memory_manager.add("SQL injection", metadata=metadata, tags=tags)
+        self.assertEqual(
+            self._engine(QueuedLLMProvider([]))._cross_session_recall_records(
+                "Let's continue the SQL injection lesson.", "default"
+            ),
+            [],
+        )
+
+    def test_semantic_relevance_precedes_recency_and_zero_similarity_is_excluded(
+        self,
+    ) -> None:
+        from memory.SemanticMemoryMatch import SemanticMemoryMatch
+
+        records = []
+        for number in range(7):
+            records.append(
+                self.memory_manager.add(
+                    f"topic {number}",
+                    tags={"brain", "conversation"},
+                    metadata={
+                        "session_id": "other",
+                        "user_message": f"topic {number}",
+                        "assistant_message": "reply",
+                    },
+                )
+            )
+        runtime = Mock()
+        runtime.search.return_value = tuple(
+            SemanticMemoryMatch(record.memory_id, 1.0 - index * 0.07)
+            for index, record in enumerate(records[:6])
+        ) + (
+            SemanticMemoryMatch(records[6].memory_id, 0.0),
+        )
+        result = self._engine(
+            QueuedLLMProvider([]), runtime
+        )._cross_session_recall_records(
+            "Let's continue the SQL injection lesson.", "default"
+        )
+        self.assertEqual(
+            [record.memory_id for record, _ in result],
+            [r.memory_id for r in records[:5]],
+        )
+
+    def test_named_session_limits_sources_even_without_id_in_turn_text(self) -> None:
+        self.session_manager.create("lesson-1")
+        for session in ("lesson-1", "unrelated"):
+            self.memory_manager.add(
+                "SQL injection",
+                tags={"brain", "conversation"},
+                metadata={
+                    "session_id": session,
+                    "user_message": "SQL injection",
+                    "assistant_message": "hint",
+                },
+            )
+        result = self._engine(QueuedLLMProvider([]))._cross_session_recall_records(
+            "Let's continue 'lesson-1'.", "default"
+        )
+        self.assertEqual([r.metadata["session_id"] for r, _ in result], ["lesson-1"])
+
+    def test_storage_failure_does_not_fabricate_a_recalled_answer(self) -> None:
+        engine = self._engine(QueuedLLMProvider(["An invented old answer."]))
+        engine._cross_session_recall_records = Mock(
+            side_effect=MemoryError("unavailable")
+        )
+        response = engine.process(
+            BrainRequest(message="Let's continue the SQL injection lesson.")
+        )
+        self.assertTrue(response.success)
+        self.assertIn("recall is unavailable", response.message)
+        self.assertNotIn("invented", response.message)
 
 
 if __name__ == "__main__":

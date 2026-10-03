@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.439] - 2026-10-03
+
+### Added
+
+- Explicit English/Turkish conversational recall can retrieve up to five
+  relevant conversation excerpts from other sessions, including persisted
+  turns loaded after restarting the real desktop application chain.
+- Each excerpt carries its recorded source session. Quotes are length-bounded
+  and escaped as reference data; partial excerpts never establish independent
+  mastery or turn assisted answers into learned-memory facts.
+
+### Fixed
+
+- Lexical fallback searches bounded topic terms rather than requiring the
+  complete recall request to appear verbatim in an old conversation. Registered
+  session IDs can explicitly narrow recall; semantic relevance precedes recency.
+- Missing or invalid provenance is excluded rather than assigned a fabricated
+  default session. Recalled replies are excluded from future cross-session
+  evidence and recall requests skip learned-memory extraction.
+- Empty/underspecified recall uses a deterministic clarification without a model
+  call. Retrieval failure reports unavailability rather than inventing a memory.
+
+### Boundaries
+
+- Fixed-phrase detection and conservative keyword matching are intentionally
+  bounded; unrestricted paraphrase understanding is not implemented. Responses
+  generated from nonempty excerpts still depend on the configured model obeying
+  the attribution and epistemic instructions.
+- No new execution authority, background research, network provider, persistence
+  schema, launcher change, local package deployment, tag, or GitHub Release.
+- Restart tests use synthetic temporary stores and a mocked chat transport;
+  they do not claim live EVREN or installed-EXE validation.
+
 ## [0.3.438] - 2026-10-02
 
 ### Changed

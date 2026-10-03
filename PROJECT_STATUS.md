@@ -2,10 +2,23 @@
 
 ## Runtime Version
 
-`v0.3.438 (Genesis)`
+`v0.3.439 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.439 adds explicit cross-session conversational recall, completing
+the preserved `5794038` WIP. The desktop handler can retrieve bounded, quoted,
+source-labeled conversation turns after application shutdown and restart.
+Lexical topic search works without a semantic index; named registered sessions
+narrow the search. Missing provenance is not invented. Empty recall is handled
+deterministically without asking a model to guess; failed retrieval is reported
+as unavailable. Recall does not create learned-memory facts, and a recalled reply
+cannot become fresh cross-session evidence. Partial/hinted answers are explicitly
+not proof of independent mastery. Verification uses synthetic stores and mocked
+transport, with no access to private user data or installed desktop packages.
+See `docs/dev/MILESTONE.md` for scope and validation evidence. Source version does
+not assert that a locally installed EXE has been upgraded.
 
 Version v0.3.438 adds the running build to the desktop window title
 (`Hypatia 0.3.438`). A user reported the desktop chat still answering "I
