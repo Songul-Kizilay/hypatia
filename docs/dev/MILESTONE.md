@@ -10,16 +10,16 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.438
+## Historical scope: v0.3.438 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Desktop window title states the running build (`Hypatia 0.3.438`), after investigating a user report that desktop chat still answered "I don't know my version" shortly after v0.3.437 shipped |
 | Base SHA | 8a298b3 (origin/main tip, v0.3.437 delivered) |
 | Branch | `fix/desktop-window-title-version`, a `git worktree` forked directly from verified `origin/main` (worktree `D:\hypatia-worktrees\desktop-version-title`) |
-| Status | release |
-| Specialists | none — single bounded fix, investigated and implemented directly in the main session |
-| Blockers | none |
+| Status | delivered (SHA `5935917`, reachable from `origin/main`) |
+| PR | #417, MERGED 2026-10-01T21:39:27Z, standard merge commit `f947aedf3252e55e212b14f0d52ceb995856ac78` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 5935917 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
 Rationale: after v0.3.437 shipped (runtime capability instruction states
 Hypatia's own version), the user reported the real desktop chat still
@@ -76,6 +76,90 @@ call used above; no code in this repository was changed because of it.
 Verification (2026-10-02, Windows canonical environment): 7877 tests,
 `OK (skipped=3)` -- 2 net new over v0.3.437's 7875. Black, Ruff, MyPy
 (`src`, 620 source files) all clean. `git diff --check` clean.
+
+Post-merge verification (2026-10-02, hypatia-lead, recorded as the first
+commit of the v0.3.439 milestone per this file's own convention): PR #417
+base `main`, head `fix/desktop-window-title-version`, `mergeStateStatus:
+CLEAN` before merge, standard merge commit (two parents: `8a298b3`,
+`5935917`), confirming a true merge rather than a squash or rebase.
+Working tree clean after merge.
+
+## Current — v0.3.439
+
+| Field | Value |
+| --- | --- |
+| Milestone | Reliable cross-session conversational memory: when a user explicitly asks, in ordinary conversation, to recall or continue something from a *different* named session (not the active one), Hypatia retrieves bounded, relevance-ranked quoted turns from that other session, labels each with its source `session_id`, and states plainly when nothing relevant exists anywhere — instead of silently having no access and letting the model guess or invent. |
+| Base SHA | f947aed (origin/main tip, v0.3.438 delivered) |
+| Branch | `feature/cross-session-recall-v0.3.439`, a `git worktree` forked directly from verified `origin/main` (worktree `D:\hypatia-worktrees\cross-session-recall`) |
+| Status | release |
+| Specialists | hypatia-runtime (detector + retrieval + prompt wiring), hypatia-security (session-isolation / no-authority-widening review), hypatia-qa (independent regression review) |
+| Blockers | none |
+
+Continuation audit (2026-10-03): local/remote feature HEAD both initially
+`5794038be42dbcdf3acce5af49fc77bebbfb76bf`; `origin/main` remains
+`f947aedf3252e55e212b14f0d52ceb995856ac78`. No open PR, no WIP exact-SHA CI,
+and no additional published Cloud commit on the feature branch were found.
+The existing WIP and its authorship are preserved. Work is confined to
+`D:\hypatia-worktrees\cross-session-recall`; the dirty primary checkout is untouched.
+
+Completion scope: preserve the detector/context/engine integration; correct
+whole-sentence lexical fallback, relevance ordering, provenance validation,
+bounded/escaped quotes, and deterministic empty/unavailable behavior. Explicit
+registered session IDs constrain recall. Recall skips learned-memory extraction
+and marks its own conversation record as derived recall so future cross-session
+retrieval cannot promote it to fresh evidence. This is optional metadata in the
+existing store, not a schema migration or legacy backfill.
+
+QA/runtime/security review: real `HypatiaApplication` -> `Bootstrap` -> `Brain`
+-> `DesktopController.submit_message` tests stop/reopen the application using
+synthetic disk stores, prove original memory IDs reload, retain hinted answers
+and exact source session labels, and leave learned memories unchanged. Boundary
+tests cover missing provenance, same-session exclusion, semantic relevance over
+recency, irrelevant results, oversized quotes, escaped role-like text, storage
+failure and fabricated model output on an empty result. No authority, budgets,
+execution dispatch or external-provider configuration is modified. Nonempty
+model prose remains subject to model compliance; the tests prove retrieval and
+prompt boundaries, not universal hallucination prevention. There was no live
+provider call or installed-EXE/launcher/private-data test.
+
+Quality gates (2026-10-03, Python 3.14 Windows environment from the existing
+`D:\hypatia-main\.venv`): full unittest **7901 tests in 157.269s**, `OK
+(skipped=3)`, exit 0; 34 focused recall/runtime tests passed. Black: 1062 files
+unchanged; Ruff: all checks passed; MyPy: 622 source files clean; `git diff
+--check`: clean. The full suite emitted non-fatal unclosed-file ResourceWarnings
+at interpreter shutdown; no failed tests. Exact-SHA CI and main integration
+are verified after the release commit, per the ledger's next-milestone recording
+convention. No next milestone is authorized here.
+
+Rationale: confirmed gap (not assumed) — `CognitiveEngine` already persists
+every turn as a `MemoryRecord` tagged `{"brain","conversation"}` with
+`metadata["session_id"]` (real per-turn provenance already exists, no
+schema change needed), already has a bounded, relevance-ranked hybrid
+semantic+lexical retrieval pipeline (`_semantic_session_records` /
+`_hybrid_session_records` / `_lexical_recall_records`, each bounded to the
+top 5 matches), and the desktop/`DesktopController` layer already exposes
+`session_search(session_id, query)` end-to-end with graceful empty-result
+composer paths. But every one of those paths requires the caller to
+already name the exact target `session_id` via a strict literal command
+(`"session search <id> -- <query>"`); `tests/brain/test_brain_router.py`
+proves natural-language phrasing is deliberately kept out of that literal
+router (e.g. `test_natural_language_session_search_phrases_remain_messages`).
+The result: an ordinary conversational request such as "let's continue the
+SQL injection lesson", asked from a brand-new session that does not and
+should not know the old session's id, falls through to plain chat, where
+the model has no access to any other session's content and must either
+refuse or hallucinate. Scope for this milestone: add a new, additive
+natural-language front door (a fixed-phrase detector mirroring the existing
+`LiveInformationRequestDetector` pattern) that, only inside the existing
+plain-conversation path and only when explicitly triggered, performs one
+bounded cross-session search (reusing the existing selectors/ranker, never
+reimplementing retrieval), and injects the quoted, session-labeled result
+(or an explicit not-found note) into the model's prompt for that turn only
+— never into the ordinary same-session conversation history, never as a
+new persistence schema, never as a new authority or network capability.
+Preserve, unchanged after this milestone, the next roadmap priorities:
+scheduled independent web-vulnerability research, persistent knowledge with
+source provenance, and an explicitly authorized VMware Kali integration.
 
 ## Historical scope: v0.3.437 (delivered)
 

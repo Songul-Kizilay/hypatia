@@ -166,6 +166,56 @@ class RuntimeCapabilitySelfAwarenessTests(unittest.TestCase):
         system_message = transport.call_args.args[2]["messages"][0]["content"]
         self.assertIn(f"Hypatia version: {VERSION.full}.", system_message)
 
+    def test_the_real_desktop_chat_handler_recalls_a_different_named_session(
+        self,
+    ) -> None:
+        """The real desktop chain surfaces a *different* session's turn.
+
+        Same chain as `test_the_real_desktop_chat_handler_states_the_real_version`:
+        `Bootstrap` -> `Brain` -> `DesktopController.submit_message`. Natural
+        conversational recall phrasing, asked from a brand-new session that
+        never saw the lesson, must still reach the other session's quoted
+        turn and its session_id -- never silence, never a hallucinated answer.
+        """
+        with (
+            patch(
+                "core.Bootstrap.load_llm_process_environment_settings",
+                return_value=(ENABLED, "test-api-key"),
+            ),
+            patch("core.Bootstrap.load_llm_process_system_prompt", return_value=None),
+        ):
+            bootstrap = Bootstrap.from_process_environment(
+                self.root / "recall-memory.json", self.root / "recall-sessions.json"
+            )
+            bootstrap.initialize()
+        self.addCleanup(bootstrap.shutdown)
+        engine = bootstrap.container.resolve(CognitiveEngine)
+        transport = Mock(return_value=ANSWER)
+        engine._llm_provider._transport = transport  # type: ignore[attr-defined]
+        brain = bootstrap.container.resolve(Brain)
+        controller = DesktopController(brain, None, None)
+
+        engine._session_manager.create("sql-injection-lesson")
+        controller.select_session("sql-injection-lesson")
+        lesson_message = (
+            "In the SQL injection lesson, I understand "
+            "UNION-based attacks now; what about blind SQL injection?"
+        )
+        lesson_response = controller.submit_message(lesson_message)
+        self.assertTrue(lesson_response.success)
+
+        engine._session_manager.create("brand-new-session")
+        controller.select_session("brand-new-session")
+        recall_response = controller.submit_message(
+            "Let's continue the SQL injection lesson."
+        )
+
+        self.assertTrue(recall_response.success)
+        user_message_sent = transport.call_args.args[2]["messages"][-1]["content"]
+        self.assertIn("[session: sql-injection-lesson]", user_message_sent)
+        self.assertIn(lesson_message, user_message_sent)
+        self.assertIn("Cross-session recall context", user_message_sent)
+
     def test_chat_receives_the_default_prompt_and_the_capability_context(
         self,
     ) -> None:

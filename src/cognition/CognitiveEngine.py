@@ -19,6 +19,10 @@ from cognition.CalibrationApplicationService import (
 from cognition.ConversationResearchClaimGuard import (
     ConversationResearchClaimGuard,
 )
+from cognition.CrossSessionRecallRequestDetector import (
+    CrossSessionRecallRequestDetector,
+    recall_query_terms,
+)
 from cognition.CuriosityApplicationService import (
     CuriosityApplicationService,
 )
@@ -162,6 +166,12 @@ from knowledge.KnowledgeContextPrompt import (
 )
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
+from memory.CrossSessionRecallContext import (
+    MAX_SOURCE_CHARACTERS,
+    NOT_FOUND_RESPONSE,
+    UNAVAILABLE_RESPONSE,
+    build_cross_session_recall_context,
+)
 from memory.HybridSemanticMemoryRanker import HybridSemanticMemoryRanker
 from memory.LearnedMemoryCandidateExtractionError import (
     LearnedMemoryCandidateExtractionError,
@@ -3769,6 +3779,172 @@ class CognitiveEngine:
             "session_id", "default"
         ) == session_id
 
+    @staticmethod
+    def _is_other_session_conversation_record(
+        record: MemoryRecord, session_id: str
+    ) -> bool:
+        """Mirror `_is_session_conversation_record` with the filter inverted."""
+        source = record.metadata.get("session_id")
+        return (
+            {"brain", "conversation"}.issubset(record.tags)
+            and isinstance(source, str)
+            and bool(source.strip())
+            and len(source) <= MAX_SOURCE_CHARACTERS
+            and source != session_id
+            and not record.metadata.get("cross_session_recall", False)
+            and isinstance(record.metadata.get("user_message"), str)
+            and isinstance(record.metadata.get("assistant_message"), str)
+        )
+
+    def _cross_session_semantic_records(
+        self,
+        matches: tuple[SemanticMemoryMatch, ...],
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        records: list[tuple[MemoryRecord, float]] = []
+        for match in matches:
+            if match.score <= 0.5:
+                continue
+            record = self._memory_manager.get(match.memory_id)
+            if record is None or not self._is_other_session_conversation_record(
+                record, session_id
+            ):
+                continue
+            records.append((record, match.score))
+        return records
+
+    def _cross_session_hybrid_records(
+        self,
+        semantic_records: list[tuple[MemoryRecord, float]],
+        lexical_records: list[MemoryRecord],
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        """Fuse already cross-session candidates, then re-check live records."""
+        ranked_matches = self._hybrid_semantic_memory_ranker.rank(
+            tuple(
+                SemanticMemoryMatch(memory_id=record.memory_id, score=score)
+                for record, score in semantic_records
+            ),
+            tuple(lexical_records),
+        )
+        records: list[tuple[MemoryRecord, float]] = []
+        for match in ranked_matches:
+            record = self._memory_manager.get(match.memory_id)
+            if record is None or not self._is_other_session_conversation_record(
+                record, session_id
+            ):
+                continue
+            records.append((record, match.score))
+        return records
+
+    def _cross_session_lexical_recall_records(
+        self,
+        query: str,
+        session_id: str,
+    ) -> list[MemoryRecord]:
+        terms = recall_query_terms(query)
+        if not terms:
+            return []
+        # Reuse the canonical lexical search; require every topic term rather
+        # than letting common recall boilerplate match an unrelated lesson.
+        records = self._memory_manager.search(terms[0], tags={"brain", "conversation"})
+        for term in terms[1:]:
+            matching_ids = {
+                record.memory_id
+                for record in self._memory_manager.search(
+                    term, tags={"brain", "conversation"}
+                )
+            }
+            records = [record for record in records if record.memory_id in matching_ids]
+        return sorted(
+            [
+                record
+                for record in records
+                if self._is_other_session_conversation_record(record, session_id)
+            ],
+            key=self._record_created_at,
+            reverse=True,
+        )
+
+    def _cross_session_recall_records(
+        self,
+        query: str,
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        """Return up to 5 relevance-ranked turns from genuinely other sessions.
+
+        Modeled on `_semantic_session_records` / `_hybrid_session_records` /
+        `_lexical_recall_records`, but scoped to records whose session_id is
+        *not* the caller's session. Preserve relevance before recency. Fails safe to
+        no cross-session context on any `MemoryError`, never failing the
+        whole turn.
+        """
+        records: list[tuple[MemoryRecord, float]] = []
+        # An explicitly named registered session narrows the candidate set;
+        # its ID is provenance, not necessarily text inside a conversation.
+        named_sessions = {
+            session.session_id
+            for session in self._session_manager.list()
+            if session.session_id.casefold()
+            in {word.strip(".,!?;:\"'()[]") for word in query[:4000].casefold().split()}
+        }
+        if named_sessions:
+            named_records = [
+                record
+                for record in self._memory_manager.search(
+                    "", tags={"brain", "conversation"}
+                )
+                if self._is_other_session_conversation_record(record, session_id)
+                and record.metadata["session_id"] in named_sessions
+            ]
+            return [
+                (record, 0.0)
+                for record in sorted(
+                    named_records, key=self._record_created_at, reverse=True
+                )[:5]
+            ]
+        if not recall_query_terms(query):
+            return []
+        runtime = self._semantic_memory_index_runtime
+        if runtime is not None:
+            try:
+                matches = runtime.search(query, limit=None)
+                semantic_records = self._cross_session_semantic_records(
+                    matches, session_id
+                )
+            except MemoryError:
+                semantic_records = []
+            if semantic_records:
+                try:
+                    lexical_records = self._cross_session_lexical_recall_records(
+                        query, session_id
+                    )
+                except MemoryError:
+                    lexical_records = []
+                if lexical_records:
+                    hybrid_records = self._cross_session_hybrid_records(
+                        semantic_records,
+                        lexical_records,
+                        session_id,
+                    )
+                    if hybrid_records:
+                        records = hybrid_records
+                if not records:
+                    records = semantic_records
+
+        if not records:
+            lexical_records = self._cross_session_lexical_recall_records(
+                query, session_id
+            )
+            records = [(record, 0.0) for record in lexical_records]
+
+        sorted_records = sorted(
+            records,
+            key=lambda pair: (pair[1], self._record_created_at(pair[0])),
+            reverse=True,
+        )
+        return sorted_records[:5]
+
     def _process_conversation(self, request: BrainRequest) -> BrainResponse:
         """Process the deterministic greeting and message conversation flow."""
         try:
@@ -3805,17 +3981,47 @@ class CognitiveEngine:
                 learned_memory_context = self._learned_memory_context_service(
                     request
                 ).build(self._memory_manager, request.message)
+                cross_session_recall_context = ""
+                recall_requested = CrossSessionRecallRequestDetector().detect(
+                    request.message
+                )
+                recall_records: tuple[tuple[MemoryRecord, float], ...] = ()
+                recall_failed = False
+                if recall_requested:
+                    try:
+                        recall_records = tuple(
+                            self._cross_session_recall_records(
+                                request.message, session_id
+                            )
+                        )
+                    except MemoryError:
+                        recall_records = ()
+                        recall_failed = True
+                    cross_session_recall_context = build_cross_session_recall_context(
+                        recall_records
+                    )
+                augmented_prompt_kwargs: dict[str, str] = {}
+                if cross_session_recall_context:
+                    augmented_prompt_kwargs["cross_session_recall_context"] = (
+                        cross_session_recall_context
+                    )
                 provider_prompt = build_learned_memory_augmented_prompt(
                     user_message=request.message,
                     learned_memory_context=learned_memory_context,
+                    **augmented_prompt_kwargs,
                 )
-                generated = self._llm_provider.generate(
-                    provider_prompt,
-                    history=history,
-                    # Descriptive runtime truth, kept apart from the configured
-                    # system prompt; it enables and authorizes nothing.
-                    system_instruction=self._runtime_capabilities.instruction(),
-                )
+                if recall_requested and not recall_records:
+                    # Absence is an observed local fact, never a model decision.
+                    generated = (
+                        UNAVAILABLE_RESPONSE if recall_failed else NOT_FOUND_RESPONSE
+                    )
+                else:
+                    generated = self._llm_provider.generate(
+                        provider_prompt,
+                        history=history,
+                        # Descriptive truth; it enables and authorizes nothing.
+                        system_instruction=self._runtime_capabilities.instruction(),
+                    )
                 response = BrainResponse(
                     message=self._conversation_research_claim_guard.annotate(
                         generated,
@@ -3826,8 +4032,12 @@ class CognitiveEngine:
                     memory_count=0,
                 )
                 try:
-                    batch = self._learned_memory_candidate_extractor.extract(
-                        request.message
+                    batch = (
+                        None
+                        if recall_requested
+                        else self._learned_memory_candidate_extractor.extract(
+                            request.message
+                        )
                     )
                 except LearnedMemoryCandidateExtractionError as error:
                     batch = None
@@ -3864,6 +4074,8 @@ class CognitiveEngine:
             "assistant_message": response.message,
         }
         memory_metadata["session_id"] = session_id
+        if CrossSessionRecallRequestDetector().detect(request.message):
+            memory_metadata["cross_session_recall"] = "true"
         self._memory_manager.add(
             f"User: {request.message}\nHypatia: {response.message}",
             metadata=memory_metadata,
