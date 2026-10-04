@@ -2,6 +2,57 @@
 
 All notable project changes are recorded here.
 
+## [0.3.444] - 2026-10-04
+
+### Added
+
+- The curated research-source catalog (`CuratedResearchSourceDiscoveryProvider`)
+  is generalized from one hardcoded topic to a reusable multi-topic shape and
+  gains a second topic, Cross-Site Scripting (PortSwigger's topic page and
+  cheat sheet, OWASP's XSS Prevention Cheat Sheet). A question naming two
+  covered topics (for example, comparing SQL injection and XSS) now discovers
+  candidates for both, still bounded by the caller's limit, so a single
+  research pass can gather material for distinguishing them.
+
+### Fixed
+
+- Discovered and fixed a real usability defect in the pre-existing
+  `ask_knowledge` intent: `KnowledgeEngine.search()` requires the entire
+  query to appear as one literal substring of a chunk, which meant an
+  ordinary question almost never matched content that plainly answered it,
+  since a natural question is essentially never a source's own exact
+  wording. Added `rank_chunks_by_term_relevance`, which tokenizes the query
+  with the existing `ResearchQueryTerms` utility and ranks already-indexed
+  chunks by shared significant terms, and wired it into `ask_knowledge` in
+  place of the exact-substring search. `KnowledgeEngine.search()` itself and
+  every other caller are unchanged.
+
+### Verification
+
+- A real, unmocked, live demonstration: curated discovery, live HTTPS fetch,
+  acceptance, and indexing for both SQL Injection and XSS against the real
+  internet (5 of 6 candidate pages fetched; the PortSwigger XSS cheat sheet
+  page honestly exceeded the existing fetcher's size bound and was correctly
+  refused, not silently truncated). Reopening the same on-disk stores with
+  fresh objects (the real `ResearchSourceContentRestorer`) restored all 5
+  documents and 1,658 chunks, and the same natural-language queries —
+  including "what is the difference between SQL injection and XSS?", which
+  PortSwigger's own page answers in those words — were answered from the
+  restored content alone.
+- Independent `hypatia-qa` review found a real soundness gap in the first
+  cut of `rank_chunks_by_term_relevance`: `ResearchQueryTerms.of()`
+  deliberately falls back to a query's raw, unfiltered tokens when every
+  token is a stop word (the right default for its own existing callers), so
+  a content-free query like "What is it?" produced term-matching against
+  common words like "is"/"it" and could surface an unrelated chunk as
+  grounded evidence. Fixed by requiring each matched term to be either a
+  recognised technical identifier or at least three characters and not a
+  stop word; a query with no significant term now matches nothing, matching
+  the module's documented guarantee. Confirmed with new regression tests.
+- Full unittest: 8000 tests (up from 7976: 21 for the catalog/ranker/
+  integration work plus 3 added for the QA-found gap above), OK. Black,
+  Ruff, and MyPy on src (625 files) clean. `git diff --check` clean.
+
 ## [0.3.443] - 2026-10-04
 
 ### Fixed

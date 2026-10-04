@@ -2,10 +2,33 @@
 
 ## Runtime Version
 
-`v0.3.443 (Genesis)`
+`v0.3.444 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.444 extends the curated research catalog from one topic to a
+reusable multi-topic shape and adds a second topic, Cross-Site Scripting,
+alongside SQL injection; a question naming both now discovers sources for
+distinguishing them in one pass. It also fixes a real usability defect found
+while proving the curriculum requirements end to end: the pre-existing
+`ask_knowledge` intent's retrieval required the whole question to appear as
+one literal substring of a source, which meant it could not actually answer
+a natural question from researched prose. `rank_chunks_by_term_relevance`
+(reusing the existing `ResearchQueryTerms` tokenizer) now ranks indexed
+chunks by shared significant terms instead; `KnowledgeEngine.search()` and
+every other caller are unchanged. A real, unmocked, live demonstration
+discovered, fetched, accepted, and indexed both topics against the real
+internet, and a real restart (the existing `ResearchSourceContentRestorer`)
+restored all of it and re-answered the same natural questions from disk
+alone, including a comparison question. Independent QA review found that the
+ranker's own tokenizer falls back to a query's raw stop words when every
+token is one, which let a content-free question like "What is it?" surface
+an unrelated chunk as grounded evidence; fixed by requiring each matched
+term to be a technical identifier or at least three non-stop-word
+characters, with new regression tests. The interactive one-question-at-a-
+time Web Security Academy teaching workflow, and Kali Linux tool knowledge,
+remain separately proposed next milestones; see `docs/dev/MILESTONE.md`.
 
 Version v0.3.443 closes a reproduced learned-memory weakness: extraction
 previously judged each turn alone, so a student who had just received a hint
