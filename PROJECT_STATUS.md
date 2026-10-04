@@ -2,10 +2,26 @@
 
 ## Runtime Version
 
-`v0.3.442 (Genesis)`
+`v0.3.443 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.443 closes a reproduced learned-memory weakness: extraction
+previously judged each turn alone, so a student who had just received a hint
+or the answer could claim independent mastery and have it durably recorded.
+The extractor's prompt now optionally sees a small, bounded, same-session
+window of recent conversation (never itself extractable, only usable to
+judge assistance), and a new deterministic module, `AssistedLearningGuard`,
+filters the returned batch before persistence regardless of what the model
+proposed: external-assistance disclosure (English/Turkish), an independence
+claim right after a substantial hint, verbatim restatement of a recent reply,
+or a bare acknowledgement all block a `self_fact` mastery candidate. Only
+`self_fact` candidates are touched; ordinary preferences, project facts, and
+goals are unaffected. Verified with a real `HypatiaApplication` +
+`DesktopController` restart test (mocked HTTP transport, not a live model):
+a suppressed claim stays absent after restart, an unaided one survives. No
+new persistence schema, authority, or provider path.
 
 Version v0.3.442 adds a third, closed-vocabulary research source discovery
 provider, `curated`, alongside the existing `crossref` and `nvd` providers. It

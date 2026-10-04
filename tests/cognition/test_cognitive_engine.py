@@ -459,10 +459,17 @@ class RecordingCandidateExtractor:
         batch: LearnedMemoryCandidateBatch | None = None,
     ) -> None:
         self.calls: list[str] = []
+        self.context_calls: list[str] = []
         self.batch = batch
 
-    def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
+    def extract(
+        self,
+        source_text: str,
+        *,
+        recent_session_context: str = "",
+    ) -> LearnedMemoryCandidateBatch:
         self.calls.append(source_text)
+        self.context_calls.append(recent_session_context)
         if self.batch is not None:
             return self.batch
         return LearnedMemoryCandidateBatch(
@@ -494,7 +501,13 @@ class RecordingCandidateSequenceExtractor:
         self.calls: list[str] = []
         self.batches = batches
 
-    def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
+    def extract(
+        self,
+        source_text: str,
+        *,
+        recent_session_context: str = "",
+    ) -> LearnedMemoryCandidateBatch:
+        del recent_session_context
         batch = self.batches[len(self.calls)]
         self.calls.append(source_text)
         return batch
@@ -507,7 +520,13 @@ class FailingCandidateExtractor:
         self.calls: list[str] = []
         self.error = error
 
-    def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
+    def extract(
+        self,
+        source_text: str,
+        *,
+        recent_session_context: str = "",
+    ) -> LearnedMemoryCandidateBatch:
+        del recent_session_context
         self.calls.append(source_text)
         raise self.error
 

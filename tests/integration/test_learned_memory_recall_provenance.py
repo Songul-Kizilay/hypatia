@@ -79,7 +79,13 @@ class RecordingLLMProvider:
 class StubExtractor:
     """Return one candidate for the teaching sentence, nothing otherwise."""
 
-    def extract(self, message: str) -> LearnedMemoryCandidateBatch | None:
+    def extract(
+        self,
+        message: str,
+        *,
+        recent_session_context: str = "",
+    ) -> LearnedMemoryCandidateBatch | None:
+        del recent_session_context
         if SECRET not in message:
             return None
         return LearnedMemoryCandidateBatch(

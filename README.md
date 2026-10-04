@@ -93,6 +93,14 @@ To create the world's most capable personal AI research companion.
 - Bounded, same-session multi-turn history with a configurable turn limit
 - Opt-in learned-memory extraction with append-only corrections, bounded
   context, deterministic keyword selection, and ranked top-k selection
+- Same-session assisted-learning protection: the extractor sees a small
+  bounded window of recent same-session conversation to judge whether a hint
+  or answer was just given, and a deterministic filter (independent of model
+  compliance) drops an independent-mastery claim when the user discloses
+  outside help, claims independence right after a substantial hint, restates
+  a hint verbatim, or merely acknowledges an explanation. Only the specific
+  self-understanding claim kind is ever filtered; other learned facts and
+  preferences are unaffected
 - A local, derived semantic-memory index core with validated embeddings and
   overflow-safe deterministic cosine ranking, capped vector dimensions, and
   bounded entry/identifier/aggregate live-memory use, available through the

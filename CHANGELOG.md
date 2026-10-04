@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.443] - 2026-10-04
+
+### Fixed
+
+- Learned-memory extraction (`LLMLearnedMemoryCandidateExtractor`) previously
+  evaluated each turn in isolation, with no visibility into whether Hypatia
+  had just supplied a hint or the answer. A student who received help could
+  say "I solved it independently" and have that unsupported mastery claim
+  durably recorded as a `self_fact` learned memory. The extractor's prompt
+  now optionally receives a small, bounded (two-turn) block of recent
+  same-session conversation, explicitly marked as untrusted data usable only
+  to judge assistance, never as a source to extract from.
+- Added a deterministic backstop, `AssistedLearningGuard`, that filters the
+  extractor's returned batch before persistence regardless of what the model
+  returned: a `self_fact` candidate is dropped when the user discloses
+  external assistance (English and Turkish phrasing), claims independence
+  immediately after a substantial recent Hypatia reply, restates a long
+  verbatim run of that reply, or the message is a bare acknowledgement with
+  no content of its own. Only `self_fact` candidates are ever filtered;
+  preferences, project facts, user facts, and goals are untouched.
+
+### Tests
+
+- Reproduced the BSCP-style scenario (incorrect answer, hint, correct answer
+  claimed as independent) and confirmed it is no longer recorded as mastery
+  while the conversational reply still acknowledges correctness; confirmed a
+  genuinely unaided new answer is not misclassified as assisted; confirmed
+  explicit disclosure in English and Turkish, and bare agreement, are both
+  rejected; confirmed ordinary preferences survive unaffected. Includes a
+  real `HypatiaApplication` + `DesktopController` restart test with a mocked
+  HTTP transport (not a live model) proving the suppressed claim stays absent
+  and the unaided one survives restart.
+
 ## [0.3.442] - 2026-10-04
 
 ### Added
