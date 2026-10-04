@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.446] - 2026-10-04
+
+### Added
+
+- Ordinary LLM conversation can use relevant, accepted local knowledge through
+  the real conversation path, with bounded untrusted excerpts and deterministic
+  source citations. Accepted knowledge remains available after restart through
+  the existing restoration path. Explicit `ask_knowledge` remains unchanged.
+
+### Fixed
+
+- Automatic grounding no longer treats casual messages such as "Can you help me
+  find my keys?" as Burp questions through common words or substring overlap.
+  The conversation-only selector requires whole-term coverage after removing
+  conversational filler, checks only the first 600 characters actually supplied
+  to the model, and selects at most three excerpts that add query coverage.
+  SQL injection questions cannot gain redundant XSS citations merely through
+  shared words such as user, data, or output. Mixed-index regressions preserve
+  SQL injection, XSS, Burp, and comparison questions with exact source sets.
+
+### Scope and limits
+
+- Matching is conservative lexical evidence selection, not semantic entailment;
+  unknown aliases/paraphrases may fall back to ordinary chat without local
+  citations. Provider transport is mocked in regressions; prompt framing does
+  not establish live-model prompt-injection resistance.
+- No new research/tool execution, authority, budget, storage schema, or learning
+  privileges. Interactive BSCP teaching and Kali laboratory integration remain
+  separate, unstarted milestones. No desktop installation or launcher changes.
+
 ## [0.3.445] - 2026-10-04
 
 ### Added

@@ -10,6 +10,40 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
+## Current scope: v0.3.446 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Ordinary chat grounding in accepted local knowledge; fix QA false-positive matching without changing explicit ask_knowledge. |
+| Base SHA | `ee943ff459be18c6f3b99a186297d05f5d69686a` (verified GitHub main; PR #425) |
+| Branch | `feature/chat-knowledge-grounding-v0.3.446`, worktree `D:\hypatia-worktrees\chat-knowledge-grounding` |
+| Status | release; exact-SHA CI, PR checks, standard merge and main verification pending |
+| Release SHA | Recorded by the next milestone after delivery, per ledger convention |
+
+Claude's uncommitted implementation was preserved after the user cancelled
+automatic continuation and closed the Code session; process/Git checks preceded
+edits. The keys/Burp false match was reproduced through the real application.
+The chat-only selector now filters filler, matches whole terms in the visible
+600-character excerpts, and requires coverage within at most three results.
+Each additional excerpt must contribute uncovered query terms. Mixed-index
+tests reject casual/partial-topic messages and redundant XSS citations on SQLi
+questions, while preserving SQLi/XSS/Burp and comparison grounding.
+
+Independent QA found and verified the redundant-source correction; independent
+security review found no new reportable vulnerability and prompted the visible-
+excerpt boundary regression. Mock transport tests establish deterministic
+selection and untrusted framing, not live-model compliance. Existing recall
+fallback, restart restoration and assisted-learning tests remain in place.
+
+Local validation: 8039 unittest tests, `OK (skipped=3)`, exit 0; Black, Ruff,
+MyPy (625 source files), and `git diff --check` passed. Post-version checks
+also verify the source/package version stays consistent. Delivery remains
+pending until the exact commit and PR pass Linux/Windows CI and reach main.
+
+Scope excludes interactive BSCP teaching (separate permission/version), new
+research/execution authority, Windows installation/launchers, VMware/Kali/EVREN,
+private user data, tags and GitHub Releases.
+
 ## Historical scope: v0.3.445 (delivered)
 
 | Field | Value |

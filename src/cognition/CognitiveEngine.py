@@ -50,7 +50,10 @@ from cognition.KaliRuntimeReadinessApplicationService import (
 from cognition.KnowledgeReconciliationApplicationService import (
     KnowledgeReconciliationApplicationService,
 )
-from cognition.KnowledgeRelevanceSearch import rank_chunks_by_term_relevance
+from cognition.KnowledgeRelevanceSearch import (
+    rank_chunks_by_term_relevance,
+    rank_chunks_for_conversation,
+)
 from cognition.LearnedMemoryAuditApplicationService import (
     LearnedMemoryAuditApplicationService,
 )
@@ -164,6 +167,7 @@ from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeContextPrompt import (
     KNOWLEDGE_CONTEXT_SYSTEM_INSTRUCTION,
     build_knowledge_context_prompt,
+    build_knowledge_reference_block,
 )
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
@@ -4062,10 +4066,26 @@ class CognitiveEngine:
                     cross_session_recall_context = build_cross_session_recall_context(
                         recall_records
                     )
+                knowledge_results = rank_chunks_for_conversation(
+                    self._knowledge_engine.chunks(),
+                    request.message,
+                    max_results=KNOWLEDGE_CONTEXT_MAX_RESULTS,
+                )
+                knowledge_citations: list[KnowledgeCitation] = []
                 augmented_prompt_kwargs: dict[str, str] = {}
                 if cross_session_recall_context:
                     augmented_prompt_kwargs["cross_session_recall_context"] = (
                         cross_session_recall_context
+                    )
+                if knowledge_results:
+                    knowledge_citations = [
+                        KnowledgeCitation.from_chunk(result)
+                        for result in knowledge_results
+                    ]
+                    augmented_prompt_kwargs["knowledge_context"] = (
+                        build_knowledge_reference_block(
+                            knowledge_results, knowledge_citations
+                        )
                     )
                 provider_prompt = build_learned_memory_augmented_prompt(
                     user_message=request.message,
@@ -4077,6 +4097,10 @@ class CognitiveEngine:
                     generated = (
                         UNAVAILABLE_RESPONSE if recall_failed else NOT_FOUND_RESPONSE
                     )
+                    # This deterministic fallback never consulted the retrieved
+                    # knowledge, so citing it here would misstate what grounded
+                    # the reply.
+                    knowledge_citations = []
                 else:
                     generated = self._llm_provider.generate(
                         provider_prompt,
@@ -4096,6 +4120,7 @@ class CognitiveEngine:
                     request_id=request.request_id,
                     intent="message",
                     memory_count=0,
+                    knowledge_citations=knowledge_citations,
                 )
                 recent_turns = self._recent_same_session_turns(session_id)
                 try:

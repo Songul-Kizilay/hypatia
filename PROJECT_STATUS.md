@@ -2,10 +2,19 @@
 
 ## Runtime Version
 
-`v0.3.445 (Genesis)`
+`v0.3.446 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.446 grounds ordinary LLM chat in relevant accepted local knowledge,
+with bounded untrusted excerpts and deterministic citations. Its separate
+conversation selector removes filler, requires whole-term query coverage in
+the visible excerpts, and excludes redundant partial matches. Mixed SQLi/XSS/
+Burp regressions reject casual requests and preserve exact source attribution.
+Restart restoration and assisted-learning protections remain covered. This is
+conservative lexical retrieval, not semantic understanding or live-model
+injection resistance; interactive BSCP teaching remains a separate milestone.
 
 Version v0.3.445 is Milestone 2 of "cybersecurity learning first, Kali Linux
 tools second": the curated catalog gains eleven LEARN-only entries, one per
