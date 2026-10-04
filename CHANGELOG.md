@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.442] - 2026-10-04
+
+### Added
+
+- A third, closed-vocabulary research source discovery provider, `curated`,
+  alongside the existing `crossref` and `nvd` providers. It makes no network
+  call: `discover()` is a pure, deterministic lookup against a small,
+  hand-reviewed catalog of fixed URLs at recognized authoritative security
+  teaching sources. The first catalog entry covers SQL Injection, with
+  PortSwigger Web Security Academy's topic page and cheat sheet and OWASP's
+  SQL Injection Prevention Cheat Sheet. An operator selects it exactly like
+  any other provider, through the existing plan-authorization flow; a
+  question matching no catalog topic returns no candidates rather than a
+  guess. Every returned URL still passes through the existing
+  `ResearchSourceCandidate` validation and, if accepted, the existing
+  `HttpResearchSourceFetcher` / `PublicHttpsUrlValidator` /
+  `PinnedHttpsTransport` path, unmodified.
+
+### Fixed
+
+- Curiosity's "ask the provider(s) this run has not asked yet" logic
+  (`CuriosityProposalBuilder`, `ResearchKnowledgeGapDetector`) now iterates
+  only the two general-purpose providers (Crossref, NVD) and never proposes
+  Curated, which only ever answers for its small fixed catalog and would
+  otherwise be proposed for questions it was never meant to answer.
+
+### Verification
+
+- A real, unmocked, live demonstration (not part of the automated suite):
+  Curated discovery for "SQL Injection" against the actual research pipeline
+  found the 3 real catalog URLs; all 3 were fetched live over HTTPS through
+  the existing, unmodified fetcher; each was accepted, indexed, and recorded
+  as deterministic evidence (real quoted excerpts, real SHA256, no model
+  call); a rendered teaching report cited all three sources with honest
+  "partially supported" / "no retained comparison" framing; reopening the
+  same on-disk run store in a fresh process reproduced byte-identical
+  evidence, sources, and hashes. No live EVREN/model call was made or
+  claimed.
+- Full unittest: 7924 tests (up from 7909), OK. Black, Ruff, and MyPy on
+  src (623 files) clean. `git diff --check` clean.
+
 ## [0.3.441] - 2026-10-03
 
 ### Fixed

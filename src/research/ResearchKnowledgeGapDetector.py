@@ -17,7 +17,7 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchClaimCalibrator import ResearchClaimCalibrator
 from research.ResearchClaimRecord import ResearchClaimRecord
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchDiscoveryProviderName import GENERAL_DISCOVERY_PROVIDERS
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchHypothesisAppraiser import ResearchHypothesisAppraiser
@@ -331,25 +331,34 @@ class ResearchKnowledgeGapDetector:
         run: ResearchRun,
         detected_at: datetime,
     ) -> list[ResearchKnowledgeGap]:
-        """Note a question put to one provider when the run could ask another.
+        """Note a question put to one general provider when another was not.
 
-        Only when at least one provider was actually asked. A run that has
-        searched nowhere is already an unsupported question, and saying it also
-        has a coverage gap would be two names for one emptiness.
+        Only when at least one *general-purpose* provider was actually asked.
+        A run that has searched nowhere among Crossref/NVD is already an
+        unsupported question there, and saying it also has a coverage gap
+        would be two names for one emptiness. A run that asked only Curated
+        is in exactly that position: Curated only ever answers for its own
+        small fixed catalog, so having asked it says nothing about whether
+        Crossref or NVD would add anything, and it must not be read as "one
+        general provider down, one to go" the way an actual Crossref/NVD ask
+        would be. Treating it that way previously produced a gap naming
+        *both* general providers as unasked, breaking the "exactly one
+        remaining provider" assumption this gap kind's proposal text relies
+        on.
 
         Nothing here prefers the provider that was not asked. Which results are
         better is exactly the judgement the comparison report refuses to make,
         and a gap that implied it would be that judgement wearing a question
         mark.
         """
+        general_provider_values = {
+            provider.value for provider in GENERAL_DISCOVERY_PROVIDERS
+        }
         asked = {discovery.provider for discovery in run.discoveries}
-        if not asked:
+        asked_general = asked & general_provider_values
+        if not asked_general:
             return []
-        unasked = sorted(
-            provider.value
-            for provider in ResearchDiscoveryProviderName
-            if provider.value not in asked
-        )
+        unasked = sorted(general_provider_values - asked)
         if not unasked:
             return []
         return [

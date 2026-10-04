@@ -2,10 +2,32 @@
 
 ## Runtime Version
 
-`v0.3.441 (Genesis)`
+`v0.3.442 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.442 adds a third, closed-vocabulary research source discovery
+provider, `curated`, alongside the existing `crossref` and `nvd` providers. It
+makes no network call: it is a pure, deterministic lookup against a small,
+hand-reviewed catalog of fixed URLs at recognized authoritative security
+teaching sources, starting with SQL Injection (PortSwigger Web Security
+Academy's topic page and cheat sheet, and OWASP's SQL Injection Prevention
+Cheat Sheet). An operator selects it exactly like any other provider through
+the existing, unmodified plan-authorization flow; every candidate still
+passes through the existing source-candidate validation and, if accepted, the
+existing SSRF-safe fetcher. A real, unmocked, live demonstration discovered,
+fetched, accepted, and recorded deterministic evidence from all three real
+catalog URLs, producing a source-attributed teaching report that survived an
+application restart. No research-authority, persistence-schema, or provider
+network-path changes beyond adding the new provider itself; curiosity's
+automatic "ask the unasked provider" proposal logic was updated to exclude
+Curated, since it only ever answers for its small fixed catalog. This
+milestone closes the research/evidence/persistence/teaching loop; it does not
+add the interactive one-question-at-a-time practice/quiz feature (with
+assisted-vs-independent answer tracking) requested alongside it. That remains
+a proposed next small milestone, not silently dropped: see
+`docs/dev/MILESTONE.md`.
 
 Version v0.3.441 closes a reproduced named-session relevance bug: specifying a
 source session no longer causes unrelated turns from that session to count as
