@@ -50,6 +50,7 @@ from cognition.KaliRuntimeReadinessApplicationService import (
 from cognition.KnowledgeReconciliationApplicationService import (
     KnowledgeReconciliationApplicationService,
 )
+from cognition.KnowledgeRelevanceSearch import rank_chunks_by_term_relevance
 from cognition.LearnedMemoryAuditApplicationService import (
     LearnedMemoryAuditApplicationService,
 )
@@ -3220,14 +3221,9 @@ class CognitiveEngine:
             return self._response_composer.ask_knowledge_failure(
                 request, "A language-model runtime is required for ask knowledge."
             )
-        try:
-            results = self._knowledge_engine.search(query)[
-                :KNOWLEDGE_CONTEXT_MAX_RESULTS
-            ]
-        except KnowledgeError as error:
-            return self._response_composer.ask_knowledge_failure(
-                request, f"Knowledge retrieval failed: {error}"
-            )
+        results = rank_chunks_by_term_relevance(self._knowledge_engine.chunks(), query)[
+            :KNOWLEDGE_CONTEXT_MAX_RESULTS
+        ]
         if not results:
             return self._response_composer.ask_knowledge_failure(
                 request, "No matching local knowledge was found."

@@ -48,6 +48,14 @@ _OWASP_SQLI_PREVENTION = (
     "https://cheatsheetseries.owasp.org/cheatsheets/"
     "SQL_Injection_Prevention_Cheat_Sheet.html"
 )
+_PORTSWIGGER_XSS = "https://portswigger.net/web-security/cross-site-scripting"
+_PORTSWIGGER_XSS_CHEAT_SHEET = (
+    "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet"
+)
+_OWASP_XSS_PREVENTION = (
+    "https://cheatsheetseries.owasp.org/cheatsheets/"
+    "Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+)
 
 
 class CuratedResearchSourceDiscoveryProviderTests(unittest.TestCase):
@@ -103,7 +111,7 @@ class CuratedResearchSourceDiscoveryProviderTests(unittest.TestCase):
             [],
         )
         self.assertEqual(
-            self.provider.discover("cross-site scripting", limit=10),
+            self.provider.discover("server-side request forgery", limit=10),
             [],
         )
 
@@ -166,6 +174,82 @@ class CuratedResearchSourceDiscoveryProviderTests(unittest.TestCase):
         )
 
 
+class CrossSiteScriptingTopicTests(unittest.TestCase):
+    """The second catalog topic, proving the catalog genuinely generalizes."""
+
+    def setUp(self) -> None:
+        self.provider = CuratedResearchSourceDiscoveryProvider()
+
+    def test_xss_acronym_returns_the_fixed_catalog(self) -> None:
+        candidates = self.provider.discover("What is reflected XSS?", limit=10)
+
+        self.assertEqual(
+            [c.url for c in candidates],
+            [_PORTSWIGGER_XSS, _PORTSWIGGER_XSS_CHEAT_SHEET, _OWASP_XSS_PREVENTION],
+        )
+
+    def test_hyphenated_phrasing_matches(self) -> None:
+        candidates = self.provider.discover(
+            "Teach me cross-site scripting for the BSCP exam.", limit=10
+        )
+        self.assertEqual(len(candidates), 3)
+
+    def test_unhyphenated_three_word_phrasing_also_matches(self) -> None:
+        """ "cross site scripting" tokenizes as three separate words, not one."""
+        candidates = self.provider.discover("What is cross site scripting?", limit=10)
+        self.assertEqual(len(candidates), 3)
+
+    def test_mentioning_only_one_required_term_does_not_match(self) -> None:
+        self.assertEqual(self.provider.discover("scripting language", limit=10), [])
+        self.assertEqual(self.provider.discover("cross country running", limit=10), [])
+
+
+class MultiTopicDiscoveryTests(unittest.TestCase):
+    """A question naming two covered topics gets candidates for both.
+
+    Directly supports "distinguish vulnerability classes that are easily
+    confused": a single discovery step can gather sources for SQL injection
+    and XSS together, so later evidence/teaching steps have material from
+    both to actually compare.
+    """
+
+    def setUp(self) -> None:
+        self.provider = CuratedResearchSourceDiscoveryProvider()
+
+    def test_a_comparison_question_discovers_both_topics(self) -> None:
+        candidates = self.provider.discover(
+            "What is the difference between SQL injection and XSS?", limit=10
+        )
+
+        urls = {c.url for c in candidates}
+        self.assertEqual(
+            urls,
+            {
+                _PORTSWIGGER_SQLI,
+                _PORTSWIGGER_CHEAT_SHEET,
+                _OWASP_SQLI_PREVENTION,
+                _PORTSWIGGER_XSS,
+                _PORTSWIGGER_XSS_CHEAT_SHEET,
+                _OWASP_XSS_PREVENTION,
+            },
+        )
+
+    def test_a_comparison_question_respects_the_limit(self) -> None:
+        candidates = self.provider.discover(
+            "What is the difference between SQL injection and XSS?", limit=4
+        )
+
+        self.assertEqual(len(candidates), 4)
+
+    def test_single_topic_question_still_returns_only_that_topic(self) -> None:
+        candidates = self.provider.discover("sql injection", limit=10)
+
+        self.assertEqual(
+            {c.url for c in candidates},
+            {_PORTSWIGGER_SQLI, _PORTSWIGGER_CHEAT_SHEET, _OWASP_SQLI_PREVENTION},
+        )
+
+
 class CuratedProviderComposesWithTheRealStepOperationTests(unittest.TestCase):
     """Full composition through the real, unmodified discovery step operation.
 
@@ -217,7 +301,7 @@ class CuratedProviderComposesWithTheRealStepOperationTests(unittest.TestCase):
         self.assertEqual(updated.evidence, ())
 
     def test_an_unrelated_question_discovers_nothing(self) -> None:
-        run = self.manager.create("What is reflected XSS?")
+        run = self.manager.create("What is server-side request forgery?")
 
         result = self.operation.run(
             self.step, ResearchPlanExecutionContext(research_run_id=run.run_id)

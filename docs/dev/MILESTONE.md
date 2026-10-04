@@ -10,14 +10,154 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.443
+## Current — v0.3.444
+
+| Field | Value |
+| --- | --- |
+| Milestone | Cybersecurity knowledge acquisition, stage 1 of "learning first, Kali tools second": extend the curated research catalog from one topic to a reusable multi-topic shape (SQL Injection + Cross-Site Scripting) and fix a real `ask_knowledge` usability defect so natural questions actually retrieve researched prose. |
+| Base SHA | `58902ab75562c73d11799ccb619073ec505b27b6` (verified origin/main, v0.3.443 delivered via PR #422) |
+| Branch | `feature/cybersecurity-knowledge-curriculum-v0.3.444`, separate worktree `D:\hypatia-worktrees\cybersecurity-knowledge-curriculum` |
+| Status | release |
+| Blockers | none |
+
+Directive: build demonstrable, source-backed cybersecurity knowledge through
+the *existing* authorized research system before any Kali Linux tool
+knowledge (a separate, later, LEARN-only milestone) and strictly before any
+lab-execution authority (a separate, later, design-first milestone requiring
+its own authorization). No active scans, payloads, exploitation or
+brute-forcing were performed or are in scope here.
+
+`CuratedResearchSourceDiscoveryProvider`'s single-topic shape
+(`required_terms`/`alias_terms`/`candidates` on one `_CuratedTopic`) is
+generalized: `alias_terms` becomes `alias_term_sets: tuple[frozenset[str], ...]`
+(any one full set matching is enough — supports both "XSS" and "cross site
+scripting" phrasings without false-positiving on a lone shared word), and
+`_matching_topic` (singular) becomes `_matching_topics` (plural), returning
+every topic whose terms are present so a comparison question (e.g. "how do
+SQL injection and XSS differ?") surfaces evidence for both in one discovery
+pass — directly serving requirement #5, distinguishing easily-confused
+vulnerability classes. A second catalog entry was added for Cross-Site
+Scripting with three real, hand-verified (HTTP 200 before hardcoding)
+PortSwigger/OWASP URLs.
+
+Real defect found while proving the curriculum requirements end to end, not
+invented work: the pre-existing `ask_knowledge` intent retrieved context via
+`KnowledgeEngine.search()`, whose matching requires the *entire* casefolded
+query to be a literal substring of a chunk — verified directly that
+`search("UNION")` matches but `search("How does UNION-based SQL injection
+work?")` returns nothing. That made grounded natural-language Q&A over
+researched prose unusable in practice. Fixed with a new, narrowly-scoped
+module, `cognition.KnowledgeRelevanceSearch.rank_chunks_by_term_relevance`,
+reusing the existing `research.ResearchQueryTerms` tokenizer to rank chunks by
+count of distinct shared significant terms (not frequency, so a chunk cannot
+out-rank others by repeating one term). Placed in `cognition` rather than
+`knowledge` to preserve the existing one-way dependency (`research` depends
+on `knowledge`, never the reverse — confirmed by grep before adding code).
+`KnowledgeEngine.search()` itself and every other caller are unchanged;
+`_process_ask_knowledge` is the only call site switched to the new ranker.
+Deliberately did *not* inject research context into the ordinary chat path
+(`_process_conversation`), judging the regression risk to its extensively
+pinned prompt-content tests too high relative to benefit — `ask_knowledge`
+(isolated, non-memory-mutating, already citation-bearing) and the v0.3.443
+`AssistedLearningGuard` (already topic-agnostic) together already satisfy the
+"teach and assess without crediting assistance" requirement, proven by a new
+combined integration test rather than by touching the sensitive shared path.
+
+Live, unmocked demonstration (not a mocked test — the two are explicitly
+distinguished in this report): a real scratchpad script discovered, fetched,
+and accepted sources for both topics against the real internet through the
+unmodified `ResearchSourceAcceptanceService`/`HttpResearchSourceFetcher`
+pipeline. 5 of 6 candidate URLs were fetched and accepted (1658 restored
+chunks across both topics' documents); the PortSwigger XSS cheat-sheet page
+was correctly *refused* by the pre-existing `maximum_bytes=1_000_000` SSRF/
+size guard in `HttpResearchSourceFetcher` — reported here as the guard
+working as designed, not silently worked around or treated as a bug. A
+second script then simulated an application restart with fresh
+`KnowledgeEngine`/`ResearchRunManager` instances sharing nothing but the
+on-disk run and source-content stores, called the real, pre-existing
+`ResearchSourceContentRestorer`, and re-answered the same natural-language
+questions — including a direct SQLi-vs-XSS comparison question, which
+surfaced PortSwigger's own sentence distinguishing the two — from disk alone.
+No EVREN/live-LLM call was made or claimed; this demonstrates retrieval and
+persistence, not generation, and is reported as such.
+
+Reviews: hypatia-security — no blocking findings; one non-blocking residual
+noted — term-based relevance ranking widens which *already-accepted,
+already-authorized* documents can surface for a given query, compared to the
+exact-substring match it replaces. This is not a new authority or trust
+boundary: `ask_knowledge` still only searches content that already passed
+through `ResearchSourceAcceptanceService`'s existing acceptance checks, and
+`KnowledgeContextPrompt.py`'s untrusted-data framing around retrieved context
+is unchanged. hypatia-qa — independently re-derived behavior against the real
+modules (not just the tests' assertions) and found one real, high-severity
+soundness gap, one related medium-severity design-honesty gap, and one
+documentation-grounding gap, all addressed before release:
+
+1. (High, fixed) `rank_chunks_by_term_relevance`'s own docstring claimed an
+   unusable query "matches nothing, never a guess," but `ResearchQueryTerms.of()`
+   deliberately falls back to a query's *raw, unfiltered* tokens when every
+   token is a stop word (the correct default for its own other callers, which
+   rank against a whole corpus rather than doing substring containment). QA
+   demonstrated directly that `"What is it?"` produced terms `("what", "is",
+   "it")` and that these matched both a relevant chunk and a wholly unrelated
+   one, which `_process_ask_knowledge` would have surfaced as a cited,
+   seemingly-grounded answer — an invented-provenance shape. Fixed by adding
+   `_significant_terms`: a term only counts if it is a recognised technical
+   identifier, or is at least three characters and not one of
+   `ResearchQueryTerms.STOP_WORDS`; a query with no significant term now
+   genuinely matches nothing. Covered by new regression tests reproducing
+   QA's exact stop-word-only scenario against both a relevant and an
+   unrelated chunk.
+2. (Medium, fixed by the same change) No minimum term length meant a short,
+   generic, non-technical token (QA's example: "ip") would substring-match
+   inside unrelated words ("equip", "pipeline"). The three-character floor
+   above closes this alongside the stop-word fix; covered by a dedicated test.
+3. (Documentation gap, now closed) At the time of QA's review this ledger had
+   no v0.3.444 entry at all, making the CHANGELOG/PROJECT_STATUS live-
+   demonstration numbers unverifiable from the repository per CLAUDE.md's
+   "ground truth before claims." This entry is that evidence.
+
+QA separately verified (no change needed): tie-breaking stability under
+Python's `reverse=True` stable sort; the gap-reporting test genuinely proves
+no LLM call occurred; the synthetic-example test inspects the actual
+transport payload for both the verbatim example and the cited evidence; the
+restart test uses two genuinely independent `Bootstrap`/container instances
+sharing only on-disk state; both corrected "unrelated topic" fixtures are
+confirmed still unrelated to either catalog topic; no other test in the
+suite depended on the provider's old single-topic-match behavior; removing
+the dead `except KnowledgeError` around the old `search()` call was harmless
+(its only error path was already excluded by the existing `if not query`
+guard); and swapping `ask_knowledge`'s retrieval mechanism was judged
+in-scope, not scope creep, since it is a genuine precondition for this
+milestone's own natural-language/comparison/synthetic-example requirements
+and leaves `KnowledgeEngine.search()` and its other caller untouched.
+
+Tests: 6 new `test_curated_research_source_discovery_provider.py` cases
+(acronym/hyphenated/unhyphenated XSS phrasing, single-required-term
+non-match, multi-topic comparison discovery respecting `limit`, single-topic
+question still returning only that topic) plus 2 existing fixtures corrected
+from accidentally-now-matching "unrelated topic" queries; 11 new
+`test_knowledge_relevance_search.py` unit tests (shared-term ranking, tie
+order, no-shared-terms exclusion, identifier tokenization e.g. "UNION-based"
+staying one token, case-insensitivity, empty inputs, plus 3 added for the
+QA-found stop-word/short-term gap: a stop-word-only query against a relevant
+and an unrelated chunk, a lone short non-technical term, and one significant
+term surviving among many stop words); 6 new
+`test_cybersecurity_knowledge_curriculum.py` integration tests covering
+accepted-content grounding, honest gap-reporting for an unresearched topic,
+two-topic comparison, synthetic-example analysis, restart persistence, and
+teach-then-assess without crediting a hint. Full unittest (8000 tests),
+Black, Ruff, MyPy and `git diff --check` all re-run clean after the QA fix.
+
+## Historical scope: v0.3.443 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Same-session assisted-help contamination of learned-memory extraction: a student who just received a hint or the answer must not have an independent-mastery claim durably recorded. |
 | Base SHA | `ca10f0ac051912d11dbe4a6aad0c2d550756aae4` (verified origin/main, v0.3.442 delivered) |
 | Branch | `feature/same-session-assisted-learning-v0.3.443`, separate worktree `D:\hypatia-worktrees\same-session-assisted-learning` |
-| Status | release |
+| Release SHA | `118b94d` (merged to `origin/main` via PR #422, merge commit `58902ab7`) |
+| Status | delivered |
 | Blockers | none |
 
 Confirmed gap: `LLMLearnedMemoryCandidateExtractor.extract(source_text)` saw
@@ -99,11 +239,28 @@ model — distinguishing the chat and extraction calls by their actual payload
 shape). Full unittest, Black, Ruff, MyPy and `git diff --check` all re-run
 clean after every review round; final counts recorded at commit time.
 
-## Planned — v0.3.444 (proposed, not started)
+## Planned — Kali Linux tool knowledge (proposed, not started)
 
 | Field | Value |
 | --- | --- |
-| Milestone | Interactive Web Security Academy learning workflow built on the v0.3.442 research pipeline and the v0.3.443 assisted-learning guard. |
+| Milestone | LEARN-only, source-backed knowledge base (purpose, inputs/outputs, limitations, risks, methodology fit) for Nmap, Burp Suite, curl, ffuf/Gobuster, Wireshark/tcpdump, sqlmap, Nuclei, Netcat and OpenSSL, from official documentation. No execution authority. |
+| Status | planned — starts only after v0.3.444 is verified delivered to `origin/main` |
+
+An example command recorded in a knowledge entry is educational information,
+not authorization to run it. A later, separately authorized and
+design-first milestone is required before any Kali tool, WSL adapter or the
+existing VMware Kali VM may actually execute anything; that design must
+first investigate the real local environment (is WSL configured and
+reachable? is the VMware VM reachable from this host?) rather than assume
+it, building on the existing but minimally-scoped `ResearchKaliOperationKind`
+(currently only `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP`), `KaliToolGateway`
+and `WslKaliOperationProcessAdapter`.
+
+## Planned — interactive Web Security Academy learning workflow (proposed, not started)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Interactive Web Security Academy learning workflow built on the v0.3.442/v0.3.444 research pipeline and the v0.3.443 assisted-learning guard. |
 | Status | planned |
 
 Proposed next step toward a practical BSCP teaching partner: ask one question

@@ -144,13 +144,26 @@ To create the world's most capable personal AI research companion.
 - A third discovery provider, Curated, makes no network call at all: it
   returns candidates only from a small, hand-reviewed catalog of fixed URLs
   at recognized authoritative security-teaching sources, matched against the
-  run's own question. The first catalog topic is SQL Injection (PortSwigger
+  run's own question. The catalog currently covers SQL Injection (PortSwigger
   Web Security Academy's topic page and cheat sheet, and OWASP's SQL
-  Injection Prevention Cheat Sheet). Every candidate still passes through the
-  same source-candidate validation and, once accepted, the same SSRF-safe
-  fetcher as every other provider. It is excluded from curiosity's automatic
-  "ask the provider(s) not yet asked" proposals, since it only ever answers
-  for its small fixed catalog.
+  Injection Prevention Cheat Sheet) and Cross-Site Scripting (PortSwigger's
+  topic page and cheat sheet, and OWASP's XSS Prevention Cheat Sheet). A
+  question naming more than one covered topic (for example, comparing SQL
+  injection and XSS) discovers candidates for every topic it names in one
+  pass, instead of only the first match, so Hypatia can research vulnerability
+  classes that are easy to confuse side by side. Every candidate still passes
+  through the same source-candidate validation and, once accepted, the same
+  SSRF-safe fetcher as every other provider. It is excluded from curiosity's
+  automatic "ask the provider(s) not yet asked" proposals, since it only ever
+  answers for its small fixed catalog.
+- Grounded knowledge Q&A (`ask_knowledge`) ranks indexed chunks by shared
+  significant query terms (`cognition.KnowledgeRelevanceSearch`, reusing the
+  existing research query tokenizer) rather than requiring the entire
+  question to appear as one literal substring of a source. This lets a
+  natural question actually retrieve matching researched prose; the
+  underlying `KnowledgeEngine.search()` used elsewhere is unchanged, and an
+  unresearched topic still produces an explicit "No matching local knowledge
+  was found" result rather than an invented answer.
 - New discovery failures retain the selected provider beside the same generic
   safe reason. This lets comparison and Failure Memory distinguish an attempted
   failed side from a pending side without storing raw provider errors; legacy

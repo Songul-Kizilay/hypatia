@@ -14,10 +14,17 @@ of that category is to let it return literal constants and nothing else.
 
 Matching is deliberately shallow, reusing the same `ResearchQueryTerms`
 normalization NVD uses for its keyword route, so punctuation and case never
-change the result. A topic matches when its required terms are all present or
-one of its short aliases is present; a question matching no topic returns an
-empty list rather than a guessed nearest topic, because an empty result is an
-honest "this catalog has nothing for that" and a guessed one is not.
+change the result. A topic matches when its required terms are all present, or
+one short alias term-set is fully present (a topic may list more than one
+alias shape -- "XSS" and the unhyphenated "cross site scripting" both name the
+same topic that "cross-site scripting" names as a single hyphenated token). A
+question matching no topic returns an empty list rather than a guessed
+nearest topic, because an empty result is an honest "this catalog has nothing
+for that" and a guessed one is not. A question naming more than one covered
+topic (for example, asking to compare SQL injection and XSS) returns every
+matching topic's candidates, catalog order, still bounded by ``limit`` -- this
+is what lets a single discovery step gather sources for distinguishing two
+topics rather than only ever answering about one.
 
 Every candidate URL still passes through the same `ResearchSourceCandidate`
 validation (credential-free HTTPS, bounded lengths) as every other provider's
@@ -55,9 +62,13 @@ class _CuratedTopic:
 
     #: Every one of these terms must appear for a match (order-independent).
     required_terms: frozenset[str]
-    #: Any single one of these terms alone is also a match (short aliases).
-    alias_terms: frozenset[str]
-    candidates: tuple[ResearchSourceCandidate, ...]
+    #: Each inner set is itself a complete alternative match (all of its terms
+    #: present); any one of these alternative shapes is also a match. Lets a
+    #: topic be named by a short acronym ("xss") or by a phrasing that tokenizes
+    #: differently than `required_terms` ("cross site scripting" as three
+    #: separate words, where `required_terms` is the hyphenated single token).
+    alias_term_sets: tuple[frozenset[str], ...] = ()
+    candidates: tuple[ResearchSourceCandidate, ...] = ()
 
 
 #: The fixed, hand-reviewed catalog. Each URL was checked by hand to resolve
@@ -66,7 +77,7 @@ class _CuratedTopic:
 _CATALOG: tuple[_CuratedTopic, ...] = (
     _CuratedTopic(
         required_terms=frozenset({"sql", "injection"}),
-        alias_terms=frozenset({"sqli"}),
+        alias_term_sets=(frozenset({"sqli"}),),
         candidates=(
             ResearchSourceCandidate(
                 url="https://portswigger.net/web-security/sql-injection",
@@ -97,6 +108,49 @@ _CATALOG: tuple[_CuratedTopic, ...] = (
                     "OWASP's official guidance on preventing SQL injection, "
                     "centered on parameterized queries and safe query "
                     "construction."
+                ),
+                container="OWASP Cheat Sheet Series",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"cross-site", "scripting"}),
+        alias_term_sets=(
+            frozenset({"xss"}),
+            frozenset({"cross", "site", "scripting"}),
+        ),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://portswigger.net/web-security/cross-site-scripting",
+                title="Cross-site scripting | Web Security Academy",
+                snippet=(
+                    "PortSwigger Web Security Academy's topic page on XSS: "
+                    "what it is, the reflected/stored/DOM-based types, and "
+                    "how to find and exploit it in a lab."
+                ),
+                container="PortSwigger Web Security Academy",
+            ),
+            ResearchSourceCandidate(
+                url=(
+                    "https://portswigger.net/web-security/"
+                    "cross-site-scripting/cheat-sheet"
+                ),
+                title="Cross-site scripting cheat sheet | Web Security Academy",
+                snippet=(
+                    "PortSwigger's reference vectors for XSS across browsers "
+                    "and contexts."
+                ),
+                container="PortSwigger Web Security Academy",
+            ),
+            ResearchSourceCandidate(
+                url=(
+                    "https://cheatsheetseries.owasp.org/cheatsheets/"
+                    "Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+                ),
+                title="Cross Site Scripting Prevention Cheat Sheet",
+                snippet=(
+                    "OWASP's official guidance on preventing XSS, centered on "
+                    "contextual output encoding and safe DOM APIs."
                 ),
                 container="OWASP Cheat Sheet Series",
             ),
@@ -135,19 +189,25 @@ class CuratedResearchSourceDiscoveryProvider:
             raise ResearchError(
                 f"Curated discovery limit must be between 1 and {_MAXIMUM_LIMIT}."
             )
-        topic = _matching_topic(normalized_query)
-        if topic is None:
-            return []
-        return list(topic.candidates[:limit])
+        topics = _matching_topics(normalized_query)
+        candidates = [candidate for topic in topics for candidate in topic.candidates]
+        return candidates[:limit]
 
 
-def _matching_topic(query: str) -> _CuratedTopic | None:
-    """Return the one catalog topic this query names, or none at all."""
+def _matching_topics(query: str) -> tuple[_CuratedTopic, ...]:
+    """Return every catalog topic this query names, in catalog order.
+
+    Plural on purpose: a question naming two covered topics (comparing SQL
+    injection and XSS, say) gets candidates for both, not only whichever is
+    listed first in `_CATALOG`.
+    """
     try:
         terms = frozenset(ResearchQueryTerms.of(query).terms)
     except ResearchError:
-        return None
-    for topic in _CATALOG:
-        if topic.alias_terms & terms or topic.required_terms <= terms:
-            return topic
-    return None
+        return ()
+    return tuple(
+        topic
+        for topic in _CATALOG
+        if topic.required_terms <= terms
+        or any(alias_terms <= terms for alias_terms in topic.alias_term_sets)
+    )
