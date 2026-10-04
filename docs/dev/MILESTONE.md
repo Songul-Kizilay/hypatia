@@ -10,14 +10,15 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.445
+## Historical scope: v0.3.445 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Cybersecurity knowledge acquisition, stage 2 of "learning first, Kali tools second": extend the curated research catalog with eleven LEARN-only Kali Linux tool entries (Nmap, Burp Suite, curl, ffuf, Gobuster, Wireshark, tcpdump, sqlmap, Nuclei, Netcat/Ncat, OpenSSL). No execution authority. |
 | Base SHA | `1f88e70c2ebdbf0efe22d0812f9e13dacece3f04` (verified origin/main, v0.3.444 delivered via PR #423) |
 | Branch | `feature/kali-tool-knowledge-v0.3.445`, separate worktree `D:\hypatia-worktrees\kali-tool-knowledge` |
-| Status | release |
+| Release SHA | `02caf02` (merged to `origin/main` via PR #424, merge commit `47c27a3`) |
+| Status | delivered |
 | Blockers | none |
 
 Directive: this is explicitly a LEARN-only milestone. The user's directive
@@ -365,15 +366,86 @@ clean after every review round; final counts recorded at commit time.
 
 An example command recorded in a knowledge entry (v0.3.445's eleven Kali
 tool catalog entries) is educational information, not authorization to run
-it. Before proposing this design, the actual local environment must be
-investigated rather than assumed -- is WSL configured and reachable from
-this host? is the user's existing VMware Kali VM reachable, and how? --
-building on the existing but minimally-scoped `ResearchKaliOperationKind`
-(currently only `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP`), `KaliToolGateway`
-and `WslKaliOperationProcessAdapter`, which already use WSL (not VMware/SSH)
-as their execution transport. Actual PortSwigger lab interaction and bug
-bounty target testing both require this design, implemented and separately
-authorized, before either can begin.
+it.
+
+### Environment investigation (read-only, local only; done 2026-10-04)
+
+Per the user's explicit instruction not to assume Kali, SSH, WSL, or a
+remote execution adapter is available, the actual host was inspected before
+writing anything below. Every check here was a local, read-only inspection
+of this machine's own configuration -- no network operation was made
+against any target, and the Kali VM was never powered on.
+
+- **WSL is broken on this host, not merely unconfigured.** `wsl --status`
+  fails with `Sınıf kaydedilmemiş. Hata kodu:
+  Wsl/CallMsi/Install/REGDB_E_CLASSNOTREG` ("class not registered"), and
+  `Get-WindowsOptionalFeature` fails with the same underlying COM
+  registration error -- a broken DISM/WSL servicing component, not just a
+  missing optional feature. **The existing
+  `WslKaliOperationProcessAdapter` -- the only execution transport
+  currently wired into Hypatia's Kali operation infrastructure -- would
+  not function on this exact host today.** Any design that assumes WSL as
+  the transport needs either a WSL repair step out of Hypatia's own scope,
+  or a different transport entirely.
+- **VMware Workstation/Player is installed, but at a non-default path.**
+  Found at `D:\vmware\` (not under `Program Files`), with `vmware.exe` and
+  `vmrun.exe` present. `vmware-authd` and `vmware-usbarbitrator64` are
+  running as background processes, and the `VMware NAT Service` Windows
+  service is running.
+- **A real, previously-used Kali VM is registered** at
+  `D:\kali vm\kali linux.vmx`: 8 vCPUs, 8192 MB RAM, guest OS profile
+  `debian10-64`, one NIC (`ethernet0`) in **NAT** mode with a VMware-
+  generated MAC address -- not bridged, so the guest is reachable from this
+  host via VMware's NAT device but is not directly addressable from the
+  rest of the user's network. `vmrun list` (read-only; lists running VMs
+  without starting or touching any of them) reports **0 VMs currently
+  running** -- the Kali VM is powered off right now. A `kali linux.vmx.lck`
+  lock file is present despite nothing running, which is often a leftover
+  from an unclean prior shutdown; worth the user's own attention the next
+  time the VM is started, not something this investigation touched or
+  resolved.
+- **Separately, raw Kali VMware-image download artifacts exist** at
+  `D:\kali-linux-2026.1-vmware-amd64\` and
+  `D:\kali-linux-2026.1-vmware-amd64.vmwarevm\` (plain, unsuffixed
+  `.vmdk` chunks, no `.vmx`/`.nvram` -- i.e. not a registered, run-ready
+  VM by themselves). These look like the original downloaded image,
+  distinct from the actively-used copy in `D:\kali vm\`; the design below
+  concerns the real VM (`D:\kali vm\kali linux.vmx`), not these.
+- **Not tested, and deliberately out of scope for this investigation**:
+  whether SSH is enabled inside the Kali guest, what its NAT-assigned IP
+  would be, and what credentials exist there. Finding any of that out
+  requires powering the VM on, which is an operational action against lab
+  infrastructure -- appropriately a step for the (separately authorized)
+  implementation milestone below, not for a read-only design investigation.
+
+### Design implications
+
+Because WSL is not viable on this host today, `WslKaliOperationProcessAdapter`
+cannot be the execution transport for a real implementation here without a
+WSL repair the user would need to perform outside Hypatia. The realistic
+transport is the already-installed VMware Workstation: either (a) `vmrun`'s
+own guest-operations commands (`vmrun -gu <user> -gp <password> runProgramInGuest ...`),
+which need the VM powered on and valid guest credentials but avoid depending
+on network reachability or guest-side SSH setup, or (b) SSH to the VM's
+NAT-assigned guest IP once that IP and SSH availability are confirmed by the
+user. Either way, a *new* process adapter is needed -- the existing
+`ResearchKaliOperationKind` (`DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP`) and
+`KaliToolGateway` interfaces can likely be reused as-is (they do not
+encode WSL specifically), but `WslKaliOperationProcessAdapter` itself
+cannot be the adapter underneath them on this host. The future
+implementation milestone must also decide, and get separate explicit
+authorization for: who powers the VM on (the user, or Hypatia with
+per-operation approval); how the guest IP is discovered (VMware's NAT
+leases are dynamic); where guest credentials are sourced from (never
+hardcoded, never silently prompted the way the EVREN launcher's API key
+flow is today); and the same invariants the user's original directive
+already named -- exact target/program scope, explicit approval per
+operation, a preview before execution, a bounded operation/resource
+budget, no arbitrary shell execution, no automatic escalation to more
+intrusive tools, accurate evidence/execution records, and clear stop
+conditions. Actual PortSwigger lab interaction and bug bounty target
+testing both require this design, implemented and separately authorized,
+before either can begin.
 
 ## Planned — interactive Web Security Academy learning workflow (proposed, not started)
 
