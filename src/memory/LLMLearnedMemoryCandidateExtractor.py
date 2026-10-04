@@ -41,8 +41,12 @@ class LLMLearnedMemoryCandidateExtractor:
     def extract(
         self,
         source_text: str,
+        *,
+        recent_session_context: str = "",
     ) -> LearnedMemoryCandidateBatch:
-        prompt = build_learned_memory_candidate_prompt(source_text)
+        prompt = build_learned_memory_candidate_prompt(
+            source_text, recent_session_context
+        )
         try:
             if isinstance(self._provider, _StructuredJSONLLMProvider):
                 payload = self._provider.generate_json(

@@ -10,135 +10,148 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.442
+## Current — v0.3.443
 
 | Field | Value |
 | --- | --- |
-| Milestone | Smallest real, end-to-end Web/API security research capability: an operator-selectable curated-source discovery provider so Hypatia can study SQL Injection from actual PortSwigger/OWASP pages through the existing research pipeline, not a generic model answer. |
-| Base SHA | `899ea5a9b428afb563f5be9c600f1b9c236a1589` (verified origin/main, v0.3.441 delivered) |
-| Branch | `feature/curated-research-sources-v0.3.442`, separate worktree `D:\hypatia-worktrees\curated-research-sources` |
+| Milestone | Same-session assisted-help contamination of learned-memory extraction: a student who just received a hint or the answer must not have an independent-mastery claim durably recorded. |
+| Base SHA | `ca10f0ac051912d11dbe4a6aad0c2d550756aae4` (verified origin/main, v0.3.442 delivered) |
+| Branch | `feature/same-session-assisted-learning-v0.3.443`, separate worktree `D:\hypatia-worktrees\same-session-assisted-learning` |
 | Status | release |
 | Blockers | none |
 
-User priority shift toward a genuine Web/API security research-and-teaching
-capability, bounded to the smallest real demonstration rather than another
-infrastructure milestone. The existing research/evidence/authorization/SSRF
-infrastructure (Phases 4-5) was characterized as already sufficient; the only
-gap was that neither existing discovery provider (Crossref: scholarly search;
-NVD: CVE records) can return a specific, hand-picked authoritative teaching
-page. Added a third, closed-vocabulary provider, `curated`, that makes no
-network call at all: `discover()` is a pure, deterministic lookup against a
-small hardcoded catalog (3 URLs: PortSwigger's SQL injection page and cheat
-sheet, OWASP's SQL Injection Prevention Cheat Sheet), matched against the
-operator's own question text via the existing `ResearchQueryTerms`
-normalizer. An operator selects it exactly like Crossref/NVD, through the
-existing, unmodified plan-authorization flow; every returned candidate still
-passes through the existing `ResearchSourceCandidate` validation and, once
-accepted, the existing `HttpResearchSourceFetcher` / `PublicHttpsUrlValidator`
-/ `PinnedHttpsTransport` path.
+Confirmed gap: `LLMLearnedMemoryCandidateExtractor.extract(source_text)` saw
+only the single current turn, with no visibility into whether Hypatia had
+just supplied a hint or the answer in the same session. The existing
+cross-session safeguard (`CrossSessionRecallContext`, v0.3.439-441) never
+covered this same-session case at all.
 
-QA review surfaced one real defect during implementation (not shipped):
-Curiosity's "ask the provider(s) not yet asked" logic iterated every
-provider, so a run that asked only `curated` was treated as "one of two
-general providers asked" and proposed asking both Crossref and NVD at once,
-breaking the "exactly one remaining provider" assumption the proposal and
-completion text relied on. Fixed by gating `ResearchKnowledgeGapDetector`'s
-coverage-gap detection on at least one *general-purpose* provider having been
-asked (`GENERAL_DISCOVERY_PROVIDERS` = Crossref, NVD only; Curated is
-deliberately excluded, since it only ever answers for its own small catalog),
-and made the proposal/completion wording count-agnostic as defense in depth.
-Two regression tests cover this directly (`curated`-only run: no gap;
-`curated` alongside one general provider: still names exactly one).
+Shape actually built: (1) the extractor's prompt now optionally receives a
+small, bounded (two-turn) block of recent same-session conversation
+(`LearnedMemoryCandidatePrompt.build_recent_session_context`), explicitly
+marked as untrusted, judge-assistance-only data that can never itself become
+an extracted candidate; (2) a new deterministic module,
+`memory.AssistedLearningGuard`, filters the extractor's returned batch
+*before persistence* regardless of what the model proposed — the actual
+enforcement, not reliance on the model obeying the prompt. A `self_fact`
+candidate is dropped when: the user discloses external assistance (English
+and Turkish phrase list); the user claims independence immediately after a
+substantial (>=120 char) recent Hypatia reply; the candidate's value shares a
+long (>=28 char) verbatim run with a recent reply; or the message is a bare
+acknowledgement with no content of its own (word-membership check, not a
+phrase list, so "I understand now" normalizes like "I understand"). Only
+`self_fact` candidates are ever touched — preferences, project facts, user
+facts and goals are unaffected, in any session state.
 
-File scope: `ResearchDiscoveryProviderName`, new
-`CuratedResearchSourceDiscoveryProvider`, `Bootstrap`'s two provider-loading
-methods, `CuriosityProposalBuilder`/`ResearchKnowledgeGapDetector`/
-`CuriosityResearchProposal` (the `GENERAL_DISCOVERY_PROVIDERS` fix above),
-version files, README/PROJECT_STATUS/CHANGELOG and this ledger. No new
-authority, persistence schema, network path, or desktop UI code: the
-Tkinter provider dropdown already enumerates the full enum generically.
+`extract()`'s signature gained an optional `recent_session_context: str = ""`
+keyword (backward compatible: omitting it reproduces the exact prior prompt
+byte-for-byte), threaded through the Protocol, the NoOp and LLM
+implementations, and every existing test double across the suite.
 
-Required verification: the new provider matches only its catalog topic and
-nothing else (case/punctuation-insensitive, no partial-term false positives);
-every candidate is credential-free HTTPS; no network/subprocess/socket import
-exists in the module; full composition through the real, unmodified
-`SourceDiscoveryStepOperation`; Curated's exclusion from
-`GENERAL_DISCOVERY_PROVIDERS` and the coverage-gap fix. Then a real,
-unmocked, live demonstration against the actual internet (see Verification
-below) and all canonical gates.
+File scope: new `AssistedLearningGuard.py`; `LearnedMemoryCandidatePrompt.py`
+(context block); `LearnedMemoryCandidateExtractor.py` (Protocol),
+`NoOpLearnedMemoryCandidateExtractor.py`, `LLMLearnedMemoryCandidateExtractor.py`
+(signature extension); `CognitiveEngine.py` (`_recent_same_session_turns`,
+the extractor call, the filter call before persistence); version files;
+README/PROJECT_STATUS/CHANGELOG and this ledger. No new persistence schema,
+authority, or provider; recall's existing behavior (extraction skipped
+entirely for a recall turn) is unchanged and covered by a regression test.
 
-Reviews: hypatia-security — no findings (full independent trace of the no-op
-`discover()`, the unmodified fetch/SSRF path, a repo-wide sweep for any other
-place that might treat Curated as a general provider, and confirmation the
-new provider is reachable only through the existing authorized plan flow).
-hypatia-qa — one Medium finding (the coverage-gap defect above, live-
-reproduced) and one Low finding (the original no-network test only checked
-instance attributes, not the module source); both addressed: the detector fix
-plus two new regression tests, and the no-network test now also scans the
-module's own source text for forbidden imports.
+Required verification: the BSCP sequence (incorrect answer, hint, correct
+answer claimed independent) is not recorded as mastery while the
+conversational reply still acknowledges correctness; a genuinely new, unaided
+answer is not misclassified as assisted; explicit disclosure in English and
+Turkish is rejected; bare agreement is rejected; ordinary preferences survive
+a session that also contains a recent hint, completely unaffected; recall
+behavior is unchanged; and the same outcomes hold after a real application
+restart with no code path bypassing the filter.
 
-Live demonstration (real, unmocked network; not part of the automated
-suite): Curated discovery for "Teach me SQL Injection for the BSCP exam"
-found the 3 real catalog URLs; all 3 were fetched live over HTTPS through the
-actual `HttpResearchSourceFetcher`; each was accepted via the canonical
-`ResearchSourceAcceptanceService`, indexed by the real `KnowledgeEngine`, and
-recorded as deterministic evidence (real quoted excerpts incl. UNION-based
-SQLi and parameterized-query guidance, real SHA256, no model call). The
-rendered `teaching_report` cited all three sources with honest "partially
-supported" / "no retained comparison" framing. Reopening the same on-disk
-run store with fresh `ResearchRunManager`/store instances (simulated restart)
-reproduced identical evidence, source URLs, and hashes. No live EVREN/model
-call was made or claimed; the quiz/practice-question acceptance item is
-explicitly deferred to the next milestone (see PROJECT_STATUS.md), not
-silently dropped.
+Reviews: hypatia-security — no blocking findings (full trace of the
+no-widening filter, the JSON-escaped/bounded prompt context block modeled on
+`CrossSessionRecallContext`, the single persist-after-filter call site, and
+no new persistence surface); one low-severity, non-regression residual noted
+(zero-width-character evasion of the phrase detectors — worst case reproduces
+the pre-milestone status quo, no fix required) and one test-coverage
+suggestion (a prior recall turn excluded from a *later* turn's context),
+added as a regression test. hypatia-qa — found genuine coverage gaps, not
+logic defects: `build_recent_session_context` had zero direct tests of its
+own escaping/truncation/ordering claims; the 2-turn window was never proven
+to actually bound history (vs. reaching back unboundedly, or only 1 turn);
+the two numeric thresholds and the acknowledgement word-count cutoff had no
+boundary tests. All four addressed with new tests (constructing one found and
+fixed a genuine fixture bug — an accidental shared boundary space had been
+inflating an intended 27-character overlap to 28, now corrected with
+distinctly-bounded fixtures). QA also flagged that cross-session-recall
+content is deliberately excluded from the same-session assistance signal;
+documented as an accepted scope boundary in `_recent_same_session_turns`'s
+docstring, not silently left unexplained — recall already carries its own,
+separately reviewed assistance framing in `CrossSessionRecallContext`.
 
-Canonical gates: full unittest 7926 tests (up from 7909) in 169.131s, OK,
-exit 0; Black 1064 files unchanged; Ruff all checks passed; MyPy 623 source
-files clean; `git diff --check` clean. Exact-SHA/PR/main CI and
-standard-merge provenance are verified after commit and recorded in the next
-milestone per ledger convention.
+Tests: 50 new (29 unit tests of the deterministic guard, including boundary
+tests at each threshold; 12 `CognitiveEngine` scenario tests covering the
+full BSCP sequence, the negative unaided-answer control, English/Turkish
+disclosure, bare agreement, ordinary-preference preservation, verbatim
+restatement, the 2-turn window's reach and bound, and recall non-interference
+both on and inside the window; 7 new prompt-construction tests covering
+injection-style input, truncation and ordering; 2 real `HypatiaApplication` +
+`DesktopController` restart tests with a mocked HTTP transport — not a live
+model — distinguishing the chat and extraction calls by their actual payload
+shape). Full unittest, Black, Ruff, MyPy and `git diff --check` all re-run
+clean after every review round; final counts recorded at commit time.
 
-## Planned — v0.3.443 (proposed, not started)
+## Planned — v0.3.444 (proposed, not started)
 
 | Field | Value |
 | --- | --- |
-| Milestone | Same-session assisted-help contamination of learned-memory extraction. |
+| Milestone | Interactive Web Security Academy learning workflow built on the v0.3.442 research pipeline and the v0.3.443 assisted-learning guard. |
 | Status | planned |
 
-Gap identified while reviewing the v0.3.442 teaching loop against the user's
-own acceptance criterion "distinguish independently demonstrated answers from
-answers obtained with hints." The existing safeguard
-(`CrossSessionRecallContext`, v0.3.439-441) only protects the *cross-session*
-case: it marks recalled assistance as "externally assisted, not independent"
-in the prompt so a later session cannot be credited with mastery it never
-demonstrated. No equivalent protection exists *within* one session.
-`LLMLearnedMemoryCandidateExtractor.extract(source_text)` sees only a single
-turn's text with no visibility into the immediately preceding turns, so if a
-user asks for a SQL-injection hint and, moments later in the same session,
-says "I solved it myself," nothing stops that claim from being extracted as a
-`self_fact`/`goal`-kind learned memory.
+Proposed next step toward a practical BSCP teaching partner: ask one question
+at a time grounded in a completed curated research report, evaluate the
+user's reasoning rather than only the final answer, give progressive hints
+through the existing conversational path (reusing `AssistedLearningGuard` so
+a hint-assisted answer is never credited as independent mastery), track
+per-topic independently-demonstrated-vs-needs-revision status as ordinary
+`self_fact`/`goal` learned memories, resume an unfinished exercise after
+restart, and recommend relevant PortSwigger Academy exercises by name (never
+a fabricated URL — only the existing curated catalog's real, hand-reviewed
+links). Needs its own scoping pass: likely new conversational intents for
+"ask a practice question" / "give a hint" / "resume where I left off", plus a
+small, explicit persisted record of per-topic progress (first genuinely new
+persistence surface in this line of work — to be scoped and separately
+authorized, not assumed). No active testing, no new execution authority.
 
-Proposed shape: extend the same "treat prior assistance as disqualifying,
-never erase the record of it" discipline from `CrossSessionRecallContext`
-into same-session extraction — give `LLMLearnedMemoryCandidateExtractor` the
-last few same-session turns alongside the candidate turn, with an explicit
-instruction not to extract independent-mastery claims when a hint/solution
-was given immediately before. Affected: `LearnedMemoryCandidatePrompt.py`,
-`LLMLearnedMemoryCandidateExtractor.py`, the call site in
-`CognitiveEngine.py` (~line 4055), and focused regression tests proving (a)
-a same-session assisted claim is not extracted as independent mastery, (b)
-an unprompted, unassisted claim still is, (c) cross-session behavior is
-unchanged. No new authority, schema, or provider; bounded to the existing
-learned-memory extraction path.
+A separate, later capability — practicing inside an explicitly authorized
+PortSwigger lab, or real bug bounty target work — is a distinct milestone
+with its own authorization boundary, target validation, allowed-operation
+list, evidence collection and stop conditions; it is not started by, and
+does not follow automatically from, either v0.3.443 or the proposal above.
 
-Separately, and only after this: the interactive one-question-at-a-time
-practice/quiz feature described in the current SQL Injection research
-milestone's acceptance criteria (ask practice questions grounded in a
-completed research run's evidence, distinguish a hint-preceded answer from
-an unprompted one) — deliberately sequenced after the extraction fix above,
-since the quiz feature would need exactly this same discipline to avoid
-re-introducing the same problem in a new surface. Needs its own scoping pass
-before implementation.
+## Historical scope: v0.3.442 (delivered)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Curated authoritative-source discovery provider so Hypatia can study SQL Injection from real PortSwigger/OWASP pages through the existing research pipeline. |
+| Base SHA | `899ea5a9b428afb563f5be9c600f1b9c236a1589` (verified origin/main, v0.3.441 delivered) |
+| Branch | `feature/curated-research-sources-v0.3.442`, worktree `D:\hypatia-worktrees\curated-research-sources` |
+| Status | delivered |
+| Blockers | none |
+
+Added a third, closed-vocabulary research discovery provider, `curated` —
+network-free, a deterministic lookup against a 3-URL hand-reviewed catalog
+(PortSwigger's SQL injection page and cheat sheet, OWASP's SQL Injection
+Prevention Cheat Sheet) — selected by an operator exactly like Crossref/NVD
+through the existing, unmodified plan-authorization and SSRF-safe fetch path.
+Fixed a QA-found defect where curiosity's coverage-gap logic could propose
+Curated as a general provider; gated it out via `GENERAL_DISCOVERY_PROVIDERS`.
+A real, unmocked, live demonstration against the actual internet discovered,
+fetched, accepted and recorded deterministic evidence from all three catalog
+URLs, producing a source-attributed teaching report that survived restart.
+Canonical gates: full unittest 7926 tests (up from 7909); Black, Ruff, MyPy
+(623 files) clean; git diff --check clean. Merged to `origin/main` via PR
+#421, standard merge commit `ca10f0ac051912d11dbe4a6aad0c2d550756aae4`;
+exact-SHA Linux and Windows CI both green; reachability from `origin/main`
+verified.
 
 ## Historical scope: v0.3.441 (delivered)
 

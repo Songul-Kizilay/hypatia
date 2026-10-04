@@ -166,6 +166,10 @@ from knowledge.KnowledgeContextPrompt import (
 )
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
+from memory.AssistedLearningGuard import (
+    AssistedLearningSignals,
+    filter_assisted_learning_candidates,
+)
 from memory.CrossSessionRecallContext import (
     MAX_SOURCE_CHARACTERS,
     NOT_FOUND_RESPONSE,
@@ -181,6 +185,7 @@ from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtract
 from memory.LearnedMemoryCandidatePersistence import (
     persist_learned_memory_candidate_batch,
 )
+from memory.LearnedMemoryCandidatePrompt import build_recent_session_context
 from memory.LearnedMemoryContext import (
     build_learned_memory_augmented_prompt,
 )
@@ -303,6 +308,11 @@ LLM_CONVERSATION_HISTORY_MAX_TURNS = 8
 KNOWLEDGE_CONTEXT_MAX_RESULTS = 3
 RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_LIMIT = 10
 RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_MAX_CLAIMS = 50
+#: How many immediately preceding same-session turns are offered to the
+#: learned-memory extractor so it (and `AssistedLearningGuard`'s deterministic
+#: checks) can tell whether a hint or answer was just given. Small and bounded
+#: on purpose: this judges "was help just given", not a full transcript.
+ASSISTED_LEARNING_CONTEXT_MAX_TURNS = 2
 
 
 class CognitiveEngine:
@@ -3780,6 +3790,49 @@ class CognitiveEngine:
             "session_id", "default"
         ) == session_id
 
+    def _recent_same_session_turns(
+        self,
+        session_id: str,
+    ) -> tuple[tuple[str, str], ...]:
+        """Return the last few turns of this same session, oldest first.
+
+        Offered to learned-memory extraction so it can see whether Hypatia
+        just supplied a hint or answer -- never to recall, which stays a
+        separate, explicitly-requested feature scoped to *other* sessions.
+        A cross-session-recall turn is excluded here too: its assistant
+        reply quotes a different session's material, not something this
+        session's own conversation actually established.
+
+        Accepted scope boundary (not an oversight): a user who explicitly
+        triggers recall to have an old answer restated, then immediately
+        claims independence, is therefore outside `AssistedLearningGuard`'s
+        deterministic reach for that specific turn -- only the recall
+        feature's own prompt instructions (`CrossSessionRecallContext`'s
+        "treat as externally assisted, not independent") apply there, which
+        is model-judgment, not a deterministic backstop. Recall is already a
+        distinct, operator-triggered action with its own, separately
+        reviewed assistance framing; folding its quoted content into this
+        same-session window would also let a recalled OTHER session's text
+        suppress or trigger rules about THIS session's own conversation,
+        which is the wrong binding. If recall-then-claim abuse is observed in
+        practice, extend the guard deliberately rather than relaxing this
+        exclusion silently.
+        """
+        candidates = [
+            record
+            for record in self._memory_manager.all()
+            if self._is_session_conversation_record(record, session_id)
+            and not record.metadata.get("cross_session_recall", False)
+            and isinstance(record.metadata.get("user_message"), str)
+            and isinstance(record.metadata.get("assistant_message"), str)
+        ]
+        candidates.sort(key=self._record_created_at, reverse=True)
+        recent = candidates[:ASSISTED_LEARNING_CONTEXT_MAX_TURNS]
+        return tuple(
+            (record.metadata["user_message"], record.metadata["assistant_message"])
+            for record in reversed(recent)
+        )
+
     @staticmethod
     def _is_other_session_conversation_record(
         record: MemoryRecord, session_id: str
@@ -4048,18 +4101,32 @@ class CognitiveEngine:
                     intent="message",
                     memory_count=0,
                 )
+                recent_turns = self._recent_same_session_turns(session_id)
                 try:
                     batch = (
                         None
                         if recall_requested
                         else self._learned_memory_candidate_extractor.extract(
-                            request.message
+                            request.message,
+                            recent_session_context=build_recent_session_context(
+                                recent_turns
+                            ),
                         )
                     )
                 except LearnedMemoryCandidateExtractionError as error:
                     batch = None
                     self._emit_learned_memory_extraction_failure(request, error)
                 if batch is not None:
+                    batch = filter_assisted_learning_candidates(
+                        batch,
+                        AssistedLearningSignals.of(
+                            request.message,
+                            recent_assistant_replies=tuple(
+                                assistant_message
+                                for _, assistant_message in recent_turns
+                            ),
+                        ),
+                    )
                     persist_learned_memory_candidate_batch(
                         self._memory_manager,
                         batch,

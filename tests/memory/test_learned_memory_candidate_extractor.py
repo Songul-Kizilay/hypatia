@@ -19,7 +19,10 @@ class RecordingCandidateExtractor:
     def extract(
         self,
         source_text: str,
+        *,
+        recent_session_context: str = "",
     ) -> LearnedMemoryCandidateBatch:
+        del recent_session_context
         self.calls.append(source_text)
         return LearnedMemoryCandidateBatch(
             source_text=source_text,
