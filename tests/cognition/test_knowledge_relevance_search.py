@@ -11,7 +11,10 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from cognition.KnowledgeRelevanceSearch import rank_chunks_by_term_relevance
+from cognition.KnowledgeRelevanceSearch import (
+    rank_chunks_by_term_relevance,
+    rank_chunks_for_conversation,
+)
 from knowledge.Chunk import Chunk
 
 
@@ -143,6 +146,81 @@ class RankChunksByTermRelevanceTests(unittest.TestCase):
         )
 
         self.assertEqual(result, [sqli_chunk])
+
+
+class ConversationRelevanceTests(unittest.TestCase):
+    def test_subject_must_be_covered_even_when_a_generic_word_matches(self):
+        source = chunk("You can find requests and keys in Burp Suite.")
+        self.assertEqual(
+            rank_chunks_for_conversation(
+                [source], "Can you find my lost keys?", max_results=3
+            ),
+            [],
+        )
+
+    def test_substrings_are_not_topic_evidence(self):
+        source = chunk("A family reunion and selection of food.")
+        self.assertEqual(
+            rank_chunks_for_conversation([source], "UNION SELECT", max_results=3), []
+        )
+
+    def test_empty_and_filler_queries_match_nothing(self):
+        for query in ("", "   ", "What is it?", "YOU YOUR HELP FIND"):
+            with self.subTest(query=query):
+                self.assertEqual(
+                    rank_chunks_for_conversation(
+                        [chunk("You can find your SQL notes here.")],
+                        query,
+                        max_results=3,
+                    ),
+                    [],
+                )
+
+    def test_comparison_coverage_is_checked_after_result_limit(self):
+        sql = chunk("SQL injection.")
+        xss = chunk("XSS.")
+        self.assertEqual(
+            rank_chunks_for_conversation(
+                [sql, xss], "SQL injection and XSS", max_results=1
+            ),
+            [],
+        )
+        self.assertEqual(
+            rank_chunks_for_conversation(
+                [sql, xss], "SQL injection and XSS", max_results=2
+            ),
+            [sql, xss],
+        )
+
+    def test_stable_ties_and_case_punctuation_preserve_identity(self):
+        first = chunk("SQL injection via UNION SELECT.")
+        second = chunk("SQL injection via UNION SELECT.")
+        self.assertEqual(
+            rank_chunks_for_conversation(
+                [first, second], "Explain sql injection.", max_results=3
+            ),
+            [first],
+        )
+
+    def test_compound_identifiers_remain_intact(self):
+        exact = chunk("ASP.NET and UNION-based SQL injection.")
+        unrelated = chunk("An asp and a net, based on a union.")
+        self.assertEqual(
+            rank_chunks_for_conversation(
+                [unrelated, exact], "ASP.NET UNION-based", max_results=3
+            ),
+            [exact],
+        )
+
+    def test_only_terms_in_the_excerpt_sent_to_the_model_can_match(self):
+        hidden = chunk("ordinary text " * 50 + "SQL injection")
+        visible = chunk("SQL injection " + "ordinary text " * 50)
+        self.assertEqual(
+            rank_chunks_for_conversation(
+                [hidden, visible], "SQL injection", max_results=3
+            ),
+            [visible],
+        )
 
 
 if __name__ == "__main__":

@@ -162,6 +162,12 @@ To create the world's most capable personal AI research companion.
   the same SSRF-safe fetcher as every other provider. It is excluded from
   curiosity's automatic "ask the provider(s) not yet asked" proposals, since
   it only ever answers for its small fixed catalog.
+- Ordinary LLM chat can use accepted local knowledge without an `ask_knowledge`
+  prefix. A conservative conversation-only selector requires whole-term query
+  coverage after removing conversational filler and adds at most three cited,
+  untrusted excerpts (600 characters each). Unrelated casual messages preserve
+  their normal prompt; unknown aliases/paraphrases can fall back without local
+  citations. This supplies context only and grants no research or tool authority.
 - Grounded knowledge Q&A (`ask_knowledge`) ranks indexed chunks by shared
   significant query terms (`cognition.KnowledgeRelevanceSearch`, reusing the
   existing research query tokenizer) rather than requiring the entire

@@ -732,6 +732,10 @@ Unchanged — confirmed absent as formal capabilities.
 
 ## Phase 11 — Memory / knowledge / learning
 
+- [x] v0.3.446 ordinary conversation grounding in accepted local knowledge:
+      conservative lexical coverage, bounded untrusted excerpts, deterministic
+      citations, and restart restoration. No autonomous research/tool execution;
+      interactive BSCP teaching remains outside this milestone.
 - [x] Basic user memory, mission-state persistence, observation history
 - [x] Learning remains advisory-only — `FailureMemoryAdvisor.py`,
       `ResearchFailureLessonDeriver.py`
