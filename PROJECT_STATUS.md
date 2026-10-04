@@ -2,10 +2,34 @@
 
 ## Runtime Version
 
-`v0.3.444 (Genesis)`
+`v0.3.445 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.445 is Milestone 2 of "cybersecurity learning first, Kali Linux
+tools second": the curated catalog gains eleven LEARN-only entries, one per
+Kali Linux tool named in the directive (Nmap, Burp Suite, curl, ffuf,
+Gobuster, Wireshark, tcpdump, sqlmap, Nuclei, Netcat/Ncat, OpenSSL), each
+backed by two real official documentation URLs. No execution authority is
+added; an example command in a fetched page remains educational content, not
+permission to run it, and the pre-existing Kali execution machinery is
+untouched. A real, unmocked live demonstration discovered, fetched, accepted,
+and indexed Nmap and OpenSSL documentation against the real internet (all 22
+new candidate URLs were separately hand-fetched and confirmed to return real
+content), and a real restart restored it and re-answered natural questions,
+including a cross-tool comparison, from disk alone -- that same live run
+caught one candidate (an OpenSSL doc-index URL) that was actually a 25-byte
+redirect stub despite passing an earlier hand HTTP-200 check; it was replaced
+with the real destination page. Independent QA review found that three tool
+names (burp, curl, nuclei) are also ordinary English words and can match an
+unrelated sentence; this has no security or authority consequence in a
+LEARN-only pipeline, so rather than narrow matching (which would also break
+legitimate short questions like "what is curl?"), the tradeoff is documented
+and covered by a dedicated regression test. The interactive one-question-at-
+a-time Web Security Academy teaching workflow, and the explicitly-separate,
+unstarted, design-first laboratory-integration milestone, remain proposed
+next steps; see `docs/dev/MILESTONE.md`.
 
 Version v0.3.444 extends the curated research catalog from one topic to a
 reusable multi-topic shape and adds a second topic, Cross-Site Scripting,

@@ -2,8 +2,11 @@
 
 Crossref and NVD each speak to a live API and can be asked almost anything.
 This provider speaks to nothing. It holds a short, literal, code-reviewed list
-of specific URLs at a small number of recognized security-teaching sources
-(PortSwigger Web Security Academy, the OWASP Cheat Sheet Series) and returns
+of specific URLs at a small number of recognized security-teaching and
+official tool-documentation sources (PortSwigger Web Security Academy, the
+OWASP Cheat Sheet Series, and each covered tool's own project documentation --
+nmap.org, curl.se, wireshark.org, tcpdump.org, sqlmap's and ffuf's and
+gobuster's and Nuclei's own project pages, and openssl.org) and returns
 entries from that list only when the question names a topic the catalog
 actually covers. There is no search, no network call, no model call, and no
 way for the question text to produce a URL that is not already written here:
@@ -11,6 +14,14 @@ a provider whose candidate list could be influenced by its input is exactly
 the SSRF-shaped mistake `PublicHttpsUrlValidator` and `PinnedHttpsTransport`
 exist to prevent downstream, and the cheapest way to keep this provider out
 of that category is to let it return literal constants and nothing else.
+
+The Kali Linux tool entries (Nmap, Burp Suite, curl, ffuf, Gobuster,
+Wireshark, tcpdump, sqlmap, Nuclei, Netcat/Ncat, OpenSSL) exist to teach
+*what a tool is and how it is documented to be used* -- purpose, inputs and
+outputs, and official usage guidance -- not to grant any execution authority.
+Nothing in this file runs a tool, and an example command inside a fetched
+page is educational content, not permission to execute it; that remains a
+separate, unstarted, explicitly authorized milestone.
 
 Matching is deliberately shallow, reusing the same `ResearchQueryTerms`
 normalization NVD uses for its keyword route, so punctuation and case never
@@ -40,6 +51,20 @@ accept a URL from a caller. `GENERAL_DISCOVERY_PROVIDERS` in
 and knowledge-gap "ask the provider(s) this run has not asked" logic must
 never auto-propose asking a catalog that was never meant to answer every
 question.
+
+A handful of tool names are also ordinary English words -- "burp", "curl",
+"nuclei" -- so a sentence that happens to contain one of them ("I felt a burp
+after lunch") can trigger a match that has nothing to do with the tool. This
+is an accepted, deliberate tradeoff rather than an oversight: unlike "SQL
+injection" or "cross-site scripting", the catalog has no natural second word
+to pair a single-word tool name with that every real question about the tool
+would still contain, and narrowing match to only two-word phrasings would
+silently break the much more common case of a short, direct question ("what
+is curl?"). The worst outcome of a false match is an extra, still-pinned,
+still-official, still-harmless documentation citation in a LEARN-only
+pipeline -- never a wrong URL, an executed command, or an expanded authority
+-- so the asymmetry favors recall here, unlike the vulnerability-class
+entries above where a wrong match would misname a security concept.
 """
 
 from __future__ import annotations
@@ -153,6 +178,262 @@ _CATALOG: tuple[_CuratedTopic, ...] = (
                     "contextual output encoding and safe DOM APIs."
                 ),
                 container="OWASP Cheat Sheet Series",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"nmap"}),
+        alias_term_sets=(frozenset({"network", "mapper"}),),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://nmap.org/book/man.html",
+                title="Nmap Reference Guide",
+                snippet=(
+                    "The official Nmap man page: scan techniques, host "
+                    "discovery, port specification, service/version "
+                    "detection, and output formats."
+                ),
+                container="Nmap.org",
+            ),
+            ResearchSourceCandidate(
+                url="https://nmap.org/book/toc.html",
+                title="Nmap Network Scanning (book table of contents)",
+                snippet=(
+                    "The official Nmap project's own book-length "
+                    "documentation, covering the tool end to end."
+                ),
+                container="Nmap.org",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"burp"}),
+        alias_term_sets=(frozenset({"burpsuite"}),),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://portswigger.net/burp/documentation",
+                title="Burp Suite documentation",
+                snippet=(
+                    "PortSwigger's official documentation hub for Burp "
+                    "Suite: Proxy, Repeater, Intruder, Scanner and the rest "
+                    "of the toolset."
+                ),
+                container="PortSwigger",
+            ),
+            ResearchSourceCandidate(
+                url="https://portswigger.net/burp/documentation/desktop/getting-started",
+                title="Getting started with Burp Suite",
+                snippet=(
+                    "PortSwigger's official getting-started guide: "
+                    "configuring the browser, intercepting traffic, and the "
+                    "basic workflow."
+                ),
+                container="PortSwigger",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"curl"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://curl.se/docs/manpage.html",
+                title="curl man page",
+                snippet=(
+                    "The official curl manual: every option, protocol "
+                    "support, and usage examples, maintained by the curl "
+                    "project itself."
+                ),
+                container="curl.se",
+            ),
+            ResearchSourceCandidate(
+                url="https://curl.se/docs/",
+                title="curl documentation index",
+                snippet=(
+                    "The curl project's own index of its manuals, "
+                    "tutorials, and protocol-specific guides."
+                ),
+                container="curl.se",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"ffuf"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://github.com/ffuf/ffuf",
+                title="ffuf -- Fuzz Faster U Fool",
+                snippet=(
+                    "ffuf's own official repository README: installation, "
+                    "command-line usage, and fuzzing examples."
+                ),
+                container="ffuf (official GitHub repository)",
+            ),
+            ResearchSourceCandidate(
+                url="https://github.com/ffuf/ffuf/wiki",
+                title="ffuf wiki",
+                snippet=(
+                    "ffuf's own project wiki with extended usage examples "
+                    "and advanced filtering/matching options."
+                ),
+                container="ffuf (official GitHub repository)",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"gobuster"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://github.com/OJ/gobuster",
+                title="Gobuster",
+                snippet=(
+                    "Gobuster's own official repository README: the dir, "
+                    "dns, vhost and other scan modes, and their options."
+                ),
+                container="Gobuster (official GitHub repository)",
+            ),
+            ResearchSourceCandidate(
+                url="https://github.com/OJ/gobuster/wiki",
+                title="Gobuster wiki",
+                snippet=(
+                    "Gobuster's own project wiki with mode-by-mode usage " "notes."
+                ),
+                container="Gobuster (official GitHub repository)",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"wireshark"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://www.wireshark.org/docs/wsug_html_chunked/",
+                title="Wireshark User's Guide",
+                snippet=(
+                    "The official Wireshark User's Guide: capturing, "
+                    "filtering, and analyzing network traffic."
+                ),
+                container="Wireshark.org",
+            ),
+            ResearchSourceCandidate(
+                url="https://www.wireshark.org/docs/man-pages/wireshark.html",
+                title="wireshark(1) man page",
+                snippet=(
+                    "The official Wireshark man page: command-line "
+                    "invocation, capture options, and display filters."
+                ),
+                container="Wireshark.org",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"tcpdump"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://www.tcpdump.org/manpages/tcpdump.1.html",
+                title="tcpdump(1) man page",
+                snippet=(
+                    "The official tcpdump man page: capture filters, "
+                    "interface selection, and output options."
+                ),
+                container="tcpdump.org",
+            ),
+            ResearchSourceCandidate(
+                url="https://www.tcpdump.org/",
+                title="TCPDUMP/LIBPCAP public repository",
+                snippet="The tcpdump project's own official home page.",
+                container="tcpdump.org",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"sqlmap"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://github.com/sqlmapproject/sqlmap/wiki/Usage",
+                title="sqlmap usage",
+                snippet=(
+                    "sqlmap's own official usage wiki: detection, "
+                    "enumeration, and database-takeover options."
+                ),
+                container="sqlmap (official GitHub repository)",
+            ),
+            ResearchSourceCandidate(
+                url="https://github.com/sqlmapproject/sqlmap",
+                title="sqlmap",
+                snippet=(
+                    "sqlmap's own official repository README: what the "
+                    "tool automates and how it is invoked."
+                ),
+                container="sqlmap (official GitHub repository)",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"nuclei"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://docs.projectdiscovery.io/tools/nuclei/overview",
+                title="Nuclei overview",
+                snippet=(
+                    "ProjectDiscovery's official documentation for Nuclei: "
+                    "template-based vulnerability scanning, how it works, "
+                    "and how templates are selected and run."
+                ),
+                container="ProjectDiscovery (official documentation)",
+            ),
+            ResearchSourceCandidate(
+                url="https://github.com/projectdiscovery/nuclei",
+                title="Nuclei",
+                snippet=(
+                    "Nuclei's own official repository README: installation "
+                    "and command-line usage."
+                ),
+                container="ProjectDiscovery (official GitHub repository)",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"netcat"}),
+        alias_term_sets=(frozenset({"ncat"}),),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://nmap.org/ncat/guide/index.html",
+                title="Ncat Reference Guide",
+                snippet=(
+                    "The Nmap Project's official guide to Ncat, its modern, "
+                    "actively maintained replacement for the classic "
+                    "Netcat utility."
+                ),
+                container="Nmap.org",
+            ),
+            ResearchSourceCandidate(
+                url="https://nmap.org/ncat/",
+                title="Ncat home page",
+                snippet=("The Nmap Project's own official Ncat project page."),
+                container="Nmap.org",
+            ),
+        ),
+    ),
+    _CuratedTopic(
+        required_terms=frozenset({"openssl"}),
+        candidates=(
+            ResearchSourceCandidate(
+                url="https://docs.openssl.org/master/man1/openssl/",
+                title="openssl(1) -- OpenSSL command line tool",
+                snippet=(
+                    "The official OpenSSL project's current documentation "
+                    "for the openssl command itself: its subcommands and "
+                    "how they are organized."
+                ),
+                container="OpenSSL.org",
+            ),
+            ResearchSourceCandidate(
+                url="https://www.openssl.org/docs/manmaster/man1/openssl.html",
+                title="openssl(1) man page",
+                snippet=(
+                    "The official OpenSSL command-line tool man page: its "
+                    "subcommands for keys, certificates, and TLS testing."
+                ),
+                container="OpenSSL.org",
             ),
         ),
     ),

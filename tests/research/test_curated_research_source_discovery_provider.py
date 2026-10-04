@@ -57,6 +57,46 @@ _OWASP_XSS_PREVENTION = (
     "Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
 )
 
+_NMAP_MAN = "https://nmap.org/book/man.html"
+_NMAP_BOOK_TOC = "https://nmap.org/book/toc.html"
+_BURP_DOCS = "https://portswigger.net/burp/documentation"
+_BURP_GETTING_STARTED = (
+    "https://portswigger.net/burp/documentation/desktop/getting-started"
+)
+_CURL_MAN = "https://curl.se/docs/manpage.html"
+_CURL_DOCS = "https://curl.se/docs/"
+_FFUF_README = "https://github.com/ffuf/ffuf"
+_FFUF_WIKI = "https://github.com/ffuf/ffuf/wiki"
+_GOBUSTER_README = "https://github.com/OJ/gobuster"
+_GOBUSTER_WIKI = "https://github.com/OJ/gobuster/wiki"
+_WIRESHARK_GUIDE = "https://www.wireshark.org/docs/wsug_html_chunked/"
+_WIRESHARK_MAN = "https://www.wireshark.org/docs/man-pages/wireshark.html"
+_TCPDUMP_MAN = "https://www.tcpdump.org/manpages/tcpdump.1.html"
+_TCPDUMP_HOME = "https://www.tcpdump.org/"
+_SQLMAP_USAGE = "https://github.com/sqlmapproject/sqlmap/wiki/Usage"
+_SQLMAP_README = "https://github.com/sqlmapproject/sqlmap"
+_NUCLEI_OVERVIEW = "https://docs.projectdiscovery.io/tools/nuclei/overview"
+_NUCLEI_README = "https://github.com/projectdiscovery/nuclei"
+_NCAT_GUIDE = "https://nmap.org/ncat/guide/index.html"
+_NCAT_HOME = "https://nmap.org/ncat/"
+_OPENSSL_DOCS = "https://docs.openssl.org/master/man1/openssl/"
+_OPENSSL_MAN = "https://www.openssl.org/docs/manmaster/man1/openssl.html"
+
+#: (query, expected ordered candidate URLs) -- one row per Kali tool topic.
+_KALI_TOOL_TOPICS = (
+    ("Teach me how Nmap scans ports.", (_NMAP_MAN, _NMAP_BOOK_TOC)),
+    ("How do I use Burp Suite's Repeater?", (_BURP_DOCS, _BURP_GETTING_STARTED)),
+    ("What flags does curl support for following redirects?", (_CURL_MAN, _CURL_DOCS)),
+    ("How does ffuf fuzz a wordlist?", (_FFUF_README, _FFUF_WIKI)),
+    ("What scan modes does Gobuster support?", (_GOBUSTER_README, _GOBUSTER_WIKI)),
+    ("How do I filter packets in Wireshark?", (_WIRESHARK_GUIDE, _WIRESHARK_MAN)),
+    ("How do I capture traffic with tcpdump?", (_TCPDUMP_MAN, _TCPDUMP_HOME)),
+    ("How does sqlmap detect injection?", (_SQLMAP_USAGE, _SQLMAP_README)),
+    ("How do Nuclei templates work?", (_NUCLEI_OVERVIEW, _NUCLEI_README)),
+    ("How do I set up a Netcat listener?", (_NCAT_GUIDE, _NCAT_HOME)),
+    ("How do I generate a cert with OpenSSL?", (_OPENSSL_DOCS, _OPENSSL_MAN)),
+)
+
 
 class CuratedResearchSourceDiscoveryProviderTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -202,6 +242,121 @@ class CrossSiteScriptingTopicTests(unittest.TestCase):
     def test_mentioning_only_one_required_term_does_not_match(self) -> None:
         self.assertEqual(self.provider.discover("scripting language", limit=10), [])
         self.assertEqual(self.provider.discover("cross country running", limit=10), [])
+
+
+class KaliToolTopicTests(unittest.TestCase):
+    """The eleven Kali Linux tool catalog entries: LEARN-only knowledge, no
+    execution authority. Each entry is checked for its own ordinary-phrasing
+    match; aliases and negatives get their own dedicated tests below.
+    """
+
+    def setUp(self) -> None:
+        self.provider = CuratedResearchSourceDiscoveryProvider()
+
+    def test_each_tool_topic_returns_its_own_fixed_catalog(self) -> None:
+        for query, expected_urls in _KALI_TOOL_TOPICS:
+            with self.subTest(query=query):
+                candidates = self.provider.discover(query, limit=10)
+                self.assertEqual(tuple(c.url for c in candidates), expected_urls)
+                for candidate in candidates:
+                    self.assertTrue(candidate.url.startswith("https://"))
+                    self.assertNotIn("@", candidate.url)
+                    self.assertTrue(candidate.title)
+
+    def test_network_mapper_alias_matches_nmap(self) -> None:
+        candidates = self.provider.discover(
+            "What is the Network Mapper tool used for?", limit=10
+        )
+        self.assertEqual(tuple(c.url for c in candidates), (_NMAP_MAN, _NMAP_BOOK_TOC))
+
+    def test_burpsuite_single_token_alias_matches_burp(self) -> None:
+        candidates = self.provider.discover(
+            "How is BurpSuite used in a web app pentest?", limit=10
+        )
+        self.assertEqual(
+            tuple(c.url for c in candidates), (_BURP_DOCS, _BURP_GETTING_STARTED)
+        )
+
+    def test_ncat_alias_matches_netcat(self) -> None:
+        candidates = self.provider.discover(
+            "What can I do with ncat that plain netcat can't?", limit=10
+        )
+        self.assertEqual(tuple(c.url for c in candidates), (_NCAT_GUIDE, _NCAT_HOME))
+
+    def test_ordinary_english_words_that_are_also_tool_names_can_false_positive(
+        self,
+    ) -> None:
+        """Documented, accepted tradeoff (see the module docstring): "burp",
+        "curl" and "nuclei" are also common English words, unlike the other
+        nine entries. An unrelated sentence containing one of them still
+        returns that tool's catalog entry -- a harmless, still-pinned,
+        still-official documentation citation, never a wrong URL or expanded
+        authority -- rather than a narrower match that would also reject
+        short, direct, entirely legitimate questions like "what is curl?".
+        This test exists so that behavior is a proven, intentional choice,
+        not a silent, undiscovered side effect.
+        """
+        self.assertEqual(
+            tuple(
+                c.url
+                for c in self.provider.discover("I felt a burp after lunch.", limit=10)
+            ),
+            (_BURP_DOCS, _BURP_GETTING_STARTED),
+        )
+        self.assertEqual(
+            tuple(
+                c.url
+                for c in self.provider.discover(
+                    "Let's curl up on the couch and watch a movie.", limit=10
+                )
+            ),
+            (_CURL_MAN, _CURL_DOCS),
+        )
+        self.assertEqual(
+            tuple(
+                c.url
+                for c in self.provider.discover(
+                    "The nuclei of a cell contain its DNA.", limit=10
+                )
+            ),
+            (_NUCLEI_OVERVIEW, _NUCLEI_README),
+        )
+
+    def test_unrelated_tool_sounding_question_matches_nothing(self) -> None:
+        self.assertEqual(
+            self.provider.discover("What is a reverse proxy load balancer?", limit=10),
+            [],
+        )
+
+    def test_comparing_two_kali_tools_discovers_both(self) -> None:
+        candidates = self.provider.discover(
+            "What is the difference between ffuf and Gobuster?", limit=10
+        )
+        self.assertEqual(
+            {c.url for c in candidates},
+            {_FFUF_README, _FFUF_WIKI, _GOBUSTER_README, _GOBUSTER_WIKI},
+        )
+
+    def test_a_web_vulnerability_and_a_kali_tool_can_be_discovered_together(
+        self,
+    ) -> None:
+        """Requirement #5's distinguishing power extends across the two
+        knowledge areas: a question naming a vulnerability class and a tool
+        in the same breath still gets sources for both.
+        """
+        candidates = self.provider.discover(
+            "How would sqlmap help test for SQL injection?", limit=10
+        )
+        self.assertEqual(
+            {c.url for c in candidates},
+            {
+                _SQLMAP_USAGE,
+                _SQLMAP_README,
+                _PORTSWIGGER_SQLI,
+                _PORTSWIGGER_CHEAT_SHEET,
+                _OWASP_SQLI_PREVENTION,
+            },
+        )
 
 
 class MultiTopicDiscoveryTests(unittest.TestCase):

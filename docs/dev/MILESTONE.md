@@ -10,14 +10,131 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.444
+## Current — v0.3.445
+
+| Field | Value |
+| --- | --- |
+| Milestone | Cybersecurity knowledge acquisition, stage 2 of "learning first, Kali tools second": extend the curated research catalog with eleven LEARN-only Kali Linux tool entries (Nmap, Burp Suite, curl, ffuf, Gobuster, Wireshark, tcpdump, sqlmap, Nuclei, Netcat/Ncat, OpenSSL). No execution authority. |
+| Base SHA | `1f88e70c2ebdbf0efe22d0812f9e13dacece3f04` (verified origin/main, v0.3.444 delivered via PR #423) |
+| Branch | `feature/kali-tool-knowledge-v0.3.445`, separate worktree `D:\hypatia-worktrees\kali-tool-knowledge` |
+| Status | release |
+| Blockers | none |
+
+Directive: this is explicitly a LEARN-only milestone. The user's directive
+states that "an example command in a knowledge record is educational
+information, not authorization to execute it," and prohibits any active
+scanning, payload sending, exploitation, or brute-forcing as part of this or
+the prior milestone. No execution-shaped code was added or touched: the
+pre-existing `KaliToolGateway`, `WslKaliOperationProcessAdapter`, and
+`ResearchKaliOperationKind` (currently only `DNS_RECORD_LOOKUP`/
+`HTTPS_HEADER_LOOKUP`) remain exactly as they were, confirmed by grep across
+the diff before this release.
+
+Eleven new `_CuratedTopic` entries were added to the same
+`CuratedResearchSourceDiscoveryProvider` catalog extended in v0.3.444, each
+with `required_terms` (plus `alias_term_sets` for nmap/"network mapper",
+burp/"burpsuite", and netcat/"ncat") and two real, hand-verified (HTTP 200
+checked by hand before hardcoding, then independently live-fetched -- see
+below) official documentation URLs: nmap.org, portswigger.net/burp, curl.se,
+github.com/ffuf/ffuf, github.com/OJ/gobuster, wireshark.org, tcpdump.org,
+github.com/sqlmapproject/sqlmap, docs.projectdiscovery.io +
+github.com/projectdiscovery/nuclei, nmap.org/ncat, and openssl.org. The
+catalog's existing multi-topic discovery (from v0.3.444) composes for free:
+a question naming two tools, or a tool and a vulnerability class (e.g. "how
+would sqlmap help test for SQL injection?"), discovers candidates for both
+in one pass.
+
+Live, unmocked demonstration: a real scratchpad script discovered, fetched,
+and accepted Nmap and OpenSSL documentation (as two representative entries)
+against the real internet through the unmodified
+`ResearchSourceAcceptanceService`/`HttpResearchSourceFetcher` pipeline --
+all 4 candidate pages fetched and accepted (5,424 to 25,562 bytes each). A
+second script simulated a restart with fresh `KnowledgeEngine`/
+`ResearchRunManager` instances sharing only on-disk state, called the real
+`ResearchSourceContentRestorer`, and re-answered natural-language questions
+-- including "how would I use Nmap and OpenSSL together?" -- from disk
+alone (4 documents, 1,523 chunks restored). Separately, all 22 of the
+milestone's new candidate URLs (not just the two demonstrated live) were
+individually hand-fetched outside the automated demo and confirmed to
+return real content ranging 2,274 to 266,350 bytes, catching a real defect
+in the process: `https://docs.openssl.org/` -- which had passed an earlier
+hand HTTP-200 check -- turned out to be a 25-byte client-side redirect stub
+("Redirecting to master/..."), not real content. Replaced with the actual
+destination page, `https://docs.openssl.org/master/man1/openssl/`
+(confirmed 18,492 bytes of genuine OpenSSL command documentation), before
+this entry was ever presented as evidence.
+
+Reviews: hypatia-security — no blocking findings. One non-blocking
+observation: four tools (ffuf, Gobuster, sqlmap, Nuclei) have a candidate
+that is partly or wholly a `github.com` repository README/wiki rather than
+a vendor-owned domain. Mechanically this carries no extra SSRF/credential/
+authority risk (the unchanged, pinned fetcher treats `github.com` like any
+other HTTPS host, and every repository is each tool's own well-known
+upstream account), but a GitHub wiki specifically is, by default, editable
+by any signed-in GitHub user unless the repo owner restricts it -- weaker
+provenance than a README or a vendor domain. Noted for awareness; no fix
+required, and no code changed in response. hypatia-qa — full suite and
+gates independently re-run clean; one real, reproducible, non-blocking
+finding, addressed before release:
+
+1. (Low severity, fixed by documentation + test, not by narrowing)
+   `required_terms={"burp"}`, `{"curl"}`, and `{"nuclei"}` are also ordinary
+   English words (unlike the other eight tool entries, and unlike the
+   existing SQLi/XSS entries' deliberate two-token `required_terms`). QA
+   demonstrated directly against the real module that unrelated sentences
+   ("I felt a burp after lunch", "let's curl up on the couch", "the nuclei
+   of a cell contain DNA") trigger a match via the catalog's exact-token-
+   set-subset matching. QA explicitly confirmed this has zero security or
+   authority consequence in a LEARN-only pipeline -- the worst outcome is an
+   extra, still-pinned, still-official, still-harmless documentation
+   citation, never a wrong URL, an executed command, or an expanded
+   authority -- and offered three acceptable remediations: narrow the
+   match, document it, or add a test proving the behavior is an accepted,
+   intentional tradeoff rather than a silent gap. Narrowing was rejected: a
+   two-token requirement would also reject the much more common, entirely
+   legitimate case of a short direct question ("what is curl?"), and unlike
+   "SQL"+"injection" or "cross-site"+"scripting", there is no natural
+   second word every real question about these three tools would still
+   contain. Resolved by adding an explanatory paragraph to the module
+   docstring and a new permanent regression test,
+   `test_ordinary_english_words_that_are_also_tool_names_can_false_positive`,
+   reproducing QA's own three examples so the behavior is a proven,
+   intentional choice rather than an undiscovered side effect.
+
+QA separately verified (no change needed): no substring-collision bugs
+exist between any new entry and any other (confirmed the provider uses
+exact token-set-subset matching, not the v0.3.444 ranker's substring
+matching, and adversarially stress-tested strings designed to look like
+collisions -- "sitemap.xml generator", "tomcat server logs", "enumcat",
+"ncatenate strings", "openssl3 library", "Nmap-like tool" -- none matched);
+all 22 new URLs are internally consistent (title/container/URL agree); no
+`required_terms`/`alias_term_sets` combination added in this diff is left
+untested; the new integration tests are non-vacuous (the gap-reporting test
+doubly proves no LLM call occurred -- both via `assert_not_called()` and by
+construction, since an unexpected call would raise `IndexError` against an
+empty reply queue -- and the restart test uses genuinely independent
+process/engine state); and the diff touches no execution-shaped code at all.
+
+Tests: 8 new `test_curated_research_source_discovery_provider.py` cases
+(table-driven coverage of all 11 tool entries via `_KALI_TOOL_TOPICS`,
+three alias tests, a negative/unrelated-query test, two cross-topic
+co-discovery tests, and the QA-driven accepted-tradeoff test); 4 new
+`test_kali_tool_knowledge.py` integration tests (grounded answer for Nmap,
+honest gap-reporting for an uncatalogued tool, two-tool comparison for
+Nmap+OpenSSL, restart persistence) -- 12 new tests total, full suite 8012
+(up from 8000). Full unittest, Black, Ruff, MyPy and `git diff --check` all
+re-run clean after the QA-driven fix and the live-demo-driven URL fix;
+final counts recorded at commit time.
+
+## Historical scope: v0.3.444 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Cybersecurity knowledge acquisition, stage 1 of "learning first, Kali tools second": extend the curated research catalog from one topic to a reusable multi-topic shape (SQL Injection + Cross-Site Scripting) and fix a real `ask_knowledge` usability defect so natural questions actually retrieve researched prose. |
 | Base SHA | `58902ab75562c73d11799ccb619073ec505b27b6` (verified origin/main, v0.3.443 delivered via PR #422) |
 | Branch | `feature/cybersecurity-knowledge-curriculum-v0.3.444`, separate worktree `D:\hypatia-worktrees\cybersecurity-knowledge-curriculum` |
-| Status | release |
+| Release SHA | `9cc3ab2` (merged to `origin/main` via PR #423, merge commit `1f88e70`) |
+| Status | delivered |
 | Blockers | none |
 
 Directive: build demonstrable, source-backed cybersecurity knowledge through
@@ -239,22 +356,24 @@ model — distinguishing the chat and extraction calls by their actual payload
 shape). Full unittest, Black, Ruff, MyPy and `git diff --check` all re-run
 clean after every review round; final counts recorded at commit time.
 
-## Planned — Kali Linux tool knowledge (proposed, not started)
+## Planned — Kali laboratory integration design (proposed, not started)
 
 | Field | Value |
 | --- | --- |
-| Milestone | LEARN-only, source-backed knowledge base (purpose, inputs/outputs, limitations, risks, methodology fit) for Nmap, Burp Suite, curl, ffuf/Gobuster, Wireshark/tcpdump, sqlmap, Nuclei, Netcat and OpenSSL, from official documentation. No execution authority. |
-| Status | planned — starts only after v0.3.444 is verified delivered to `origin/main` |
+| Milestone | Design (not implement) how Hypatia could eventually run an authorized Kali Linux tool operation against an explicitly scoped target -- target/program scope binding, explicit user approval, operation preview, bounded operation/resource budget, no arbitrary shell execution, no automatic escalation to more intrusive tools, accurate evidence/execution records, clear stop conditions. |
+| Status | planned — design-first; requires its own separate authorization before any implementation, and is not started by, or implied by, v0.3.444 or v0.3.445 |
 
-An example command recorded in a knowledge entry is educational information,
-not authorization to run it. A later, separately authorized and
-design-first milestone is required before any Kali tool, WSL adapter or the
-existing VMware Kali VM may actually execute anything; that design must
-first investigate the real local environment (is WSL configured and
-reachable? is the VMware VM reachable from this host?) rather than assume
-it, building on the existing but minimally-scoped `ResearchKaliOperationKind`
+An example command recorded in a knowledge entry (v0.3.445's eleven Kali
+tool catalog entries) is educational information, not authorization to run
+it. Before proposing this design, the actual local environment must be
+investigated rather than assumed -- is WSL configured and reachable from
+this host? is the user's existing VMware Kali VM reachable, and how? --
+building on the existing but minimally-scoped `ResearchKaliOperationKind`
 (currently only `DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP`), `KaliToolGateway`
-and `WslKaliOperationProcessAdapter`.
+and `WslKaliOperationProcessAdapter`, which already use WSL (not VMware/SSH)
+as their execution transport. Actual PortSwigger lab interaction and bug
+bounty target testing both require this design, implemented and separately
+authorized, before either can begin.
 
 ## Planned — interactive Web Security Academy learning workflow (proposed, not started)
 

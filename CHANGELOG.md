@@ -2,6 +2,79 @@
 
 All notable project changes are recorded here.
 
+## [0.3.445] - 2026-10-04
+
+### Added
+
+- Milestone 2 of "cybersecurity learning first, Kali Linux tools second":
+  the curated research-source catalog
+  (`CuratedResearchSourceDiscoveryProvider`) gains eleven new LEARN-only
+  entries, one per Kali Linux tool named in the directive -- Nmap, Burp
+  Suite, curl, ffuf, Gobuster, Wireshark, tcpdump, sqlmap, Nuclei,
+  Netcat/Ncat, and OpenSSL -- each with two real, hand-verified (HTTP 200
+  checked by hand, then live-fetched end to end; see below) official
+  documentation URLs. No execution authority is added anywhere in this
+  milestone: an example command inside a fetched page remains educational
+  content, not permission to run it. The pre-existing Kali operation
+  execution machinery (`KaliToolGateway`, `WslKaliOperationProcessAdapter`,
+  `ResearchKaliOperationKind`) is untouched by this diff.
+
+### Fixed
+
+- One catalog candidate (OpenSSL's documentation index,
+  `https://docs.openssl.org/`) turned out to be a 25-byte client-side
+  redirect stub rather than real content, discovered only by actually
+  fetching it during this milestone's own live demonstration (not caught
+  by the earlier hand HTTP-200 check, which a redirect stub also passes).
+  Replaced with `https://docs.openssl.org/master/man1/openssl/`, the real
+  destination page, confirmed to fetch 18,492 bytes of genuine content.
+
+### Verification
+
+- Independent `hypatia-security` review: no blocking findings. One
+  non-blocking observation: four tools' candidates partly point at
+  `github.com` repository READMEs/wikis rather than a vendor-owned domain;
+  mechanically identical risk to every other HTTPS host under the
+  unchanged, pinned fetcher, but a GitHub wiki specifically is editable by
+  any signed-in GitHub user by default, which is weaker provenance than a
+  README or a vendor domain -- noted for awareness, no fix required.
+- Independent `hypatia-qa` review: full suite and gates clean (8011 tests
+  at review time); one real, reproducible, non-blocking finding --
+  `required_terms={"burp"}`/`{"curl"}`/`{"nuclei"}` are also ordinary
+  English words (unlike the other eight entries), so an unrelated sentence
+  containing one of them ("I felt a burp after lunch") returns that tool's
+  catalog entry. QA confirmed this has zero security/authority
+  consequence (worst case: an extra, still-official, still-harmless
+  citation) and offered three acceptable remediations: narrow the match,
+  document it, or add a test proving it is an accepted, intentional
+  tradeoff rather than a silent gap. Narrowing was rejected because it
+  would also break the much more common, entirely legitimate case of a
+  short direct question ("what is curl?") and the catalog has no natural
+  second word to require instead, the way "SQL"+"injection" or
+  "cross-site"+"scripting" do. Resolved by documenting the tradeoff in the
+  module docstring and adding
+  `test_ordinary_english_words_that_are_also_tool_names_can_false_positive`,
+  reproducing QA's own three examples as a permanent regression test.
+- A real, unmocked, live demonstration: curated discovery, live HTTPS
+  fetch, acceptance, and indexing for Nmap and OpenSSL (as two
+  representative entries of the eleven-tool catalog) against the real
+  internet. All 4 candidate pages fetched and were accepted (5,424 to
+  25,562 bytes each) -- the OpenSSL redirect-stub fix above was made
+  *because of* this same live run catching it. Separately, all 22 of the
+  milestone's new candidate URLs were fetched by hand outside the
+  automated demo and confirmed to return real content (2,274 to 266,350
+  bytes each), not a redirect stub or an empty shell. Reopening the same
+  on-disk stores with fresh objects (the real
+  `ResearchSourceContentRestorer`) restored all 4 documents and 1,523
+  chunks, and natural-language queries -- including a direct "how would I
+  use Nmap and OpenSSL together?" comparison question -- were answered
+  from the restored content alone.
+- Full unittest: 8012 tests (up from 8000: 8 new catalog-matching tests --
+  table-driven coverage of all 11 tool entries, three alias tests, a
+  negative, two cross-topic co-discovery tests, and the accepted-tradeoff
+  test above -- plus 4 new end-to-end integration tests), OK. Black, Ruff,
+  and MyPy on src (625 files) clean. `git diff --check` clean.
+
 ## [0.3.444] - 2026-10-04
 
 ### Added
