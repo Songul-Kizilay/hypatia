@@ -133,6 +133,16 @@ To create the world's most capable personal AI research companion.
   operation and requires its own Advance action. Read-only provider-quality,
   side-by-side result, and same-question paired-quality views remain
   descriptive: they choose no provider and alter no routing or ranking.
+- A third discovery provider, Curated, makes no network call at all: it
+  returns candidates only from a small, hand-reviewed catalog of fixed URLs
+  at recognized authoritative security-teaching sources, matched against the
+  run's own question. The first catalog topic is SQL Injection (PortSwigger
+  Web Security Academy's topic page and cheat sheet, and OWASP's SQL
+  Injection Prevention Cheat Sheet). Every candidate still passes through the
+  same source-candidate validation and, once accepted, the same SSRF-safe
+  fetcher as every other provider. It is excluded from curiosity's automatic
+  "ask the provider(s) not yet asked" proposals, since it only ever answers
+  for its small fixed catalog.
 - New discovery failures retain the selected provider beside the same generic
   safe reason. This lets comparison and Failure Memory distinguish an attempted
   failed side from a pending side without storing raw provider errors; legacy

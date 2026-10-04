@@ -35,7 +35,6 @@ from research.CuriosityProposalBuilder import CuriosityProposalBuilder
 from research.ResearchCuriosityQuestionGenerator import (
     ResearchCuriosityQuestionGenerator,
 )
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchKnowledgeGapDetector import (
     ACQUISITION_FAILURE_STAGES,
@@ -228,6 +227,38 @@ class ProviderCoverageGapTests(unittest.TestCase):
         self.assertNotIn(ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP, kinds)
         self.assertIn(ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION, kinds)
 
+    def test_a_curated_only_run_is_not_a_coverage_gap(self) -> None:
+        """Having asked only Curated is not "one general provider down".
+
+        Regression guard: Curated only ever answers for its own small fixed
+        catalog, so a run that asked only it has not meaningfully engaged
+        with the Crossref/NVD comparison this gap kind is about. Before this
+        fix, `asked` included "curated" and neither general provider was in
+        it, so both Crossref and NVD were reported as unasked at once --
+        breaking the "exactly one remaining provider" assumption this gap
+        kind's proposal and completion text rely on (see
+        `CoverageProposalStepTests` and `CuriosityResearchProposal`).
+        """
+        self.assertEqual(
+            gaps_of(
+                run(discoveries=(discovery(1, "curated"),)),
+                ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP,
+            ),
+            [],
+        )
+
+    def test_curated_alongside_one_general_provider_still_names_exactly_one(
+        self,
+    ) -> None:
+        """Curated never dilutes or replaces a genuine single-provider gap."""
+        [gap] = gaps_of(
+            run(discoveries=(discovery(1, "curated"), discovery(2, "nvd"))),
+            ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP,
+        )
+
+        self.assertIn("crossref", gap.summary)
+        self.assertNotIn("curated", gap.summary)
+
     def test_the_coverage_question_prefers_no_provider(self) -> None:
         research_run = run(discoveries=(discovery(1, "nvd"),))
         [question] = [
@@ -408,14 +439,38 @@ class CoverageProposalStepTests(unittest.TestCase):
             if step.capability is ResearchPlanStepCapability.SOURCE_DISCOVERY
         ]
 
+        # Only among the general-purpose providers: Curated is excluded even
+        # though it is also technically "unasked", because it never answers
+        # for questions outside its small fixed catalog and a coverage-gap
+        # proposal naming it would be asking the operator to approve a step
+        # that will almost always return nothing.
         self.assertEqual(
             [step.discovery_provider.value for step in discoveries],
-            [
-                provider.value
-                for provider in ResearchDiscoveryProviderName
-                if provider.value != "nvd"
-            ],
+            ["crossref"],
         )
+
+    def test_curated_is_never_proposed_as_an_unasked_provider(self) -> None:
+        """Curiosity's coverage-gap logic never names the curated catalog.
+
+        Regression guard for the exact bug this would otherwise reintroduce:
+        `CuriosityResearchProposal`'s coverage-gap completion text says "the
+        remaining provider" in the singular, which is only ever true because
+        exactly one of two general providers can be unasked. If Curated were
+        included, a run that asked only Crossref would have two unasked
+        providers and that singular phrasing would misdescribe the record.
+        """
+        for asked in (("nvd",), ("crossref",)):
+            with self.subTest(asked=asked):
+                proposal = self._proposal(asked)
+                discoveries = [
+                    step
+                    for step in proposal.plan.steps
+                    if step.capability is ResearchPlanStepCapability.SOURCE_DISCOVERY
+                ]
+                self.assertNotIn(
+                    "curated",
+                    [step.discovery_provider.value for step in discoveries],
+                )
 
     def test_a_provider_already_asked_gets_no_step(self) -> None:
         proposal = self._proposal(("nvd",))
@@ -431,7 +486,8 @@ class CoverageProposalStepTests(unittest.TestCase):
     def test_the_recorded_order_of_discoveries_does_not_change_the_plan(self) -> None:
         """Same provider asked twice, recorded either way round, plans the same.
 
-        Storage order is not a planning rule. Only two providers exist, so both
+        Storage order is not a planning rule. Only two general-purpose
+        providers are ever proposed this way (Curated is excluded), so both
         runs here still leave the same one unasked; what differs is the order
         the record happens to hold, and the plan must not notice.
         """

@@ -10,49 +10,154 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current — v0.3.441
+## Current — v0.3.442
+
+| Field | Value |
+| --- | --- |
+| Milestone | Smallest real, end-to-end Web/API security research capability: an operator-selectable curated-source discovery provider so Hypatia can study SQL Injection from actual PortSwigger/OWASP pages through the existing research pipeline, not a generic model answer. |
+| Base SHA | `899ea5a9b428afb563f5be9c600f1b9c236a1589` (verified origin/main, v0.3.441 delivered) |
+| Branch | `feature/curated-research-sources-v0.3.442`, separate worktree `D:\hypatia-worktrees\curated-research-sources` |
+| Status | release |
+| Blockers | none |
+
+User priority shift toward a genuine Web/API security research-and-teaching
+capability, bounded to the smallest real demonstration rather than another
+infrastructure milestone. The existing research/evidence/authorization/SSRF
+infrastructure (Phases 4-5) was characterized as already sufficient; the only
+gap was that neither existing discovery provider (Crossref: scholarly search;
+NVD: CVE records) can return a specific, hand-picked authoritative teaching
+page. Added a third, closed-vocabulary provider, `curated`, that makes no
+network call at all: `discover()` is a pure, deterministic lookup against a
+small hardcoded catalog (3 URLs: PortSwigger's SQL injection page and cheat
+sheet, OWASP's SQL Injection Prevention Cheat Sheet), matched against the
+operator's own question text via the existing `ResearchQueryTerms`
+normalizer. An operator selects it exactly like Crossref/NVD, through the
+existing, unmodified plan-authorization flow; every returned candidate still
+passes through the existing `ResearchSourceCandidate` validation and, once
+accepted, the existing `HttpResearchSourceFetcher` / `PublicHttpsUrlValidator`
+/ `PinnedHttpsTransport` path.
+
+QA review surfaced one real defect during implementation (not shipped):
+Curiosity's "ask the provider(s) not yet asked" logic iterated every
+provider, so a run that asked only `curated` was treated as "one of two
+general providers asked" and proposed asking both Crossref and NVD at once,
+breaking the "exactly one remaining provider" assumption the proposal and
+completion text relied on. Fixed by gating `ResearchKnowledgeGapDetector`'s
+coverage-gap detection on at least one *general-purpose* provider having been
+asked (`GENERAL_DISCOVERY_PROVIDERS` = Crossref, NVD only; Curated is
+deliberately excluded, since it only ever answers for its own small catalog),
+and made the proposal/completion wording count-agnostic as defense in depth.
+Two regression tests cover this directly (`curated`-only run: no gap;
+`curated` alongside one general provider: still names exactly one).
+
+File scope: `ResearchDiscoveryProviderName`, new
+`CuratedResearchSourceDiscoveryProvider`, `Bootstrap`'s two provider-loading
+methods, `CuriosityProposalBuilder`/`ResearchKnowledgeGapDetector`/
+`CuriosityResearchProposal` (the `GENERAL_DISCOVERY_PROVIDERS` fix above),
+version files, README/PROJECT_STATUS/CHANGELOG and this ledger. No new
+authority, persistence schema, network path, or desktop UI code: the
+Tkinter provider dropdown already enumerates the full enum generically.
+
+Required verification: the new provider matches only its catalog topic and
+nothing else (case/punctuation-insensitive, no partial-term false positives);
+every candidate is credential-free HTTPS; no network/subprocess/socket import
+exists in the module; full composition through the real, unmodified
+`SourceDiscoveryStepOperation`; Curated's exclusion from
+`GENERAL_DISCOVERY_PROVIDERS` and the coverage-gap fix. Then a real,
+unmocked, live demonstration against the actual internet (see Verification
+below) and all canonical gates.
+
+Reviews: hypatia-security — no findings (full independent trace of the no-op
+`discover()`, the unmodified fetch/SSRF path, a repo-wide sweep for any other
+place that might treat Curated as a general provider, and confirmation the
+new provider is reachable only through the existing authorized plan flow).
+hypatia-qa — one Medium finding (the coverage-gap defect above, live-
+reproduced) and one Low finding (the original no-network test only checked
+instance attributes, not the module source); both addressed: the detector fix
+plus two new regression tests, and the no-network test now also scans the
+module's own source text for forbidden imports.
+
+Live demonstration (real, unmocked network; not part of the automated
+suite): Curated discovery for "Teach me SQL Injection for the BSCP exam"
+found the 3 real catalog URLs; all 3 were fetched live over HTTPS through the
+actual `HttpResearchSourceFetcher`; each was accepted via the canonical
+`ResearchSourceAcceptanceService`, indexed by the real `KnowledgeEngine`, and
+recorded as deterministic evidence (real quoted excerpts incl. UNION-based
+SQLi and parameterized-query guidance, real SHA256, no model call). The
+rendered `teaching_report` cited all three sources with honest "partially
+supported" / "no retained comparison" framing. Reopening the same on-disk
+run store with fresh `ResearchRunManager`/store instances (simulated restart)
+reproduced identical evidence, source URLs, and hashes. No live EVREN/model
+call was made or claimed; the quiz/practice-question acceptance item is
+explicitly deferred to the next milestone (see PROJECT_STATUS.md), not
+silently dropped.
+
+Canonical gates: full unittest 7926 tests (up from 7909) in 169.131s, OK,
+exit 0; Black 1064 files unchanged; Ruff all checks passed; MyPy 623 source
+files clean; `git diff --check` clean. Exact-SHA/PR/main CI and
+standard-merge provenance are verified after commit and recorded in the next
+milestone per ledger convention.
+
+## Planned — v0.3.443 (proposed, not started)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Same-session assisted-help contamination of learned-memory extraction. |
+| Status | planned |
+
+Gap identified while reviewing the v0.3.442 teaching loop against the user's
+own acceptance criterion "distinguish independently demonstrated answers from
+answers obtained with hints." The existing safeguard
+(`CrossSessionRecallContext`, v0.3.439-441) only protects the *cross-session*
+case: it marks recalled assistance as "externally assisted, not independent"
+in the prompt so a later session cannot be credited with mastery it never
+demonstrated. No equivalent protection exists *within* one session.
+`LLMLearnedMemoryCandidateExtractor.extract(source_text)` sees only a single
+turn's text with no visibility into the immediately preceding turns, so if a
+user asks for a SQL-injection hint and, moments later in the same session,
+says "I solved it myself," nothing stops that claim from being extracted as a
+`self_fact`/`goal`-kind learned memory.
+
+Proposed shape: extend the same "treat prior assistance as disqualifying,
+never erase the record of it" discipline from `CrossSessionRecallContext`
+into same-session extraction — give `LLMLearnedMemoryCandidateExtractor` the
+last few same-session turns alongside the candidate turn, with an explicit
+instruction not to extract independent-mastery claims when a hint/solution
+was given immediately before. Affected: `LearnedMemoryCandidatePrompt.py`,
+`LLMLearnedMemoryCandidateExtractor.py`, the call site in
+`CognitiveEngine.py` (~line 4055), and focused regression tests proving (a)
+a same-session assisted claim is not extracted as independent mastery, (b)
+an unprompted, unassisted claim still is, (c) cross-session behavior is
+unchanged. No new authority, schema, or provider; bounded to the existing
+learned-memory extraction path.
+
+Separately, and only after this: the interactive one-question-at-a-time
+practice/quiz feature described in the current SQL Injection research
+milestone's acceptance criteria (ask practice questions grounded in a
+completed research run's evidence, distinguish a hint-preceded answer from
+an unprompted one) — deliberately sequenced after the extraction fix above,
+since the quiz feature would need exactly this same discipline to avoid
+re-introducing the same problem in a new surface. Needs its own scoping pass
+before implementation.
+
+## Historical scope: v0.3.441 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Named-session recall must respect an explicitly requested topic: a source ID is not proof of relevance. |
 | Base SHA | `7f7d4880410d4afbe3ebe36aa2941723f437c2ca` (verified origin/main, v0.3.440 delivered) |
-| Branch | `fix/named-recall-topic-v0.3.441`, separate worktree `D:\hypatia-worktrees\named-recall-topic` |
-| Status | release |
+| Branch | `fix/named-recall-topic-v0.3.441`, worktree `D:\hypatia-worktrees\named-recall-topic` |
+| Status | delivered |
 | Blockers | none |
 
-The user's continued-development request follows a verified v0.3.440 desktop
-package update. Repository characterization reproduced a concrete bug: asking
-to continue quantum cryptography in a named SQL-only session returned SQL
-excerpts and invoked the model. A new regression fails on the base. Fix only
-the named-session branch by removing named IDs from the lexical topic query,
-reusing existing lexical retrieval, and intersecting results with the named
-sources. Topic-free named recall retains its recent-turn behavior.
-
-File scope: CognitiveEngine, its recall tests and desktop restart test, version
-files, README/PROJECT_STATUS/CHANGELOG and this ledger. No new authority,
-provider, scheduler, schema, research execution or private-data access. The
-local EXE/launcher deployment is separately authorized and verified with
-synthetic data; it does not widen product scope or touch EVREN configuration.
-
-Required verification: absent named topic bypasses the model; matching topic
-excludes unrelated turns and other sessions; multiple named sources still
-require topic relevance; original topic-free behavior remains; same behavior
-after real application restart. Then all canonical gates, exact-SHA and PR CI,
-standard merge, provenance verification and the authorized package update.
-
-Review: named-source filtering reuses the existing lexical matcher, retains the
-other-session conversation validator and five-record bound, and never trusts
-model-generated source IDs. No authority, persistence schema or provider path
-changes. The actual desktop handler restart regression verifies a missing named
-topic returns without another transport call; assisted-learning exclusion and
-source attribution remain covered by the focused suite. The base regression
-failed before the fix. Focused tests: 42 passed.
-
-Canonical Windows gates (2026-10-03): full unittest 7909 tests in 162.041s,
-OK (skipped=3), exit 0; Black 1062 files unchanged; Ruff all checks passed;
-MyPy 622 source files clean; git diff --check clean. Existing non-fatal suite
-ResourceWarnings remain. Exact-SHA/PR/main CI and standard-merge provenance are
-verified after commit and recorded in the next milestone per ledger convention.
+Fixed named-session recall bypassing topic relevance by removing named IDs
+from the lexical topic query, reusing existing lexical retrieval, and
+intersecting results with the named sources. Canonical Windows gates
+(2026-10-03): full unittest 7909 tests in 162.041s, OK (skipped=3); Black
+1062 files unchanged; Ruff clean; MyPy 622 source files clean; git diff
+--check clean. Merged to `origin/main` via PR #420, standard merge commit
+`899ea5a9b428afb563f5be9c600f1b9c236a1589`; exact-SHA Linux and Windows CI
+both green; reachability from `origin/main` verified.
 
 ## Historical scope: v0.3.440 (delivered)
 

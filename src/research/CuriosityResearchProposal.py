@@ -165,8 +165,8 @@ _COMPLETION: dict[ResearchKnowledgeGapKind, str] = {
         "evidence says the test was examined, never that it passed."
     ),
     ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP: (
-        "This proposal is finished when the remaining provider has been asked "
-        "this run's question. Asking it says nothing about which provider "
+        "This proposal is finished when every named provider has been asked "
+        "this run's question. Asking them says nothing about which provider "
         "answers better."
     ),
     ResearchKnowledgeGapKind.FAILED_ACQUISITION: (

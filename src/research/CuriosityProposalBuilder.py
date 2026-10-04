@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from core.Exceptions import ResearchError
 from research.CuriosityResearchProposal import CuriosityResearchProposal
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchDiscoveryProviderName import GENERAL_DISCOVERY_PROVIDERS
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchPlanDraftService import ResearchPlanDraftService
@@ -114,9 +114,9 @@ def _objective(question: ResearchCuriosityQuestion, run: ResearchRun) -> str:
             missing = _unasked_providers(run)
             named = ", ".join(missing) if missing else "the remaining providers"
             return (
-                f"Put this run's question to {named}, which has not been asked "
-                "it, so the operator can see what a second source of results "
-                "adds. Neither provider is preferred."
+                f"This run has not yet put its question to {named}; doing so "
+                "lets the operator see what the additional results add. "
+                "Neither provider is preferred."
             )
         case ResearchKnowledgeGapKind.FAILED_ACQUISITION:
             return (
@@ -175,7 +175,7 @@ def _discovery_steps(
     """Return the outward-looking steps, each naming an exact provider or none."""
     if question.kind is ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP:
         providers = _unasked_providers(run) or [
-            provider.value for provider in ResearchDiscoveryProviderName
+            provider.value for provider in GENERAL_DISCOVERY_PROVIDERS
         ]
         return tuple(
             ResearchPlanStepDraftInput(
@@ -223,6 +223,6 @@ def _unasked_providers(run: ResearchRun) -> list[str]:
     asked = {discovery.provider for discovery in run.discoveries}
     return [
         provider.value
-        for provider in ResearchDiscoveryProviderName
+        for provider in GENERAL_DISCOVERY_PROVIDERS
         if provider.value not in asked
     ]

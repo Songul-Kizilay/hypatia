@@ -76,6 +76,9 @@ from planner.Planner import Planner
 from research.CrossrefResearchSourceDiscoveryProvider import (
     CrossrefResearchSourceDiscoveryProvider,
 )
+from research.CuratedResearchSourceDiscoveryProvider import (
+    CuratedResearchSourceDiscoveryProvider,
+)
 from research.DeferredExecutionGrantStore import DeferredExecutionGrantReader
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileBackgroundTaskStore import (
@@ -314,11 +317,13 @@ class Bootstrap:
             return NvdResearchSourceDiscoveryProvider(
                 api_key=Bootstrap._load_process_nvd_api_key()
             )
+        if provider_name == "curated":
+            return CuratedResearchSourceDiscoveryProvider()
         if provider_name == "disabled":
             return None
         raise ValueError(
             "HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER must be "
-            "'crossref', 'nvd', or 'disabled'."
+            "'crossref', 'nvd', 'curated', or 'disabled'."
         )
 
     @staticmethod
@@ -327,11 +332,11 @@ class Bootstrap:
     ):
         """Return every provider an approved step may name.
 
-        Both are constructed when discovery is enabled at all, because which one
-        a step contacts is decided by the plan the operator approved rather than
-        by process configuration. Registering only the default would mean an
-        approval naming the other one failed for a reason that had nothing to do
-        with what was authorized.
+        All of them are constructed when discovery is enabled at all, because
+        which one a step contacts is decided by the plan the operator approved
+        rather than by process configuration. Registering only the default
+        would mean an approval naming another one failed for a reason that had
+        nothing to do with what was authorized.
         """
         if (
             os.environ.get("HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER", "crossref")
@@ -344,6 +349,9 @@ class Bootstrap:
             ),
             ResearchDiscoveryProviderName.NVD: NvdResearchSourceDiscoveryProvider(
                 api_key=Bootstrap._load_process_nvd_api_key()
+            ),
+            ResearchDiscoveryProviderName.CURATED: (
+                CuratedResearchSourceDiscoveryProvider()
             ),
         }
 
