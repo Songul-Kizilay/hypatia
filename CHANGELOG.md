@@ -2,6 +2,57 @@
 
 All notable project changes are recorded here.
 
+## [0.3.448] - 2026-10-05
+
+### Fixed
+
+- Cross-session recall returned a false "not found" for a genuinely relevant
+  record, reproduced live on the real Windows desktop app (v0.3.447): a
+  session named `default` had a real SQL injection conversation, and a
+  natural Turkish recall sentence asked from a new session --
+  "Önceki oturumda SQL Injection konusunda nerede kalmıştık? Eski oturum
+  kayıtlarından bul ve hangi session_id'den getirdiğini söyle." -- returned
+  NOT_FOUND even though the same record was found by the separate, UI-driven
+  `session search` path. Root cause: `recall_query_terms()`'s stop-word list
+  was too narrow, so ordinary recall-instruction words in the sentence
+  ("bul"/find, "ve"/and, "söyle"/tell, "getirdiğini"/that-you-brought,
+  "eski"/old, "konusunda"/regarding, "kayıtlarından"/from-the-records, "id",
+  "den") survived into the extracted "topic term" list alongside the real
+  topic ("sql", "injection"). `CognitiveEngine._cross_session_lexical_recall_records`
+  requires every extracted term to match the same candidate record, so each
+  leaked boilerplate word (absent from any real conversation about SQL
+  injection) independently emptied the match.
+- Fixed by expanding `_QUERY_STOP_WORDS` (still a fixed, deterministic,
+  test-covered list -- no fuzzy or statistical matching added) to strip the
+  newly-identified Turkish/English boilerplate, including common verb
+  inflections. Nothing else in the recall pipeline changed: detection
+  (`.detect()`), the AND-intersection matching algorithm, session-exclusion/
+  provenance checks, and prompt/attribution building are all untouched.
+  `session search`, same-session exclusion, and "no result found" behavior
+  were independently confirmed unregressed.
+
+### Scope and limits
+
+- Independent security review: PASS -- stop-word growth can only remove
+  candidate terms, never add a spurious match, so it cannot cause an
+  unrelated record to leak; no new authority, write, network call, or
+  permission anywhere in the diff.
+- Independent QA review: PASS-with-caveats, the caveat addressed before this
+  release -- if a message's entire real topic is composed of words this
+  list now treats as boilerplate (e.g. "eski kayıtlar" / "old records" with
+  no other topic word), extraction returns nothing and recall (lexical and
+  semantic alike) fails safe to a deterministic NOT_FOUND rather than
+  searching on unstripped boilerplate text. This is a disclosed, tested
+  tradeoff (never a wrong-session leak or a fabricated answer), not a hidden
+  one -- see `RecallQueryTermsTests` in
+  `tests/cognition/test_cross_session_recall_request_detector.py` and the
+  comment at `CognitiveEngine._cross_session_recall_records`'s term-presence
+  gate.
+- No new memory architecture was built -- `MemoryRecord`, the existing
+  session/provenance infrastructure, and the existing lexical/semantic
+  recall paths were reused exactly as they were. No change to Kali,
+  research authority, networking, VMware, or execution permissions.
+
 ## [0.3.447] - 2026-10-05
 
 ### Fixed

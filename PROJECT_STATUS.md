@@ -2,10 +2,27 @@
 
 ## Runtime Version
 
-`v0.3.447 (Genesis)`
+`v0.3.448 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.448 fixes a live-validated cross-session recall false negative:
+a natural Turkish recall sentence wrapping a real topic ("SQL Injection") in
+ordinary recall instructions ("bul", "ve", "söyle", ...) returned NOT_FOUND
+even though the record existed and the separate `session search` path found
+it fine. The lexical term extractor's stop-word list was too narrow, so
+boilerplate words leaked into the "topic term" list and the AND-intersection
+matcher required every one of them -- including words absent from any real
+conversation -- to match. Fixed by expanding the stop-word list only (still
+a fixed, deterministic, test-covered list, no fuzzy matching); detection,
+the matching algorithm, session-exclusion/provenance checks, and
+attribution building are all unchanged. Independent security review: PASS.
+Independent QA review found one disclosed, now-tested blind spot (a topic
+composed entirely of the newly-added boilerplate words still fails safe to
+NOT_FOUND) and no false-positive risk in any constructed adversarial case.
+No new memory architecture; existing `MemoryRecord`/session infrastructure
+reused exactly as it was.
 
 Version v0.3.447 makes Hypatia's capability and cross-session-memory claims in
 ordinary chat evidence-based instead of guessed. A capability/status question

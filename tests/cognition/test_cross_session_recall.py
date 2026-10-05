@@ -477,6 +477,148 @@ class CrossSessionRecallTests(unittest.TestCase):
         self.assertNotIn("Outside named source.", prompt)
         self.assertIn('"lesson-source"', response.message)
 
+    def test_turkish_natural_recall_phrase_with_boilerplate_finds_the_real_record(
+        self,
+    ) -> None:
+        """Reproduces a real live-validation failure (v0.3.447 desktop).
+
+        `session search default -- SQL Injection` found the real record, so
+        this was never a missing-memory problem. A natural Turkish recall
+        sentence that wraps the topic in ordinary recall instructions ("bul
+        ... ve ... söyle") returned NOT_FOUND anyway: the leaked boilerplate
+        terms ("bul", "ve", "söyle", "konusunda", "eski", "kayıtlarından",
+        "id", "den", "getirdiğini") joined the real topic terms ("sql",
+        "injection") in the AND-intersection lexical match, and a real SQL
+        injection record contains none of that boilerplate, so the
+        intersection collapsed to nothing.
+        """
+        lesson_question = "SQL Injection nedir, UNION tabanlı saldırı nasıl çalışır?"
+        lesson_answer = "UNION SELECT ile iki sorguyu birlestirerek calisir."
+        recall_message = (
+            "Önceki oturumda SQL Injection konusunda nerede kalmıştık? Eski "
+            "oturum kayıtlarından bul ve hangi session_id'den getirdiğini "
+            "söyle."
+        )
+        recall_answer = "Buldum, devam edelim."
+        llm_provider = QueuedLLMProvider([lesson_answer, recall_answer])
+        engine = self._engine(llm_provider)
+        self.session_manager.create("memory-test-447")
+
+        lesson_response = engine.process(
+            BrainRequest(
+                message=lesson_question,
+                metadata={"session_id": "default"},
+            )
+        )
+        self.assertTrue(lesson_response.success)
+
+        recall_response = engine.process(
+            BrainRequest(
+                message=recall_message,
+                metadata={"session_id": "memory-test-447"},
+            )
+        )
+
+        self.assertTrue(recall_response.success)
+        self.assertEqual(len(llm_provider.calls), 2)
+        recall_prompt = llm_provider.calls[1][0]
+        self.assertIn("[session: default]", recall_prompt)
+        self.assertIn(lesson_question, recall_prompt)
+        self.assertIn(lesson_answer, recall_prompt)
+        self.assertIn('"default"', recall_response.message)
+        self.assertIn("Source sessions", recall_response.message)
+
+    def test_turkish_natural_recall_phrase_for_an_unrelated_topic_finds_nothing(
+        self,
+    ) -> None:
+        """Same boilerplate-heavy phrasing, genuinely unrelated topic: NOT_FOUND.
+
+        The boilerplate fix must not turn into a broad fuzzy match -- asking
+        about a topic that was never discussed anywhere must still fail
+        deterministically, never inventing or guessing an answer.
+        """
+        lesson_question = "SQL Injection nedir, UNION tabanlı saldırı nasıl çalışır?"
+        lesson_answer = "UNION SELECT ile iki sorguyu birlestirerek calisir."
+        recall_message = (
+            "Önceki oturumda kuantum kriptografi konusunda nerede kalmıştık? "
+            "Eski oturum kayıtlarından bul ve hangi session_id'den "
+            "getirdiğini söyle."
+        )
+        llm_provider = QueuedLLMProvider([lesson_answer])
+        engine = self._engine(llm_provider)
+        self.session_manager.create("memory-test-447")
+        engine.process(
+            BrainRequest(
+                message=lesson_question,
+                metadata={"session_id": "default"},
+            )
+        )
+
+        recall_response = engine.process(
+            BrainRequest(
+                message=recall_message,
+                metadata={"session_id": "memory-test-447"},
+            )
+        )
+
+        self.assertTrue(recall_response.success)
+        # No second model call: the deterministic not-found path never reaches
+        # the model, so there is nothing it could fabricate.
+        self.assertEqual(len(llm_provider.calls), 1)
+        self.assertIn("bulamadım", recall_response.message)
+        self.assertNotIn("Source sessions", recall_response.message)
+        self.assertNotIn(lesson_question, recall_response.message)
+
+    def test_turkish_natural_recall_phrase_never_surfaces_same_session_content(
+        self,
+    ) -> None:
+        """The asker's own session must never be mislabeled as a recall source.
+
+        Both the asking session and another session discuss SQL injection;
+        the Turkish recall sentence must attribute the quoted material to
+        the real other session only, exactly mirroring
+        `test_the_askers_own_session_is_excluded_even_when_its_content_matches`
+        but through the natural-language path this milestone fixes.
+        """
+        other_session_message = "SQL Injection (diger oturumdaki gercek ders)."
+        own_session_prior_message = "SQL Injection (bu oturumda daha once sorulmustu)."
+        recall_message = (
+            "Önceki oturumda SQL Injection konusunda nerede kalmıştık? Eski "
+            "oturum kayıtlarından bul ve hangi session_id'den getirdiğini "
+            "söyle."
+        )
+        llm_provider = QueuedLLMProvider(
+            ["Not edildi (diger).", "Not edildi (bu oturum).", "Devam."]
+        )
+        engine = self._engine(llm_provider)
+        self.session_manager.create("memory-test-447")
+
+        engine.process(
+            BrainRequest(
+                message=other_session_message,
+                metadata={"session_id": "default"},
+            )
+        )
+        engine.process(
+            BrainRequest(
+                message=own_session_prior_message,
+                metadata={"session_id": "memory-test-447"},
+            )
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message=recall_message,
+                metadata={"session_id": "memory-test-447"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        prompt = llm_provider.calls[-1][0]
+        self.assertIn("[session: default]", prompt)
+        self.assertIn(other_session_message, prompt)
+        self.assertNotIn("[session: memory-test-447]", prompt)
+
     def test_multiple_named_sessions_still_require_the_requested_topic(self) -> None:
         for source, topic in (
             ("lesson-one", "SQL injection"),
