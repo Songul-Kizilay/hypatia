@@ -71,6 +71,7 @@ class RuntimeProjectionTests(unittest.TestCase):
             RuntimeCapability.CONVERSATION,
             RuntimeCapability.SESSIONS,
             RuntimeCapability.MEMORY,
+            RuntimeCapability.CROSS_SESSION_RECALL,
             RuntimeCapability.LOCAL_KNOWLEDGE,
             RuntimeCapability.AUTHORIZED_RESEARCH,
             RuntimeCapability.SOURCE_DISCOVERY,
@@ -110,6 +111,38 @@ class RuntimeProjectionTests(unittest.TestCase):
         )
         no_model = project_runtime_capabilities(wired(conversation_model=False))
         self.assertIs(no_model.state_of(RuntimeCapability.CONVERSATION), UNAVAILABLE)
+
+    def test_cross_session_recall_needs_both_a_model_and_memory(self) -> None:
+        """Bug: this real, wired capability was missing from the catalogue.
+
+        The model was told to deny any capability not in this list, so a real
+        question about cross-session recall got a false "I cannot do that"
+        even though `CrossSessionRecallRequestDetector` and the matching
+        `CognitiveEngine` wiring already implement it whenever a model and
+        memory are both present -- the same two facts this projects from.
+        """
+        self.assertIs(
+            project_runtime_capabilities(wired()).state_of(
+                RuntimeCapability.CROSS_SESSION_RECALL
+            ),
+            AVAILABLE,
+        )
+        self.assertIs(
+            project_runtime_capabilities(wired(memory=False)).state_of(
+                RuntimeCapability.CROSS_SESSION_RECALL
+            ),
+            UNAVAILABLE,
+        )
+        self.assertIs(
+            project_runtime_capabilities(wired(conversation_model=False)).state_of(
+                RuntimeCapability.CROSS_SESSION_RECALL
+            ),
+            UNAVAILABLE,
+        )
+        self.assertIn(
+            "other named sessions",
+            project_runtime_capabilities(wired()).instruction(),
+        )
 
     def test_research_operations_without_approval_are_not_research(self) -> None:
         context = project_runtime_capabilities(wired(research_approvals=False))
@@ -260,6 +293,7 @@ class ConservativeUnknownTests(unittest.TestCase):
             RuntimeCapability.SESSIONS,
             RuntimeCapability.MEMORY,
             RuntimeCapability.CONVERSATION,
+            RuntimeCapability.CROSS_SESSION_RECALL,
         ):
             self.assertIs(context.state_of(capability), UNKNOWN, capability)
         self.assertIn("Not confirmed (do not claim):", context.instruction())
@@ -343,8 +377,34 @@ class InstructionContentTests(unittest.TestCase):
             "anything in this chat",
             self.text,
         )
+
+    def test_unverified_capabilities_get_a_verify_instruction_not_a_denial(
+        self,
+    ) -> None:
+        """Bug: 'not confirmed' and 'unavailable' were given the same denial.
+
+        A capability the runtime could not establish (`UNKNOWN`) was shown
+        under "Not confirmed (do not claim):", but the one rule sentence
+        told the model to "say Hypatia cannot do it" for *everything* not
+        listed as available/simulated -- so an honestly unverified fact was
+        instructed to be denied outright, a false absence claim.
+        """
+        unverified_text = project_runtime_capabilities(
+            wired(sessions=None)
+        ).instruction()
+
+        self.assertIn("Not confirmed (do not claim):", unverified_text)
         self.assertIn(
-            "only through a research plan the user explicitly approves", self.text
+            "say you cannot verify that from this runtime, not that Hypatia "
+            "cannot do it",
+            unverified_text,
+        )
+
+    def test_the_model_must_explain_a_capability_correction(self) -> None:
+        self.assertIn(
+            "Correct an earlier statement plainly, naming what changed, "
+            "never silently.",
+            self.text,
         )
 
     def test_revalidation_is_described_as_bounded_and_not_automatic(self) -> None:

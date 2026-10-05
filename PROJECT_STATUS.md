@@ -2,10 +2,30 @@
 
 ## Runtime Version
 
-`v0.3.446 (Genesis)`
+`v0.3.447 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.447 makes Hypatia's capability and cross-session-memory claims in
+ordinary chat evidence-based instead of guessed. A capability/status question
+no longer gets swallowed by the deterministic research-refusal shortcut; the
+already-existing, already-wired cross-session recall path is now named in the
+capability list the model is told about; "not confirmed" (unverified) is no
+longer conflated with "unavailable" in the model's instruction, so an honestly
+unverified fact is no longer denied outright; a capability correction must be
+stated plainly, never silently. No new execution capability, authority,
+permission, or memory architecture was added -- inspection found the needed
+provenance and evidence machinery (`RuntimeCapabilityProjection.py`,
+`memory/CrossSessionRecallContext.py`) already existed, so this milestone
+corrected what the model is told rather than building something new.
+Independent security review: PASS. Independent QA review found two real gaps
+(a narrow-hedge exemption bypass; a guarantee dropped while trimming prompt
+text to its length budget) before release, both fixed and covered by new
+regression tests reproducing QA's own adversarial examples. Live Windows
+desktop GUI testing was not performed; all evidence is automated, through the
+real Bootstrap -> Brain -> DesktopController/CognitiveEngine chain with a
+mocked model transport.
 
 Version v0.3.446 grounds ordinary LLM chat in relevant accepted local knowledge,
 with bounded untrusted excerpts and deterministic citations. Its separate

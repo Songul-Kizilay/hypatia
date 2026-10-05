@@ -10,15 +10,93 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.446 (release)
+## Current scope: v0.3.447 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Capability and cross-session-memory claim truthfulness: correct what Hypatia's chat is told about its own capabilities and cross-session recall, without adding any new capability. |
+| Base SHA | `2a4732992eaa0a1028c12d5fe5d8752b06645416` (verified `origin/main`; PR #426, v0.3.446 delivered) |
+| Branch | `feature/capability-memory-truthfulness-v0.3.447`, worktree `D:\hypatia-main\.claude\worktrees\response-routing-investigation` |
+| Status | release; exact-SHA CI, PR, standard merge and main verification pending |
+| Release SHA | Recorded by the next milestone after delivery, per ledger convention |
+
+Derived from a user-reported live desktop conversation (Hypatia v0.3.445): a
+capability question was misrouted into the deterministic research-refusal
+reply; Hypatia first denied being able to read other sessions, then could
+only say it could not verify that either way; and it asserted a version
+number from a statement that was not actually in the conversation it was
+shown. Investigation (not assumption) found: cross-session recall
+(`CrossSessionRecallRequestDetector`, session-labeled `[session: X]` prompt
+context, source-session attribution in the final reply) already existed,
+already worked from ordinary chat, and was already tested end to end
+(`test_the_real_desktop_chat_handler_recalls_a_different_named_session`) —
+it was simply never named in the capability list the model is told about,
+and that list's own rule text told the model to flatly deny anything not
+listed, conflating "not confirmed" with "unavailable." Separately,
+`LiveInformationRequestDetector`'s phrase table is a plain substring match
+with no sense of question-vs-command, so a capability question sharing bare
+vocabulary ("sources", "research") with the action tables got the
+deterministic refusal instead of ever reaching the model.
+
+No new `CapabilityEvidence`/`ConversationMemoryEvidence` architecture was
+built: the existing `RuntimeCapabilityEvidence`/`RuntimeCapabilityContext`/
+`RuntimeCapabilityState` projection and `MemoryRecord` +
+`memory/CrossSessionRecallContext.py` already provide trusted-source-only
+evidence, session/source provenance, and a "not found" vs
+"retrieval-unavailable" distinction; this milestone corrects what the model
+is told, it does not duplicate what already works. Four fixes, each the
+smallest change that closes the gap it addresses: (1) a narrow,
+whole-message-only "discussion only" exemption in
+`LiveInformationRequestDetector` so a capability/status question reaches the
+model; (2) a new `RuntimeCapability.CROSS_SESSION_RECALL`, derived only from
+the two composition-root facts that already gate the real recall path; (3)
+reworded model-facing `_RULES` text distinguishing "not confirmed" (say
+cannot verify) from "not implemented"/"not enabled" (say cannot do it), plus
+a requirement to explain any correction to an earlier capability claim; (4)
+one sentence in the default system prompt forbidding an unverifiable claim
+about what was said earlier in the conversation.
+
+Independent security review: PASS. No new authority, execution path, network
+call, or permission anywhere in the diff; the new capability derives only
+from existing trusted booleans, never request metadata or model output; the
+discussion-only exemption only bypasses the refusal shortcut, never an
+approval gate; the cross-session recall machinery itself is unchanged
+(confirmed absent from the diff). Independent QA review: PASS-with-caveats,
+then both caveats fixed before this release -- (a) the original
+`DISCUSSION_ONLY_PHRASES` table held narrower hedges ("without actually",
+"no need to actually") that could attach to one sub-clause of a genuine
+action request rather than the whole message; QA demonstrated three concrete
+prompts that were wrongly exempted. The table now holds only whole-message
+disclaimers, and all three of QA's examples are now locked in as regression
+tests expecting correct detection, not `NONE`. (b) Trimming prompt text to
+fit the existing <300-word instruction-length test accidentally dropped the
+guarantee "never say a real lookup ran or completed when only the simulation
+is available" outright rather than folding it into the replacement wording;
+restored verbatim, with the word budget recovered from unrelated filler
+elsewhere in the same instruction text. QA also caught a stray, unrelated
+assertion left in one new test by a bad edit; removed.
+
+Local validation: 8050 unittest tests, `OK`, exit 0; Black, Ruff, MyPy (625
+source files), and `git diff --check` passed. `tests/core/test_version.py`
+confirms source/package version consistency. Mock-transport tests establish
+deterministic routing and instruction content, not live-model compliance;
+live Windows desktop GUI testing was not performed.
+
+Scope excludes any new Kali/VMware/WSL execution capability, web browsing,
+permission, or auto-authorization; broad new memory architecture (inspection
+found the existing provenance/evidence machinery already sufficient); and
+anything unrelated to capability/memory claim truthfulness.
+
+## Historical scope: v0.3.446 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Ordinary chat grounding in accepted local knowledge; fix QA false-positive matching without changing explicit ask_knowledge. |
 | Base SHA | `ee943ff459be18c6f3b99a186297d05f5d69686a` (verified GitHub main; PR #425) |
 | Branch | `feature/chat-knowledge-grounding-v0.3.446`, worktree `D:\hypatia-worktrees\chat-knowledge-grounding` |
-| Status | release; exact-SHA CI, PR checks, standard merge and main verification pending |
-| Release SHA | Recorded by the next milestone after delivery, per ledger convention |
+| Release SHA | `f05fb8c` (merged to `origin/main` via PR #426, standard merge commit `2a47329`) |
+| Status | delivered |
+| Blockers | none |
 
 Claude's uncommitted implementation was preserved after the user cancelled
 automatic continuation and closed the Code session; process/Git checks preceded
@@ -37,8 +115,12 @@ fallback, restart restoration and assisted-learning tests remain in place.
 
 Local validation: 8039 unittest tests, `OK (skipped=3)`, exit 0; Black, Ruff,
 MyPy (625 source files), and `git diff --check` passed. Post-version checks
-also verify the source/package version stays consistent. Delivery remains
-pending until the exact commit and PR pass Linux/Windows CI and reach main.
+also verify the source/package version stays consistent. Delivered: PR #426
+merged to `origin/main` with a standard merge commit (`2a47329`); exact-SHA
+Linux/Windows CI and PR-triggered checks both passed
+(https://github.com/Songul-Kizilay/hypatia/actions/runs/37227329951,
+https://github.com/Songul-Kizilay/hypatia/actions/runs/37227338444); `2a47329`
+verified reachable from `origin/main` (it is the current tip).
 
 Scope excludes interactive BSCP teaching (separate permission/version), new
 research/execution authority, Windows installation/launchers, VMware/Kali/EVREN,

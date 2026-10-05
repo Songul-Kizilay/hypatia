@@ -236,6 +236,76 @@ class LiveInformationDetectionTests(unittest.TestCase):
                     LiveInformationRequestKind.NONE,
                 )
 
+    def test_a_capability_question_marked_discussion_only_is_not_detected(
+        self,
+    ) -> None:
+        """A real failure: a capability question was misclassified as research.
+
+        Asked to discuss capabilities -- cross-session memory, web/CVE
+        research, Kali integration -- with an explicit discussion-only
+        qualifier, the runtime must not swallow the question into the
+        deterministic "I did not search" refusal just because it shares bare
+        vocabulary ("sources", "research") with the action phrase tables.
+        """
+        prompts = (
+            "Can you discuss your capabilities for web and CVE research and "
+            "cite sources for them? Discussion only, please don't do anything.",
+            "Just want to discuss what you can do with VMware/Kali "
+            "integration and cross-session memory -- no need to actually run "
+            "or search anything.",
+        )
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertIs(
+                    self.detector.detect(prompt),
+                    LiveInformationRequestKind.NONE,
+                    prompt,
+                )
+
+    def test_a_genuine_action_request_is_still_detected_despite_overlap(
+        self,
+    ) -> None:
+        """The discussion-only exemption must not swallow a real request."""
+        self.assertIs(
+            self.detector.detect("Give me sources for this and cite your sources."),
+            LiveInformationRequestKind.ACADEMIC_SOURCES,
+        )
+
+    def test_a_narrow_hedge_cannot_smuggle_a_real_request_past_the_exemption(
+        self,
+    ) -> None:
+        """QA finding: a hedge attached to one sub-clause, not the whole ask.
+
+        `DISCUSSION_ONLY_PHRASES` originally also held narrower hedges such
+        as "without actually" and "no need to actually". Those attach to
+        whatever clause they sit next to, not necessarily to the action verb
+        itself, so a genuine request could carry one and still be wrongly
+        exempted -- independent QA review found and confirmed exactly this
+        with these three prompts. Only whole-message disclaimers remain in
+        the table now; each of these three must still be classified as a
+        live-information request, never swallowed into NONE.
+        """
+        cases = (
+            (
+                "Please search the internet for today's news, just explain "
+                "it simply.",
+                LiveInformationRequestKind.CURRENT_EVENTS,
+            ),
+            (
+                "Can you fetch this http://example.com page without actually "
+                "running anything else?",
+                LiveInformationRequestKind.URL_ACCESS,
+            ),
+            (
+                "Search the web for the latest news on this, no need to "
+                "actually go deep.",
+                LiveInformationRequestKind.CURRENT_EVENTS,
+            ),
+        )
+        for prompt, expected in cases:
+            with self.subTest(prompt=prompt):
+                self.assertIs(self.detector.detect(prompt), expected, prompt)
+
     def test_only_a_live_kind_requires_research(self) -> None:
         self.assertFalse(LiveInformationRequestKind.NONE.requires_live_research)
         self.assertFalse(
@@ -314,6 +384,27 @@ class LiveResearchRefusalTests(HonestyFixture):
 
         self.assertEqual(len(provider.calls), 1)
         self.assertIn("closure", response.message)
+
+    def test_a_discussion_only_capability_question_reaches_the_model(self) -> None:
+        """Same real failure as the detector test, exercised end to end.
+
+        A capability question marked discussion-only must still reach the
+        model (with the real runtime capability instruction attached), not
+        the deterministic "I did not search" refusal, even when it shares
+        wording with the action phrase tables.
+        """
+        provider = RecordingLLMProvider("Here is what I can actually do.")
+        engine = self.build_engine(provider)
+
+        response = self.chat(
+            engine,
+            "Just want to discuss what you can do with cross-session memory "
+            "and web/CVE research and cite sources for them -- no need to "
+            "actually run or search anything.",
+        )
+
+        self.assertEqual(len(provider.calls), 1)
+        self.assertEqual(response.message, "Here is what I can actually do.")
 
     def test_the_refusal_works_without_a_run_store(self) -> None:
         engine = self.build_engine(RecordingLLMProvider("x"), with_runs=False)

@@ -131,6 +131,13 @@ authorization creates permission to execute.
 - [x] Runtime capability self-awareness — `src/cognition/RuntimeCapabilityProjection.py`, wired from real service-presence facts, fail-closed to `UNKNOWN`
 - [x] Distinguish Hypatia application capabilities from LLM capabilities
 - [x] Prevent unsupported capabilities from being presented as available
+- [x] v0.3.447 capability/cross-session-memory claim truthfulness: a
+      capability/status question no longer gets swallowed by the live-
+      research refusal shortcut; `UNKNOWN` ("not confirmed") is no longer
+      told to the model as a flat denial, only `UNAVAILABLE` is; the already-
+      existing, already-wired cross-session recall path is now named in the
+      capability list the model is told about; a capability correction must
+      be stated plainly, never silent
 
 - [ ] Model registry
 - [ ] Task-specific model routing
