@@ -39,6 +39,7 @@ class RuntimeCapability(StrEnum):
     CONVERSATION = "conversation"
     SESSIONS = "sessions"
     MEMORY = "memory"
+    CROSS_SESSION_RECALL = "cross_session_recall"
     LOCAL_KNOWLEDGE = "local_knowledge"
     AUTHORIZED_RESEARCH = "authorized_research"
     SOURCE_DISCOVERY = "source_discovery"
@@ -59,27 +60,29 @@ class RuntimeCapability(StrEnum):
 _DESCRIPTIONS: dict[RuntimeCapability, str] = {
     RuntimeCapability.CONVERSATION: "conversation in this chat",
     RuntimeCapability.SESSIONS: "separate named chat sessions",
-    RuntimeCapability.MEMORY: "remembering facts the user shares in conversation",
-    RuntimeCapability.LOCAL_KNOWLEDGE: "searching documents already loaded locally",
+    RuntimeCapability.MEMORY: "remembering facts shared in conversation",
+    RuntimeCapability.CROSS_SESSION_RECALL: (
+        "finding turns from other named sessions you name or ask to "
+        "continue; never a web search"
+    ),
+    RuntimeCapability.LOCAL_KNOWLEDGE: "searching loaded local documents",
     RuntimeCapability.AUTHORIZED_RESEARCH: (
-        "research runs, only through a research plan the user explicitly approves"
+        "only through a research plan the user explicitly approves"
     ),
     RuntimeCapability.SOURCE_DISCOVERY: (
-        "in approved research: discovering candidate sources"
+        "approved research: discovering candidate sources"
     ),
     RuntimeCapability.SOURCE_ACQUISITION: (
-        "in approved research: fetching and accepting sources"
+        "approved research: fetching and accepting sources"
     ),
     RuntimeCapability.EVIDENCE_TRACKING: (
-        "in approved research: recording evidence, claims and contradictions"
+        "approved research: recording evidence, claims and contradictions"
     ),
     RuntimeCapability.SOURCE_REVALIDATION: (
-        "in approved research: one explicitly approved re-fetch of a recorded "
+        "approved research: one explicitly approved re-fetch of a recorded "
         "source, using a normal source slot and budget; never automatic"
     ),
-    RuntimeCapability.SECURITY_SELF_AUDIT: (
-        "auditing Hypatia's own stored research records"
-    ),
+    RuntimeCapability.SECURITY_SELF_AUDIT: ("auditing Hypatia's own records"),
     RuntimeCapability.REVIEWED_KALI_LOOKUPS: "running Kali tools",
     RuntimeCapability.CHAT_WEB_BROWSING: "browsing or searching the web from chat",
     RuntimeCapability.PENETRATION_TESTING: (
@@ -112,14 +115,17 @@ _IDENTITY = (
     "coding or translation as Hypatia capabilities."
 )
 _RULES = (
-    "Describe only the capabilities listed as available or simulated. For "
-    "anything not listed there, say Hypatia cannot do it; never invent a "
-    "capability. This list describes; it grants no permission and starts "
-    "nothing. Knowing that a workflow exists is not doing it: never say you "
+    "Describe only the capabilities listed as available or simulated. For a "
+    "capability listed as not implemented or not enabled, say Hypatia cannot "
+    "do it; never invent a capability. For one listed as not confirmed, say "
+    "you cannot verify that from this runtime, not that Hypatia cannot do "
+    "it; it grants no permission and starts nothing; never say you "
     "researched, browsed, fetched, verified or revalidated anything in this "
-    "chat. A capability listed as simulated performs no real action -- never "
-    "describe a simulated result as a real one, and never say a real lookup "
-    "ran or completed when only the simulation is available."
+    "chat. A capability listed as simulated performs no real action -- "
+    "never describe a simulated result as a real one, and never say a real "
+    "lookup ran or completed when only the simulation is available. "
+    "Correct an earlier statement plainly, naming what changed, never "
+    "silently."
 )
 
 
@@ -270,6 +276,13 @@ def project_runtime_capabilities(
         RuntimeCapability.CONVERSATION: _state(evidence.conversation_model),
         RuntimeCapability.SESSIONS: _state(evidence.sessions),
         RuntimeCapability.MEMORY: _state(evidence.memory),
+        # Cross-session recall is reached only from the same model-backed chat
+        # branch that already requires both facts (see
+        # `CognitiveEngine._process_conversation`); no new evidence field, so
+        # this can never drift from what the engine actually gates it on.
+        RuntimeCapability.CROSS_SESSION_RECALL: _state(
+            _both(evidence.conversation_model, evidence.memory)
+        ),
         RuntimeCapability.LOCAL_KNOWLEDGE: _state(evidence.local_knowledge),
         RuntimeCapability.AUTHORIZED_RESEARCH: _state(research),
         RuntimeCapability.SOURCE_DISCOVERY: _state(
@@ -314,6 +327,18 @@ def project_runtime_capabilities(
 
 def _proven(value: object) -> bool:
     return value is True
+
+
+def _both(first: object, second: object) -> object:
+    """Combine two evidence facts without quietly promoting an unproven one.
+
+    Returns a real bool only when both inputs are already proper booleans, so
+    `_state` keeps treating anything else (missing, malformed) as UNKNOWN
+    rather than deciding AVAILABLE/UNAVAILABLE from a guess.
+    """
+    if isinstance(first, bool) and isinstance(second, bool):
+        return first and second
+    return None
 
 
 def _state(value: object) -> RuntimeCapabilityState:

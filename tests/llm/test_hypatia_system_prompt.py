@@ -51,3 +51,16 @@ class HypatiaSystemPromptTests(unittest.TestCase):
 
     def test_the_prompt_permits_admitting_ignorance(self) -> None:
         self.assertIn("say you do not know", HYPATIA_DEFAULT_SYSTEM_PROMPT)
+
+    def test_the_prompt_forbids_unverifiable_claims_about_earlier_turns(self) -> None:
+        """Bug: the model claimed a version number it never actually said.
+
+        Nothing supplied to the model forbade asserting what it "said earlier
+        in this conversation" beyond what was literally in the supplied
+        history, so a model could -- and did -- state a fabricated or
+        out-of-context self-quote with total confidence.
+        """
+        prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
+
+        self.assertIn("Never claim what you or the user said earlier", prompt)
+        self.assertIn("say you cannot verify that", prompt)

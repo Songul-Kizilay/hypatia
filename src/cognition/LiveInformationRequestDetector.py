@@ -21,6 +21,15 @@ a specific page only when it contains a URL *and* asks about reaching it, becaus
 a pasted link is usually context for a question rather than a request to open
 anything. Matching on the URL alone would take over every turn that mentioned
 one.
+
+A capability or status question can mention the same bare vocabulary as a live
+request -- "cite sources" is a substring of "can you cite sources while we just
+discuss what you can do" -- without asking Hypatia to perform anything right
+now. Rather than trying to parse that distinction out of the action tables
+themselves (which would weaken the deliberate over-match above), a message that
+also carries an explicit discussion-only marker is exempted from every kind in
+this table, English or Turkish, the same fixed-phrase way everything else here
+is decided.
 """
 
 from __future__ import annotations
@@ -165,6 +174,27 @@ WEB_SEARCH_PHRASES = (
     "googlela",
 )
 
+#: Deliberately only whole-message, topic-level disclaimers -- phrases that
+#: can only describe the entire message's purpose, never attach to one
+#: sub-clause of it. A narrower hedge such as "without actually" or "no need
+#: to actually" was tried and rejected: "Can you fetch this page without
+#: actually running anything else?" is a genuine request, not a discussion,
+#: and a hedge like that attaches to "anything else", not to the fetch
+#: itself. Keeping only whole-message phrasing here preserves this table's
+#: own over-match safety margin instead of handing it back per hedge word.
+DISCUSSION_ONLY_PHRASES = (
+    "discussion only",
+    "just discuss",
+    "just want to discuss",
+    "only want to discuss",
+    "just talk about",
+    "just discussing",
+    "sadece konusalim",
+    "sadece konuşalım",
+    "sadece tartisalim",
+    "sadece tartışalım",
+)
+
 _TABLE: tuple[tuple[LiveInformationRequestKind, tuple[str, ...]], ...] = (
     (LiveInformationRequestKind.EVIDENCE_PROVENANCE, EVIDENCE_PROVENANCE_PHRASES),
     (LiveInformationRequestKind.CURRENT_EVENTS, CURRENT_EVENTS_PHRASES),
@@ -182,6 +212,8 @@ class LiveInformationRequestDetector:
             return LiveInformationRequestKind.NONE
         bounded = message[:MAX_INSPECTED_CHARACTERS]
         forms = _normalized_forms(bounded)
+        if any(phrase in form for form in forms for phrase in DISCUSSION_ONLY_PHRASES):
+            return LiveInformationRequestKind.NONE
         for kind, phrases in _TABLE:
             if any(phrase in form for form in forms for phrase in phrases):
                 return kind

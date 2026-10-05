@@ -2,6 +2,72 @@
 
 All notable project changes are recorded here.
 
+## [0.3.447] - 2026-10-05
+
+### Fixed
+
+- A capability or status question asked in ordinary chat (e.g. "can you cite
+  sources while we just discuss your capabilities?") could be swallowed by
+  the deterministic "I did not search the internet" refusal before it ever
+  reached the model, because the refusal's phrase-table match is a plain
+  substring check with no sense of question-vs-command. A narrow,
+  whole-message "discussion only" exemption (English/Turkish) now lets a
+  genuine capability/status question reach the model with its real runtime
+  capability instruction attached, while a real action request is still
+  caught deterministically -- including three adversarial phrasings
+  (independent QA review) where a *narrow* hedge such as "without actually"
+  or "no need to actually" could attach to one sub-clause of a genuine
+  request rather than the whole message; the table now holds only
+  whole-message disclaimers for this reason.
+- The already-existing, already-wired, already-tested cross-session recall
+  path (`CrossSessionRecallRequestDetector`, session-labeled `[session: X]`
+  context, source-session attribution) was never named in the capability
+  list the model is told about, so a direct question about it was denied
+  outright even though the underlying mechanism already worked. It is now
+  listed as its own capability, derived only from the two composition-root
+  facts (a conversation model and a memory store) that already gate it.
+- The model-facing capability instruction told the model to "say Hypatia
+  cannot do it" for *any* capability not listed as available or simulated --
+  including one the runtime genuinely could not establish (`UNKNOWN`, shown
+  under "Not confirmed (do not claim):"). An honestly unverified fact was
+  therefore instructed to be denied outright, a false absence claim. The
+  instruction now distinguishes "not confirmed" (say you cannot verify that
+  from this runtime) from "not implemented"/"not enabled" (say Hypatia
+  cannot do it).
+- The model was never told to explain a correction to its own earlier
+  capability claim in the same conversation; it could silently contradict
+  itself. The capability instruction now requires naming what changed.
+- Nothing forbade the model from asserting what it or the user said earlier
+  in the conversation beyond what was actually supplied as history; the
+  default system prompt now requires saying "I cannot verify that" instead
+  of guessing.
+
+### Scope and limits
+
+- This milestone is introspection/truthfulness/retrieval-provenance only: no
+  Kali/VMware/WSL execution capability, no web browsing, no new permission,
+  no automatic authorization, and no change to the cross-session recall
+  mechanism's own gating or security behavior (confirmed unchanged by this
+  diff). The suggested `CapabilityEvidence`/`ConversationMemoryEvidence`
+  shapes from the originating request were not introduced as new types:
+  inspection found the existing `RuntimeCapabilityEvidence`/
+  `RuntimeCapabilityContext`/`RuntimeCapabilityState` projection and the
+  existing `MemoryRecord` + `memory/CrossSessionRecallContext.py` builders
+  already provide the same guarantees (trusted-source-only evidence,
+  session/source provenance, "not found" vs "retrieval unavailable"
+  distinction), so the fix extends and corrects those instead of
+  duplicating them.
+- Independent security review: PASS (no new authority/execution/network
+  path; the new capability derives only from existing trusted booleans;
+  the discussion-only exemption only bypasses the refusal shortcut, never
+  an approval gate). Independent QA review: found and the implementation
+  fixed two real gaps (the narrow-hedge exemption bypass, and a dropped
+  "never say a real lookup ran or completed" guarantee lost to word-count
+  trimming) before this release; see `docs/dev/MILESTONE.md`.
+- Live Windows desktop GUI verification was not performed; all evidence is
+  from automated tests through the real `Bootstrap` -> `Brain` ->
+  `DesktopController`/`CognitiveEngine` chain with a mocked model transport.
+
 ## [0.3.446] - 2026-10-04
 
 ### Added
