@@ -70,14 +70,36 @@ RECALL_PHRASES = (
     "konusuna don",
 )
 
+#: Deliberately a fixed, bounded list -- the same reproducible, test-covered
+#: discipline as `RECALL_PHRASES` above, not a fuzzy or statistical filter.
+#: Extending coverage means adding a word here, verified by a test, exactly
+#: like adding a phrase to a detector table elsewhere in this codebase; it
+#: never becomes partial-match, edit-distance, or model-scored stripping.
+#: Grammatical scaffolding and instructional verbs ("bul", "söyle", "ve",
+#: "find", "tell") are stripped because they routinely survive into the
+#: term list from a natural recall sentence without naming any topic, and
+#: `CognitiveEngine._cross_session_lexical_recall_records` requires every
+#: surviving term to match the same candidate record -- a single leaked
+#: boilerplate word is therefore enough to hide a real, relevant record.
 _QUERY_STOP_WORDS = frozenset(
     "a an the i we you our my me it is was were about in on from to of and "
     "can could please let lets s continue lesson lessons session previous "
     "last earlier time what where did do leave left off question before "
     "hey so exactly yesterday with that this discuss talked explained "
+    "find tell bring fetch say says said brought told found fetched "
+    "old record records which id "
     "derse dersine ders oturum oturumda önceki onceki geçen gecen devam "
     "edelim mi ne neydi nerede hangi soruda son sorum kalmıştık kalmistik "
-    "kalmıştı kalmisti öğrendik ogrendik konuşmuştuk konusmustuk".split()
+    "kalmıştı kalmisti öğrendik ogrendik konuşmuştuk konusmustuk "
+    "ve veya ile icin için lütfen lutfen bana bize "
+    "bul bulabilir bulur bulunuz bulup "
+    "getir getirir getirdi getirdin getirdiniz getirdiğini getirdigini "
+    "söyle soyle söyler soyler söyledi soyledi "
+    "anlat anlatir anlatır aktar aktarir aktarır "
+    "konusunda hakkında hakkinda eski "
+    "kayıt kayit kayıtlar kayitlar kayıtlardan kayitlardan "
+    "kayıtlarından kayitlarindan "
+    "den dan ten tan".split()
 )
 
 

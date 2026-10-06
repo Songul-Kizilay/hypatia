@@ -138,6 +138,13 @@ authorization creates permission to execute.
       existing, already-wired cross-session recall path is now named in the
       capability list the model is told about; a capability correction must
       be stated plainly, never silent
+- [x] v0.3.448 cross-session recall topic-term fix (live-validated): a
+      natural recall sentence wrapping a real topic in ordinary recall
+      instructions ("bul", "ve", "söyle"/find, "and", "tell") no longer
+      returns a false NOT_FOUND -- the lexical term extractor's stop-word
+      list now strips that boilerplate so the AND-intersection matcher is
+      not defeated by words absent from the real record; detection, the
+      matching algorithm, and session-exclusion/provenance are unchanged
 
 - [ ] Model registry
 - [ ] Task-specific model routing

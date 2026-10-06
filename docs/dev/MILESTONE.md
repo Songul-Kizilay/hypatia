@@ -10,15 +10,86 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.447 (release)
+## Current scope: v0.3.448 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Cross-session recall topic-term fix: a natural recall sentence wrapping a real topic in ordinary recall instructions returned a false NOT_FOUND. |
+| Base SHA | `1123787f20297aa81acf68101d455eae8cbaefd0` (verified `origin/main`; PR #427, v0.3.447 delivered) |
+| Branch | `feature/cross-session-recall-topic-fix-v0.3.448`, worktree `D:\hypatia-main\.claude\worktrees\cross-session-recall-topic-fix` |
+| Status | release; exact-SHA CI, PR, standard merge and main verification pending |
+| Release SHA | Recorded by the next milestone after delivery, per ledger convention |
+
+Derived from live validation of the deployed v0.3.447 Windows desktop app.
+Verified facts going in: conversation persistence worked; `session search
+default -- SQL Injection` (a separate, UI-driven path) found the real
+record; a new session `memory-test-447` was created and activated; asking,
+from that new session, "Önceki oturumda SQL Injection konusunda nerede
+kalmıştık? Eski oturum kayıtlarından bul ve hangi session_id'den
+getirdiğini söyle." returned NOT_FOUND. Not a missing-memory problem --
+the record existed in another session, but cross-session recall failed to
+retrieve it.
+
+Investigation confirmed the primary suspicion exactly, empirically (not by
+inspection alone): `recall_query_terms()` extracted `('sql', 'injection',
+'konusunda', 'eski', 'kayıtlarından', 'bul', 've', 'id', 'den',
+'getirdiğini', 'söyle')` -- nine ordinary Turkish recall-instruction words
+survived its stop-word list alongside the two real topic words.
+`CognitiveEngine._cross_session_lexical_recall_records` requires every
+extracted term to match the same candidate record via a chain of
+`MemoryManager.search()` calls intersected together; since a real SQL
+injection conversation contains none of that boilerplate, the intersection
+collapsed to nothing. Fix: expand `_QUERY_STOP_WORDS` only (still a fixed,
+deterministic, test-covered list -- no fuzzy or statistical heuristic was
+introduced, answering the milestone's explicit question about whether the
+existing stripping approach was sufficiently bounded: yes, by degree, not
+by kind). No new memory architecture: `MemoryRecord` and the existing
+session/provenance infrastructure were reused exactly as they were;
+detection (`.detect()`), the AND-intersection matching algorithm,
+session-exclusion/provenance checks (`_is_other_session_conversation_record`),
+and prompt/attribution building (`memory/CrossSessionRecallContext.py`) are
+all untouched (confirmed absent from the diff).
+
+Independent security review: PASS. Stop-word growth can only remove
+candidate terms, never add a spurious match -- it is monotonic, so it
+cannot cause a previously-non-matching, unrelated record to match; no new
+authority, write, network call, or permission anywhere in the diff.
+Independent QA review: PASS-with-caveats, the caveat addressed before this
+release -- if a message's entire real topic happens to be composed
+entirely of the newly-added boilerplate words (e.g. "eski kayıtlar" / "old
+records" with no other topic word), extraction returns nothing, and
+`_cross_session_recall_records`'s term-presence gate then skips semantic
+search too, not only the lexical path -- a real, disclosed blind spot
+(always fails safe to NOT_FOUND, never a wrong-session leak or a
+fabricated answer), now documented with an explanatory code comment and a
+locked-in regression test rather than left silent. QA ran eight adversarial
+Turkish/English probes directly against the fixed extractor and produced
+no false positive in any of them.
+
+Local validation: 8058 unittest tests, `OK`, exit 0; Black, Ruff, MyPy (625
+source files), and `git diff --check` passed. `tests/core/test_version.py`
+confirms source/package version consistency. Three new engine-level tests
+reproduce the exact live Turkish message end to end (finds the real
+`default` record with correct `[session: default]` provenance; a
+genuinely unrelated Turkish-phrased topic still returns NOT_FOUND; the
+asker's own session's matching content is never mislabeled as a
+cross-session source); four new unit tests exercise `recall_query_terms()`
+directly, including the disclosed blind-spot case.
+
+Scope excludes any new Kali/VMware/WSL execution capability, web browsing,
+permission, or auto-authorization; a new memory architecture (none was
+needed); and anything unrelated to this one retrieval defect.
+
+## Historical scope: v0.3.447 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Capability and cross-session-memory claim truthfulness: correct what Hypatia's chat is told about its own capabilities and cross-session recall, without adding any new capability. |
 | Base SHA | `2a4732992eaa0a1028c12d5fe5d8752b06645416` (verified `origin/main`; PR #426, v0.3.446 delivered) |
 | Branch | `feature/capability-memory-truthfulness-v0.3.447`, worktree `D:\hypatia-main\.claude\worktrees\response-routing-investigation` |
-| Status | release; exact-SHA CI, PR, standard merge and main verification pending |
-| Release SHA | Recorded by the next milestone after delivery, per ledger convention |
+| Release SHA | `0cdae91` (merged to `origin/main` via PR #427, standard merge commit `1123787f`) |
+| Status | delivered |
+| Blockers | none |
 
 Derived from a user-reported live desktop conversation (Hypatia v0.3.445): a
 capability question was misrouted into the deterministic research-refusal
@@ -80,7 +151,19 @@ Local validation: 8050 unittest tests, `OK`, exit 0; Black, Ruff, MyPy (625
 source files), and `git diff --check` passed. `tests/core/test_version.py`
 confirms source/package version consistency. Mock-transport tests establish
 deterministic routing and instruction content, not live-model compliance;
-live Windows desktop GUI testing was not performed.
+live Windows desktop GUI testing was not performed. Delivered: PR #427
+merged to `origin/main` with a standard merge commit (`1123787f`); exact-SHA
+Linux/Windows CI on `0cdae91`
+(https://github.com/Songul-Kizilay/hypatia/actions/runs/37353309173,
+https://github.com/Songul-Kizilay/hypatia/actions/runs/37353318858), PR-
+triggered checks, and post-merge push-triggered CI on `main`
+(https://github.com/Songul-Kizilay/hypatia/actions/runs/37355288144,
+https://github.com/Songul-Kizilay/hypatia/actions/runs/37355288197) all
+passed; `1123787f` verified reachable from `origin/main` (it was the tip
+until this milestone's merge). The verified v0.3.447 artifact was also
+deployed to the live desktop (`D:\Hypatia\versions\v0.3.447\`, hash-pinned
+in the EVREN launcher, self-test-verified window title), independently of
+this ledger's own gates.
 
 Scope excludes any new Kali/VMware/WSL execution capability, web browsing,
 permission, or auto-authorization; broad new memory architecture (inspection

@@ -3969,6 +3969,15 @@ class CognitiveEngine:
                     named_records, key=self._record_created_at, reverse=True
                 )[:5]
             ]
+        # Accepted tradeoff (independent QA review, v0.3.448): if the real
+        # topic is composed entirely of words `_QUERY_STOP_WORDS` treats as
+        # recall boilerplate (e.g. "eski kayıtlar" / "old records" with no
+        # other topic word), this gate also skips semantic/hybrid search,
+        # not only the lexical path -- fails safe to NOT_FOUND rather than
+        # searching on unstripped boilerplate text, never a wrong-session
+        # leak or a fabricated answer. See
+        # `RecallQueryTermsTests` ("entirely of stopwords" case) in
+        # `tests/cognition/test_cross_session_recall_request_detector.py`.
         if not recall_query_terms(query):
             return []
         runtime = self._semantic_memory_index_runtime
