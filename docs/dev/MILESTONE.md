@@ -10,15 +10,171 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.449 (release)
+## Current scope: v0.3.450 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | VMware Kali guest-execution readiness + credential boundary -- first boundary able to verify one fixed, networkless guest command (`/usr/bin/dig -v`) is reachable, over restricted SSH; zero target traffic, zero new execution authority. |
+| Base SHA | `7178c3e66c1eac25ef031e7136a43e5e4853061a` (verified `origin/main`; PR #430, v0.3.449 delivered) |
+| Branch | `feature/vmware-kali-guest-execution-readiness-v0.3.450`, worktree `D:\hypatia-worktrees\vmware-kali-guest-execution-readiness` |
+| Status | release; exact-SHA CI, PR, standard merge and main verification pending |
+| Blockers | Real live guest execution not verified: the Kali VM was confirmed powered off throughout (never auto-started), and the dedicated SSH key, pinned known_hosts entry and minimum-privilege guest account this boundary requires do not exist on this machine yet -- requires separate, explicit user setup before v0.3.451 can attempt a real live `/usr/bin/dig -v` guest check. |
+
+Per the standing ledger convention, the previous milestone's delivery is
+recorded here, at the start of this one: v0.3.449 (VMware Kali transport
+foundation + host readiness) release commits `8d1e11e` (initial release)
+and `e542e4b` (a required follow-up fix -- exact-SHA Linux CI, run
+37517683114, caught a real cross-platform path-validation defect the local
+Windows-only gate run could not; fixed as a new commit, never amending the
+pushed one, per policy), PR #430, standard merge commit `7178c3e` (parents
+`cb50bda` + `e542e4b`, confirmed by `git show --no-patch --format="%P"`),
+exact-SHA CI green on `e542e4b` (Linux run 37519572887, Windows run
+37519603334), PR-triggered CI green (Linux run 37520303524, Windows run
+37520303541), and `origin/main` reachability verified
+(`git merge-base --is-ancestor e542e4b origin/main` succeeds; both carried
+commits' author/committer identity unchanged, Songül Kızılay via GitHub
+noreply email). v0.3.449 is **delivered**.
+
+Re-verified from code before this milestone, not assumed: v0.3.449's VMware
+host boundary (`ResearchVMwareKaliHostReadiness`/
+`VmrunVMwareKaliHostReadinessProbe`) is unchanged on this branch's base;
+`ResearchVMwareKaliHostReadiness.host_ready` is the one precondition this
+milestone's guest probe must check before any guest attempt.
+
+Read-only host inspection performed before any code was written (never
+assumed from the prior milestone's findings): `vmrun.exe` with no arguments
+prints its own usage text, confirming `-gu`/`-gp` are
+"AUTHENTICATION-FLAGS" that "must appear before the command and any
+command parameters" -- i.e., a real guest password transits as a plaintext
+command-line argument to `vmrun.exe`, visible to any other process on this
+host able to list command lines (`tasklist`, Task Manager's command-line
+column, `wmic process list`, etc.). Rejected as a production credential
+transport on that evidence, not by assumption. Checked for existing guest
+SSH setup: `~/.ssh/id_ed25519(.pub)` exists but its comment is the
+operator's own personal GitHub identity
+(`203017802+Songul-Kizilay@users.noreply.github.com`) -- not a dedicated,
+minimum-privilege Hypatia guest key, so it must not be reused for this
+purpose. `~/.ssh/known_hosts` pins only `github.com`; no Kali-guest host
+key is pinned yet. `C:\ProgramData\VMware\vmnetdhcp.leases` shows the Kali
+guest has consistently leased `192.168.206.128` (same MAC
+`00:0c:29:08:fc:14`, hostname `kali`) across its last three DHCP renewals
+-- a practically-stable address, but not a true static reservation and not
+a substitute for SSH's own host-key identity pinning. Conclusion: SSH is
+the right direction, but is genuinely not configured yet on this machine.
+Per explicit instruction, nothing was set up automatically (no account, no
+key, no `sshd` config, no service enable, no firewall change) -- this is
+recorded as a user-setup blocker, not worked around.
+
+Delivered: a wholly separate VMware **guest-only** readiness contract
+(`ResearchVMwareKaliGuestReadiness.py`) and a real adapter
+(`SshVMwareKaliGuestReadinessProbe.py`) distinguishing nine fail-closed
+states -- `GUEST_READY`, `HOST_NOT_READY`, `GUEST_TRANSPORT_UNCONFIGURED`,
+`GUEST_UNREACHABLE`, `GUEST_IDENTITY_UNVERIFIED`,
+`AUTHENTICATION_UNAVAILABLE`, `TOOL_MISSING`, `TOOL_VERSION_MISMATCH`,
+`GUEST_INSPECTION_FAILED`. The guest probe takes an already-computed
+`ResearchVMwareKaliHostReadiness` as an input and checks `host_ready`
+before touching the filesystem or a process at all -- confirmed by
+`test_host_not_ready_makes_zero_authentication_attempt` and
+`test_wrong_vm_identity_is_host_not_ready_before_any_guest_attempt` (a
+`VM_IDENTITY_MISMATCH` host result takes the identical zero-attempt path).
+The one allowed remote command, `/usr/bin/dig -v`, is a module-level
+constant (`_REMOTE_COMMAND`) with no field, parameter, request-metadata
+read or model-output path anywhere that could substitute a different
+executable or argument. The SSH invocation disables every password/
+interactive auth method, pins the host key
+(`StrictHostKeyChecking=yes` against a dedicated `UserKnownHostsFile`,
+never the operator's own `~/.ssh/known_hosts`), disables agent and X11
+forwarding, allocates no pseudo-terminal, closes stdin, uses `shell=False`
+and a bounded timeout -- locked in by
+`test_argv_is_exactly_the_fixed_remote_command_with_no_shell_and_closed_stdin`.
+`GUEST_READY` is structurally incapable of being read as execution
+authority: `kali_operation_authorization_created` is pinned `False` by the
+report type's own constructor, and nothing in this diff wires the guest
+probe into `KaliToolGateway` or any other real-dispatch path.
+`Bootstrap` installs the guest probe only behind a new, independent,
+default-off opt-in (`HYPATIA_VMWARE_KALI_GUEST_READINESS_ENABLED`),
+exactly mirroring the v0.3.449 host wiring pattern.
+
+Independent security review (hypatia-security, subagent): PASS. Confirmed
+no code path can place a secret in process argv (key-based auth only; no
+`-gp`/`-gu`/`vp` equivalent anywhere); confirmed the host-not-ready
+short-circuit happens before any filesystem/process touch by reading the
+actual line order; confirmed `GUEST_READY` is only reachable when
+`returncode == 0` **and** the bounded dig-version prefix matched, and that
+`StrictHostKeyChecking=yes` plus disabled password/interactive auth means
+a non-zero exit (the only path into the failure-classification branches)
+can never also satisfy that `GUEST_READY` condition -- adversarial
+stdout/stderr content can only select among already-not-ready states, never
+promote to ready. One informational finding: `classification_text` was
+built from raw, unbounded `stdout`/`stderr` before truncation (only the
+separately-bounded `stdout` variable used for `observed_version` was
+bounded) -- an adversarial or compromised guest returning unbounded output
+could have cost an unbounded local `casefold()`/concatenation before
+classification, though no authority gate was bypassable this way. Fixed
+before release: both sides are now bounded before concatenation.
+
+Independent QA review (hypatia-qa, subagent): found one genuine,
+reproducible diagnostic-accuracy defect, not merely a coverage gap: the
+classification order checked a bare `"permission denied"` substring before
+checking the shell's own exit-code convention, so a POSIX "found but not
+executable" guest-side failure (exit code 126, whose own message commonly
+also reads "Permission denied") would have been misreported as
+`AUTHENTICATION_UNAVAILABLE` ("SSH public-key authentication was not
+accepted") instead of `TOOL_MISSING` -- a real ambiguity the existing test
+suite did not prove either way (every `AUTHENTICATION_UNAVAILABLE` test
+used the unambiguous real OpenSSH wording `"Permission denied
+(publickey)."`, never the bare phrase). Fixed before release: exit code
+126/127 is now checked first, removing the ambiguity structurally instead
+of by guessing from substrings; a dedicated regression test
+(`test_non_executable_remote_tool_is_tool_missing_not_auth_failure`) proves
+the corrected classification. QA separately flagged a real but lower-
+priority coverage gap (the `"connection timed out"` phrase was reachable
+but untested) closed with
+`test_connection_timed_out_is_guest_unreachable`. QA's remaining findings
+(cross-platform absolute-path validation correctly mirrors the v0.3.449
+fix; host-not-ready-first ordering; `_REMOTE_COMMAND` unreachable from any
+parameter; construction-only safety) were independently confirmed correct
+with no further changes needed.
+
+Real, read-only live validation on this machine (never a VM power action,
+never a guest login attempt): re-ran the exact real host probe
+(`D:\vmware\vmrun.exe`, `D:\kali vm\kali linux.vmx`, identity `kali
+linux`) -- state `vm_not_running`, as expected, VM confirmed still powered
+off. Running the actual shipped guest probe with that real host-readiness
+result and a guest transport requirement pointed at this machine's real
+`C:\Windows\System32\OpenSSH\ssh.exe` (a not-yet-existing dedicated key/
+known_hosts pair, since none exists yet) returned `state=host_not_ready`,
+`guest_ready=False`, `kali_operation_authorization_created=False` --
+confirming, on real code and real host facts, that zero SSH connection
+attempt and zero guest authentication attempt were made, exactly as
+required while the VM stays off.
+
+Full local gates on the integrated diff (after the QA fix): unittest
+suite, Black, Ruff, MyPy (`mypy==1.18.2`, same pin as every other active
+worktree's venv -- the default `pip install mypy` resolves 2.4.0, whose
+compiled mypyc extension Windows Application Control blocks), `git diff
+--check`, all clean.
+
+Scope excludes, explicitly: real DNS lookup, real HTTPS request, any
+target traffic, `nmap`/`sqlmap`/`nuclei`/`ffuf`/`gobuster`/any other
+arbitrary tool, an interactive shell, `bash`/`sh`/`sudo`/PowerShell/cmd
+guest commands, an arbitrary executable path, model- or user-authored
+argv, automatic VM power-on or power-off, and any widening of target
+authorization. Real `DNS_RECORD_LOOKUP` execution over any transport
+remains a distinct, separately-authorized future milestone (v0.3.451+).
+
+## Historical scope: v0.3.449 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | VMware Kali transport foundation + host readiness -- architecture only, zero target traffic, zero guest execution. |
-| Base SHA | `cb50bda62a73b63b9cd902fa52c7edcb519f714f` (verified `origin/main`; PR #429, v0.3.448-verification delivered) |
-| Branch | `feature/vmware-kali-transport-foundation-v0.3.449`, worktree `D:\hypatia-worktrees\vmware-kali-transport-foundation` |
-| Status | release; exact-SHA CI, PR, standard merge and main verification pending |
-| Blockers | none |
+| Linux desktop CI (exact-SHA) | success (run 37519572887) |
+| Windows desktop CI (exact-SHA) | success (run 37519603334) |
+| Linux desktop CI (PR-triggered) | success (run 37520303524) |
+| Windows desktop CI (PR-triggered) | success (run 37520303541) |
+| Status | delivered |
+| PR | #430, MERGED 2026-10-06T19:43:30Z, standard merge commit `7178c3e66c1eac25ef031e7136a43e5e4853061a` |
+| origin/main reachability | verified: `git merge-base --is-ancestor e542e4b origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`cb50bda`, `e542e4b`) prove a true merge rather than a squash or rebase; author/committer identity on both carried commits (`8d1e11e`, `e542e4b`) unchanged (Songül Kızılay via GitHub noreply email) |
 
 Re-verified from code, not assumed: `ResearchKaliCommandTransport` held only
 `WSL_KALI`; `kali_operation_command_plan()` hardcoded

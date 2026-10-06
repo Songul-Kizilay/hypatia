@@ -11,7 +11,19 @@ WSL/Kali `dig -v` readiness probe adapter landed in v0.3.313. The first
 reviewed operation-run boundary with injected process adapter landed in
 v0.3.314. A bounded WSL/Kali process adapter for reviewed command plans landed
 in v0.3.315. Explicit production opt-in wiring for installing the WSL/Kali
-adapters landed in v0.3.316.
+adapters landed in v0.3.316. A second, explicit transport identity
+(`ResearchKaliCommandTransport.VMWARE_KALI`, bound into the existing
+operation-preview digest so it can never be confused with or replayed
+against a `WSL_KALI` authorization) plus a wholly separate VMware
+**host-only** readiness boundary (one read-only `vmrun ... list` call, a
+local `.vmx` identity-match text read, zero guest login) landed in v0.3.449.
+VMware guest-execution readiness -- the first boundary that can verify a
+single fixed, networkless command is reachable *inside* the Kali guest --
+landed in v0.3.450, using restricted, key-based, host-key-pinned SSH rather
+than `vmrun runProgramInGuest` (this host's real `vmrun` requires the guest
+password as a plaintext command-line argument via `-gu`/`-gp`, rejected as a
+production credential transport); guest readiness still grants no
+target-execution authority and is wired to nothing chat-facing.
 
 ## Purpose
 
@@ -66,6 +78,29 @@ effects, budget and evidence handling are known before they run.
 - Production bootstrap can now install the WSL/Kali readiness probe and process
   adapter when `HYPATIA_KALI_OPERATION_EXECUTION_ENABLED=true` is present. The
   default remains disabled, and adapter installation itself starts no process.
+- A VMware host-readiness boundary (v0.3.449) can now report, fail-closed,
+  whether a configured, trusted `vmrun`/Kali `.vmx` pair exists, matches the
+  trusted identity recorded in the `.vmx` file itself, and is currently
+  running -- via exactly one read-only `vmrun -T ws list` call. It never
+  starts or stops the VM and grants no guest-execution authority.
+  Independently opt-in (`HYPATIA_VMWARE_KALI_HOST_READINESS_ENABLED`).
+- A VMware guest-readiness boundary (v0.3.450) can now additionally verify,
+  only once host readiness is already `HOST_READY`, whether the one fixed
+  command `/usr/bin/dig -v` is reachable inside the guest over restricted
+  SSH: key-based authentication only, pinned host key
+  (`StrictHostKeyChecking=yes` against a dedicated known_hosts file),
+  password and keyboard-interactive authentication disabled, no agent or
+  port forwarding, no pseudo-terminal. `vmrun runProgramInGuest` was
+  evaluated and rejected: this host's real `vmrun` requires the guest
+  password as a plaintext `-gp` command-line argument, visible to any other
+  process that can list command lines, which this project does not accept
+  as a production credential transport. Guest readiness still creates no
+  Kali operation authorization and is wired to nothing chat-facing.
+  Independently opt-in (`HYPATIA_VMWARE_KALI_GUEST_READINESS_ENABLED`). On
+  this development machine the Kali VM was confirmed powered off during
+  this milestone, so live guest execution was not verified; the dedicated
+  SSH key, pinned host-key entry and guest account this boundary requires
+  do not exist yet either, and were deliberately not created automatically.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every

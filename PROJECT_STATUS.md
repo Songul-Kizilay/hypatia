@@ -2,10 +2,38 @@
 
 ## Runtime Version
 
-`v0.3.449 (Genesis)`
+`v0.3.450 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.450 is the first boundary that can verify whether a single,
+fixed, networkless command (`/usr/bin/dig -v`) is reachable *inside* the
+Kali guest -- still zero target traffic, zero new execution authority.
+Read-only inspection of this host's real `vmrun.exe` usage text showed its
+guest-authentication flags (`-gu`/`-gp`) require the guest password as a
+plaintext command-line argument, visible to any other process on the host
+that can list command lines -- rejected as a production credential
+transport. Restricted, key-based SSH was chosen instead: pinned host key
+(`StrictHostKeyChecking=yes` against a dedicated known_hosts file),
+password and keyboard-interactive authentication disabled, no agent or
+port forwarding, no pseudo-terminal, closed stdin, `shell=False`, a bounded
+timeout. The guest probe refuses any attempt at all unless the v0.3.449
+host boundary already reported `HOST_READY`; `GUEST_READY` itself is
+structurally incapable of being read as execution authority (the report
+type's `kali_operation_authorization_created` field is pinned `False`).
+Independent security review: PASS. Independent QA review found one real
+diagnostic-accuracy defect (a bare "permission denied" substring match
+could have misreported a guest file-permission failure as an SSH
+authentication rejection) and one hardening gap (classification text was
+built from unbounded stdout/stderr before truncation); both fixed and
+locked in with new regression tests before release. On this development
+machine the Kali VM was confirmed powered off throughout (verified via
+read-only `vmrun list` only, never a power action), and the dedicated SSH
+key, pinned host-key entry and minimum-privilege guest account this
+boundary requires do not exist yet -- deliberately not created
+automatically, reported as a user-setup blocker rather than worked around.
+Live guest execution was not verified this milestone.
 
 Version v0.3.449 is a transport-architecture and host-readiness foundation
 for a future VMware-backed Kali execution path -- zero target traffic, zero
