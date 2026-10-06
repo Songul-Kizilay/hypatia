@@ -10,6 +10,172 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
+## Current scope: v0.3.449 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | VMware Kali transport foundation + host readiness -- architecture only, zero target traffic, zero guest execution. |
+| Base SHA | `cb50bda62a73b63b9cd902fa52c7edcb519f714f` (verified `origin/main`; PR #429, v0.3.448-verification delivered) |
+| Branch | `feature/vmware-kali-transport-foundation-v0.3.449`, worktree `D:\hypatia-worktrees\vmware-kali-transport-foundation` |
+| Status | release; exact-SHA CI, PR, standard merge and main verification pending |
+| Blockers | none |
+
+Re-verified from code, not assumed: `ResearchKaliCommandTransport` held only
+`WSL_KALI`; `kali_operation_command_plan()` hardcoded
+`transport=ResearchKaliCommandTransport.WSL_KALI` in both its DNS and HTTPS
+branches; `Bootstrap` typed `kali_runtime_probe`/`kali_operation_process_adapter`
+against the concrete `WslKaliRuntimeProbe`/`WslKaliOperationProcessAdapter`
+classes even though every consumer downstream (`CognitiveEngine`,
+`KaliOperationRunApplicationService`, `KaliToolGateway`) already used the
+abstract `ResearchKaliRuntimeProbe`/`ResearchKaliOperationProcessAdapter`
+contracts; `KaliToolGateway` already gated exact authorization-digest
+matching, scope/policy, runtime readiness and consume-before-dispatch with
+no transport-selection logic of its own (it never reads a "transport" key
+from anywhere).
+
+Delivered: a second, explicit `ResearchKaliCommandTransport.VMWARE_KALI`
+transport identity, threaded through `ResearchKaliOperationPreview`'s new
+`transport` field (default `WSL_KALI`, placed correctly in the dataclass so
+every existing caller's digest is provably unchanged -- locked in by
+`test_wsl_default_digest_is_deterministic_and_matches_explicit_wsl`) and
+through `kali_operation_command_plan(transport=...)` (same default). Because
+`command_plan.transport` is already part of the hashed preview document,
+transport is automatically bound into `operation_digest` with no new digest
+schema: a WSL preview and a VMware preview of the identical logical
+operation produce different digests (`test_vmware_and_wsl_bind_the_same_
+logical_operation_to_different_digests`), so an authorization recorded for
+one can never satisfy the other -- mirrored directly against
+`KaliToolGateway`'s own `authorization.operation_digest != preview.
+operation_digest` check. `KaliOperationPreviewApplicationService.
+preview_for_request` was independently confirmed to never read a
+"transport" key from `request.metadata` at all (not merely to ignore it);
+`test_transport_in_request_metadata_has_no_effect_on_the_built_preview` sets
+`request.metadata["transport"] = "vmware_kali"` and proves the built preview
+still resolves to `WSL_KALI`.
+
+A wholly separate VMware **host-only** readiness contract was added
+(`ResearchVMwareKaliHostReadiness.py`): `ResearchVMwareKaliHostRequirement`
+(trusted, code-owned `vmrun` path / `.vmx` path / VM identity string, each
+format-validated at construction -- absolute path, correct filename/suffix,
+no control characters, invalid timeout rejected) and
+`ResearchVMwareKaliHostReadiness` (a report type whose `guest_execution_
+verified` field is structurally pinned to `False` by its own `__post_init__`
+-- there is no constructor path that sets it otherwise). The real adapter,
+`VmrunVMwareKaliHostReadinessProbe`, distinguishes six fail-closed states:
+`VMRUN_EXECUTABLE_MISSING`, `VMX_MISSING`, `VM_IDENTITY_MISMATCH` (the
+`.vmx` file's own `displayName` line, read as plain local text, must match
+the trusted configured identity), `VM_NOT_RUNNING`, `HOST_INSPECTION_FAILED`
+(non-zero exit, timeout, OSError, or malformed `vmrun` output -- each
+independently tested), and `HOST_READY`. The only subprocess call anywhere
+in the adapter is one read-only `vmrun -T ws list`; there is no code path to
+`start`/`stop`/`runProgramInGuest`, no guest credential argument, no shell,
+closed stdin -- locked in by `test_the_only_subprocess_call_is_a_read_only_
+list_never_power_or_guest`. Both the `.vmx` text read and the `vmrun list`
+output are bounded (`MAX_VMX_FILE_BYTES`, `MAX_VMRUN_LIST_OUTPUT_CHARACTERS`)
+before parsing, each proven with an adversarially oversized input test.
+`Bootstrap` installs this probe only behind a new, independent opt-in
+(`HYPATIA_VMWARE_KALI_HOST_READINESS_ENABLED`, default off, strict
+`"true"`-only match like every other capability flag in `RuntimeOptIn.py`);
+constructing the probe or its requirement never starts a process or touches
+the network (proven with `subprocess.run`/`Popen`/`socket.getaddrinfo`
+all patched to fail the test if called). Nothing wires this probe to chat,
+`CognitiveEngine`, or any `BrainRequest`-facing surface in this milestone.
+
+Real, read-only host inspection on this machine (never a power action,
+never a guest login): VMware Workstation 25.0.1 is installed to a
+non-default location, `D:\vmware\` (registry `InstallLocation` was empty;
+found instead via the registered Windows services' own binary paths --
+`VMAuthdService` -> `D:\vmware\vmware-authd.exe`). Real `vmrun.exe`:
+`D:\vmware\vmrun.exe`. Real Kali VMX: `D:\kali vm\kali linux.vmx`
+(`displayName = "kali linux"`). `vmrun -T ws list` (read-only) reported
+`Total running VMs: 0`. Running the actual shipped
+`VmrunVMwareKaliHostReadinessProbe` against these real, trusted values
+(not a fixture) returned `state=VM_NOT_RUNNING`,
+`host_ready=False`, `guest_execution_verified=False` -- the honest
+"VMware host transport present, guest execution unavailable/unverified"
+outcome, not a failure of this milestone. Deliberately re-tried with a
+wrong configured identity (`VM_IDENTITY_MISMATCH`) and a nonexistent
+`vmrun`/VMX path (`VMRUN_EXECUTABLE_MISSING`/`VMX_MISSING`) against the same
+real files to confirm each fail-closed state is independently reachable, not
+only the synthetic-fixture path.
+
+`Bootstrap`'s existing `kali_runtime_probe`/`kali_operation_process_adapter`
+constructor parameters and factory-method return types were retyped from
+the concrete WSL classes to the abstract contracts -- a type-annotation-only
+change (the default WSL construction calls are byte-for-byte unchanged);
+confirmed by the full pre-existing WSL/Kali test suite (70 tests) passing
+unmodified.
+
+Independent security review (hypatia-security, subagent): PASS. Traced
+every consumer of the new `VMWARE_KALI` enum value and the new probe/
+requirement types; confirmed no guest execution, no network call, no VM
+power mutation, no credential of any kind anywhere in the diff; confirmed
+`WslKaliOperationProcessAdapter._validate_command_plan` would independently
+reject a VMware-transport command plan even if one were ever authorized
+(defense in depth). One non-blocking hardening note -- `_vmx_identity_matches`
+read the whole `.vmx` file before truncating to the bound, rather than
+reading bounded from the start (not exploitable, since the path is always
+trusted code-owned configuration, never attacker input) -- was fixed before
+release: it now reads at most `MAX_VMX_FILE_BYTES` directly via a bounded
+`file.read()`.
+
+Independent QA review (hypatia-qa, subagent): ran the full suite
+independently (8090 tests, OK) plus gates, and found one genuine,
+reproducible correctness defect, not merely a coverage gap:
+`_vmx_identity_matches` matched any key sharing the case-insensitive
+*prefix* `displayname` (e.g. a decoy `displayNameExtra`/`displayNameBackup`
+key), rather than the exact `displayName` key, so a `.vmx` with no real
+`displayName` line at all but a decoy key carrying the trusted identity
+string would have been wrongly accepted as a match. Fixed before release:
+the key is now compared exactly (`raw_key.strip().casefold() == "displayname"`)
+before its value is read at all, and the first exact-key line found
+resolves the match outright rather than letting a later, unrelated line
+override it. QA separately flagged a real coverage gap even though the
+underlying logic was already correct: no test exercised
+`_normalized_windows_path`'s actual job (case/slash-style/trailing-
+whitespace differences between the configured VMX path and vmrun's own
+list output); a silent regression back to a plain identity comparison
+would have passed every previously-existing test. Both closed with new
+regression tests (`test_a_decoy_key_sharing_the_displayname_prefix_is_
+never_accepted`, `test_host_ready_despite_case_slash_and_whitespace_
+differences`) before this milestone's release; QA's remaining findings
+(transport-digest binding, Bootstrap opt-in independence, construction-only
+safety, `WslKaliOperationProcessAdapter`'s existing transport guard) were
+independently confirmed correct with no changes needed. Full suite, Black,
+Ruff, MyPy and `git diff --check` all re-run clean after the fix.
+
+Full local gates on the integrated diff: unittest suite, Black, Ruff, MyPy
+(`mypy==1.18.2` -- the default `pip install mypy` resolves 2.4.0, whose
+compiled mypyc extension Windows Application Control blocks; this pin
+matches every other active worktree's venv), `git diff --check`, all clean.
+
+Exact-SHA Linux desktop CI (run 37517683114) failed on the first release
+commit -- caught a real cross-platform defect the local Windows-only gate
+run could not: `ResearchVMwareKaliHostRequirement.__post_init__` validated
+`vmrun_executable_path`/`vmx_path` as absolute using only `PureWindowsPath`,
+so this module's own test fixture's real, OS-native temporary-file paths
+(created via `tempfile.TemporaryDirectory()`) were correctly real files on
+the Linux runner but a bare POSIX `/tmp/...` path is not "absolute" under
+Windows path syntax, so 16 tests raised `ResearchError` at fixture
+construction instead of exercising the probe. Fixed with a second commit
+(never amending the pushed one): the absolute-path check now accepts a
+path absolute under either `PureWindowsPath` or `PurePosixPath` syntax --
+real deployments will always configure a genuine Windows path (the only
+one that matters there), and the POSIX branch exists solely so the exact
+same trusted-format validation also accepts this suite's own real,
+OS-native CI fixture paths; a genuinely relative path (under either
+reading) is still rejected on every platform, locked in by a new explicit
+test. Re-verified against this machine's real `D:\vmware\vmrun.exe`/`D:\kali
+vm\kali linux.vmx` after the fix: identical `VM_NOT_RUNNING` result as
+before the fix.
+
+Scope excludes, explicitly: real guest command execution of any kind, a new
+Kali operation kind, any Kali tool-catalogue expansion, VM power-on/off,
+guest credentials, SSH, `vmrun runProgramInGuest`, arbitrary shell/guest
+command, model-authored argv, and any DNS/HTTPS target traffic. Real
+VMware-backed `DNS_RECORD_LOOKUP` execution is a distinct, separately
+authorized future milestone (v0.3.450+).
+
 ## Post-delivery verification: v0.3.448 Windows live runtime and cross-session
 ## recall check (developer-infrastructure, no version bump)
 

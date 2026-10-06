@@ -2,10 +2,47 @@
 
 ## Runtime Version
 
-`v0.3.448 (Genesis)`
+`v0.3.449 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.449 is a transport-architecture and host-readiness foundation
+for a future VMware-backed Kali execution path -- zero target traffic, zero
+guest command execution in this release. A second, explicit
+`ResearchKaliCommandTransport.VMWARE_KALI` identity now sits alongside the
+existing `WSL_KALI`, bound into the same operation-preview digest every
+existing WSL operation already used, so an authorization recorded for one
+transport can never be replayed against the other; WSL's own default
+behavior and every existing digest are unchanged (locked in by a
+determinism test). Transport is trusted, code-owned configuration only --
+confirmed that no production code path reads a "transport" key from request
+metadata or model output, and a dedicated test proves setting
+`request.metadata["transport"] = "vmware_kali"` has no effect on the built
+preview. A wholly separate VMware **host-only** readiness contract was
+added: a real adapter runs exactly one read-only `vmrun -T ws list` call
+plus a local `.vmx` text read to distinguish, fail-closed, a missing
+`vmrun` executable, a missing `.vmx`, an identity mismatch, the VM simply
+not running, and host-inspection failure, from the one positive
+`HOST_READY` state -- which is deliberately never shaped so it could be
+mistaken for guest-execution-readiness (`guest_execution_verified` is
+structurally pinned to `False`). Independent QA review found and this
+release fixed one real pre-release defect (an exact-key match was
+previously a loose case-insensitive prefix match, so a decoy `.vmx` key
+could have been wrongly accepted as the trusted identity) and added the
+missing path-normalization regression coverage that would have let a
+future silent regression through every previously-existing test.
+Independent security review: PASS, including confirming the existing WSL
+process adapter already independently rejects a VMware-transport command
+plan as defense in depth. Default configuration installs neither the WSL
+nor the new VMware probe; constructing any of the new VMware types never
+starts a process or touches the network. Live-validated read-only on this
+machine's real, non-synthetic VMware install (`vmrun.exe`, a real Kali
+`.vmx`) in every fail-closed state the probe defines, including the honest
+`VM_NOT_RUNNING` outcome for the real, currently-powered-off VM -- never a
+VM power action, never a guest login. Real guest execution, a new Kali
+operation kind, and any Kali tool-catalogue expansion remain explicitly out
+of scope, deferred to a separate, future, separately-authorized milestone.
 
 Version v0.3.448 fixes a live-validated cross-session recall false negative:
 a natural Turkish recall sentence wrapping a real topic ("SQL Injection") in

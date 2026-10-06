@@ -1026,7 +1026,22 @@ trust judgement over cited evidence that this record does not carry — a
 future, separate milestone's concern (richer per-citation evidence
 quality), not something this one could honestly invent. `MODEL CONFIDENCE
 != EVIDENCE` throughout: the ceiling reads no free-text field and no
-Reproduction Record outcome.
+Reproduction Record outcome. v0.3.449 laid transport-architecture
+foundation underneath the already-delivered Kali execution surface, not a
+new numbered item: a second, explicit
+`ResearchKaliCommandTransport.VMWARE_KALI` identity alongside the existing
+`WSL_KALI`, bound into the existing operation-preview digest so an
+authorization recorded for one transport can never be replayed against the
+other, plus a wholly separate VMware **host-only** readiness contract
+(`vmrun -T ws list`, read-only; a local `.vmx` identity-match text read;
+never a guest login, guest credential, guest command or VM power-state
+change). `TRANSPORT AVAILABILITY != EXECUTION AUTHORITY`, `HOST READY !=
+GUEST READY`: nothing in this milestone runs a Kali operation through
+VMware, adds a new operation kind, or widens the Kali tool catalogue: zero
+target traffic, zero guest execution. Real VMware-backed `DNS_RECORD_LOOKUP`
+execution (item 11-adjacent: the gateway dispatching to a second, equally
+reviewed transport) remains a distinct, separately-authorized future
+milestone.
 
 With this, every leg of M1's target lifecycle (Finding -> Evidence ->
 Validation -> Confidence -> Contradiction -> Final State) now has a
