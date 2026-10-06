@@ -48,6 +48,7 @@ class ResearchVMwareKaliGuestReadinessState(StrEnum):
     GUEST_IDENTITY_UNVERIFIED = "guest_identity_unverified"
     AUTHENTICATION_UNAVAILABLE = "authentication_unavailable"
     TOOL_MISSING = "tool_missing"
+    TOOL_UNEXECUTABLE = "tool_unexecutable"
     TOOL_VERSION_MISMATCH = "tool_version_mismatch"
     GUEST_INSPECTION_FAILED = "guest_inspection_failed"
 

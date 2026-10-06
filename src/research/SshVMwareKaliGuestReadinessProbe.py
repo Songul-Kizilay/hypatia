@@ -19,6 +19,7 @@ this project's boundary, so this adapter never uses it.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -161,30 +162,47 @@ class SshVMwareKaliGuestReadinessProbe(ResearchVMwareKaliGuestReadinessProbe):
                 observed_version=stdout or None,
             )
 
+        # Remote shell exit codes take precedence over diagnostic wording.
+        if completed.returncode == 126:
+            return self._result(
+                transport,
+                ResearchVMwareKaliGuestReadinessState.TOOL_UNEXECUTABLE,
+                "Reviewed dig executable was found but could not be "
+                "executed on the guest.",
+            )
+        if completed.returncode == 127:
+            return self._result(
+                transport,
+                ResearchVMwareKaliGuestReadinessState.TOOL_MISSING,
+                "Reviewed dig executable was not found on the guest.",
+            )
         if "host key verification failed" in classification_text:
             return self._result(
                 transport,
                 ResearchVMwareKaliGuestReadinessState.GUEST_IDENTITY_UNVERIFIED,
                 "SSH host key did not match the pinned known_hosts entry.",
             )
-        # Checked by exit code, and before the generic "permission denied"
-        # text match below: POSIX shells report both "not found" (127) and
-        # "found but not executable" (126) this way, and the latter's own
-        # message is commonly "Permission denied" -- a guest tool-permission
-        # problem, not an SSH authentication rejection. Classifying by the
-        # shell's own exit-code convention first removes that ambiguity
-        # instead of guessing from substrings.
-        if completed.returncode in (126, 127) or (
+        if (
             "no such file or directory" in classification_text
             and EXPECTED_GUEST_DIG_EXECUTABLE in classification_text
         ):
             return self._result(
                 transport,
                 ResearchVMwareKaliGuestReadinessState.TOOL_MISSING,
-                "Reviewed dig executable was not found or not executable "
-                "on the guest.",
+                "Reviewed dig executable was not found on the guest.",
             )
-        if "permission denied" in classification_text:
+        # Require OpenSSH's stderr rejection line for this endpoint, exit
+        # 255, and a complete publickey method token. Generic permissions,
+        # stdout, or lookalike method names are not authentication evidence.
+        # This remains diagnostic evidence only, never execution authority.
+        if completed.returncode == 255 and re.search(
+            r"^"
+            + re.escape(f"{transport.guest_user}@{transport.guest_host}".casefold())
+            + r": permission denied \((?:[a-z0-9@._+-]+,)*publickey"
+            r"(?:,[a-z0-9@._+-]+)*\)\.$",
+            self._bounded(completed.stderr).casefold(),
+            re.MULTILINE,
+        ):
             return self._result(
                 transport,
                 ResearchVMwareKaliGuestReadinessState.AUTHENTICATION_UNAVAILABLE,

@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.451] - 2026-10-06
+
+### Fixed
+
+- VMware SSH guest-readiness failures distinguish exit 126
+  (`TOOL_UNEXECUTABLE`) from exit 127 (`TOOL_MISSING`), with shell exit
+  codes taking precedence over conflicting diagnostic text.
+- Authentication rejection requires exit 255 and a complete OpenSSH
+  stderr rejection line for the configured user/host, with `publickey`
+  as a complete advertised method. Generic permission errors, non-255
+  failures, stdout-only messages and lookalike method names cannot be
+  classified as `AUTHENTICATION_UNAVAILABLE`.
+- Regression coverage preserves host-key failure as
+  `GUEST_IDENTITY_UNVERIFIED`, connection refusal/timeouts as
+  `GUEST_UNREACHABLE`, fixed failure reasons without raw stderr, and
+  readiness results that never grant operation authorization.
+
+### Scope
+
+- Diagnostic correctness only; zero target traffic, no live guest probe,
+  no VM power changes or credential setup, no KaliToolGateway/chat
+  execution changes. `MODEL OUTPUT != AUTHORITY` and
+  `GUEST READY != TARGET AUTHORITY` remain unchanged. Real DNS execution
+  is a separately authorized future milestone; v0.3.452 is not started.
+
 ## [0.3.450] - 2026-10-06
 
 ### Added

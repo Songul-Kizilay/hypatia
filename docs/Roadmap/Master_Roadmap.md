@@ -1067,6 +1067,14 @@ deliberately not created automatically, reported as a user-setup blocker
 instead. Real VMware-backed `DNS_RECORD_LOOKUP` execution remains a
 distinct, separately-authorized future milestone.
 
+v0.3.451 narrows guest-readiness failure classification: exit 126 means
+`TOOL_UNEXECUTABLE`, 127 means `TOOL_MISSING`; SSH publickey rejection
+requires exit 255 and a complete endpoint-specific OpenSSH stderr line.
+Generic permission errors do not imply authentication failure. This is
+diagnostic hardening only: zero target traffic, no live guest probe, no VM
+power mutation, no credential setup and no new execution authority.
+v0.3.452 DNS execution remains unstarted and separately authorized.
+
 With this, every leg of M1's target lifecycle (Finding -> Evidence ->
 Validation -> Confidence -> Contradiction -> Final State) now has a
 repository-grounded, defensible treatment: Evidence (v0.3.416-419),

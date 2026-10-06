@@ -364,7 +364,7 @@ class SshVMwareKaliGuestReadinessProbeTests(unittest.TestCase):
             readiness.state, ResearchVMwareKaliGuestReadinessState.TOOL_MISSING
         )
 
-    def test_non_executable_remote_tool_is_tool_missing_not_auth_failure(
+    def test_non_executable_remote_tool_is_tool_unexecutable_not_auth_failure(
         self,
     ) -> None:
         """POSIX shells report "found but not executable" as exit code 126,
@@ -382,8 +382,93 @@ class SshVMwareKaliGuestReadinessProbeTests(unittest.TestCase):
             readiness = self.probe.readiness(_host_ready(), self.fixture.requirement())
 
         self.assertIs(
-            readiness.state, ResearchVMwareKaliGuestReadinessState.TOOL_MISSING
+            readiness.state, ResearchVMwareKaliGuestReadinessState.TOOL_UNEXECUTABLE
         )
+
+    def test_shell_exit_codes_override_misleading_diagnostic_text(self) -> None:
+        self.fixture.write_all()
+        for code, state in (
+            (126, ResearchVMwareKaliGuestReadinessState.TOOL_UNEXECUTABLE),
+            (127, ResearchVMwareKaliGuestReadinessState.TOOL_MISSING),
+        ):
+            for message in (
+                "",
+                "bash: /usr/bin/dig: No such file or directory",
+                "bash: /usr/bin/dig: Permission denied",
+                f"{GUEST_USER}@{GUEST_HOST}: Permission denied (publickey).",
+                "Host key verification failed.",
+                "Connection refused",
+            ):
+                with self.subTest(code=code, message=message):
+                    with patch(
+                        "subprocess.run",
+                        return_value=_completed(returncode=code, stderr=message),
+                    ):
+                        readiness = self.probe.readiness(
+                            _host_ready(), self.fixture.requirement()
+                        )
+                    self.assertIs(readiness.state, state)
+                    self.assertFalse(readiness.guest_ready)
+                    self.assertFalse(readiness.kali_operation_authorization_created)
+                    self.assertIsNone(readiness.observed_version)
+
+    def test_permission_text_without_ssh_rejection_fails_closed(self) -> None:
+        self.fixture.write_all()
+        rejection = f"{GUEST_USER}@{GUEST_HOST}: Permission denied (publickey)."
+        for code, stdout, stderr in (
+            (1, "", "Permission denied"),
+            (2, "Permission denied", ""),
+            (1, "", rejection),
+            (255, "", "Permission denied"),
+            (255, rejection, ""),
+            (255, "", rejection.replace("publickey", "publickey-invalid")),
+            (255, "", rejection.replace(").", "")),
+            (255, "", rejection.replace(GUEST_USER, "other-user")),
+            (255, "", rejection + " extra text"),
+        ):
+            with self.subTest(code=code, stdout=stdout, stderr=stderr):
+                with patch(
+                    "subprocess.run",
+                    return_value=_completed(stdout, stderr, code),
+                ):
+                    readiness = self.probe.readiness(
+                        _host_ready(), self.fixture.requirement()
+                    )
+                self.assertIs(
+                    readiness.state,
+                    ResearchVMwareKaliGuestReadinessState.GUEST_INSPECTION_FAILED,
+                )
+                self.assertFalse(readiness.guest_ready)
+                self.assertFalse(readiness.kali_operation_authorization_created)
+                self.assertIsNone(readiness.observed_version)
+                self.assertNotIn(GUEST_HOST, readiness.reason)
+                self.assertNotIn("Permission denied", readiness.reason)
+
+    def test_publickey_rejection_accepts_complete_advertised_method_lists(self) -> None:
+        self.fixture.write_all()
+        for methods in (
+            "publickey",
+            "publickey,password",
+            "gssapi-with-mic,publickey,keyboard-interactive",
+        ):
+            with self.subTest(methods=methods):
+                completed = _completed(
+                    returncode=255,
+                    stderr="Warning: diagnostic preamble\n"
+                    f"{GUEST_USER}@{GUEST_HOST}: Permission denied ({methods}).\n",
+                )
+                with patch("subprocess.run", return_value=completed):
+                    readiness = self.probe.readiness(
+                        _host_ready(), self.fixture.requirement()
+                    )
+                self.assertIs(
+                    readiness.state,
+                    ResearchVMwareKaliGuestReadinessState.AUTHENTICATION_UNAVAILABLE,
+                )
+                self.assertFalse(readiness.guest_ready)
+                self.assertFalse(readiness.kali_operation_authorization_created)
+                self.assertIsNone(readiness.observed_version)
+                self.assertNotIn(GUEST_HOST, readiness.reason)
 
     def test_connection_refused_is_guest_unreachable(self) -> None:
         self.fixture.write_all()

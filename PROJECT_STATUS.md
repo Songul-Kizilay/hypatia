@@ -2,10 +2,21 @@
 
 ## Runtime Version
 
-`v0.3.450 (Genesis)`
+`v0.3.451 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.451 hardens only VMware SSH guest-readiness diagnostics:
+exit 126 reports `TOOL_UNEXECUTABLE`, 127 reports `TOOL_MISSING`, and
+authentication rejection requires exit 255 plus the complete OpenSSH
+publickey rejection line in stderr for the configured endpoint. Generic
+permission errors do not imply SSH authentication failure. Host-key
+failure and connection refusal/timeouts retain their distinct states.
+Tests use mocked subprocess results; this milestone performs no live
+guest probe, target traffic, VM power mutation or credential setup, and
+does not widen KaliToolGateway or chat execution. Guest readiness remains
+separate from target authority. v0.3.452 DNS execution is not started.
 
 Version v0.3.450 is the first boundary that can verify whether a single,
 fixed, networkless command (`/usr/bin/dig -v`) is reachable *inside* the
