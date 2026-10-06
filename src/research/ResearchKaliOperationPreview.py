@@ -41,9 +41,19 @@ class ResearchDnsRecordType(StrEnum):
 
 
 class ResearchKaliCommandTransport(StrEnum):
-    """Reviewed transport profile names; not an executable launcher."""
+    """Reviewed transport profile names; not an executable launcher.
+
+    A transport is trusted, code-owned configuration, never a value read
+    from request metadata, model output or user-supplied text. It is bound
+    into the operation digest below (`ResearchKaliOperationCommandPlan` is
+    hashed as part of the preview), so an authorization recorded for one
+    transport can never be replayed against another: changing the transport
+    changes the digest, and the gateway's authorization check already
+    requires an exact digest match.
+    """
 
     WSL_KALI = "wsl_kali"
+    VMWARE_KALI = "vmware_kali"
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +154,7 @@ class ResearchKaliOperationPreview:
     max_requests_per_minute: int
     max_seconds: float
     created_at: datetime
+    transport: ResearchKaliCommandTransport = ResearchKaliCommandTransport.WSL_KALI
     command_plan: ResearchKaliOperationCommandPlan = field(init=False)
     operation_digest: str = field(init=False)
 
@@ -158,6 +169,8 @@ class ResearchKaliOperationPreview:
                 raise ResearchError(f"Kali operation preview {label} cannot be empty.")
         if not isinstance(self.operation_kind, ResearchKaliOperationKind):
             raise ResearchError("Kali operation preview kind is invalid.")
+        if not isinstance(self.transport, ResearchKaliCommandTransport):
+            raise ResearchError("Kali operation preview transport is invalid.")
         if not isinstance(self.check_class, ResearchProgramScopeCheckClass):
             raise ResearchError("Kali operation preview check class is invalid.")
         if not isinstance(self.hostname, str) or not self.hostname.strip():
@@ -239,6 +252,7 @@ class ResearchKaliOperationPreview:
                 hostname=normalized_hostname,
                 dns_record_type=self.dns_record_type,
                 resolved_address=self.resolved_address,
+                transport=self.transport,
             ),
         )
         object.__setattr__(
@@ -252,10 +266,19 @@ def kali_operation_command_plan(
     hostname: str,
     dns_record_type: ResearchDnsRecordType | None = None,
     resolved_address: str | None = None,
+    transport: ResearchKaliCommandTransport = ResearchKaliCommandTransport.WSL_KALI,
 ) -> ResearchKaliOperationCommandPlan:
-    """Build the reviewed argv plan for one supported operation."""
+    """Build the reviewed argv plan for one supported operation.
+
+    `transport` must come from trusted, code-owned configuration -- never
+    from request metadata, model output or a user-supplied string. Its
+    default preserves today's WSL-only behavior for every existing caller
+    that does not pass it explicitly.
+    """
     if not isinstance(operation_kind, ResearchKaliOperationKind):
         raise ResearchError("Kali operation command plan kind is not supported.")
+    if not isinstance(transport, ResearchKaliCommandTransport):
+        raise ResearchError("Kali operation command plan transport is invalid.")
     if not isinstance(hostname, str):
         raise ResearchError("Kali operation command plan hostname is invalid.")
     normalized_hostname = hostname.strip().lower().removesuffix(".")
@@ -273,7 +296,7 @@ def kali_operation_command_plan(
                 "Kali operation command plan resolved address is not applicable."
             )
         return ResearchKaliOperationCommandPlan(
-            transport=ResearchKaliCommandTransport.WSL_KALI,
+            transport=transport,
             executable_path="/usr/bin/dig",
             argv=(
                 "/usr/bin/dig",
@@ -305,7 +328,7 @@ def kali_operation_command_plan(
             else parsed_address.compressed
         )
         return ResearchKaliOperationCommandPlan(
-            transport=ResearchKaliCommandTransport.WSL_KALI,
+            transport=transport,
             executable_path="/usr/bin/curl",
             argv=(
                 "/usr/bin/curl",

@@ -24,6 +24,7 @@ from core.RuntimeOptIn import (
     plan_authorization_enabled,
     reflection_enabled,
     research_execution_persistence_enabled,
+    vmware_kali_host_readiness_enabled,
     vulnerability_graph_enabled,
 )
 from eventbus.EventBus import EventBus
@@ -151,6 +152,8 @@ from research.ResearchClaimContradictionProposalProvider import (
 )
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchKaliOperationExecution import ResearchKaliOperationProcessAdapter
+from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSecurityFindingLifecycleIntegrity import (
     verify_finding_lifecycle_integrity,
@@ -158,8 +161,12 @@ from research.ResearchSecurityFindingLifecycleIntegrity import (
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.ResearchVMwareKaliHostReadiness import (
+    ResearchVMwareKaliHostReadinessProbe,
+)
 from research.RoutedResearchSourceFetcher import RoutedResearchSourceFetcher
 from research.SemanticComparisonStepOperation import SemanticComparisonStepOperation
+from research.VmrunVMwareKaliHostReadinessProbe import VmrunVMwareKaliHostReadinessProbe
 from research.WslKaliOperationProcessAdapter import WslKaliOperationProcessAdapter
 from research.WslKaliRuntimeProbe import WslKaliRuntimeProbe
 from response.ResponseComposer import ResponseComposer
@@ -204,8 +211,13 @@ class Bootstrap:
         ) = None,
         research_source_content_path: Path | None = None,
         research_program_scope_revision_path: Path | None = None,
-        kali_runtime_probe: WslKaliRuntimeProbe | None = None,
-        kali_operation_process_adapter: WslKaliOperationProcessAdapter | None = None,
+        kali_runtime_probe: ResearchKaliRuntimeProbe | None = None,
+        kali_operation_process_adapter: (
+            ResearchKaliOperationProcessAdapter | None
+        ) = None,
+        vmware_kali_host_readiness_probe: (
+            ResearchVMwareKaliHostReadinessProbe | None
+        ) = None,
         semantic_comparison_transport: ChatCompletionTransport | None = None,
         defer_mission_recovery: bool = False,
     ) -> None:
@@ -238,6 +250,7 @@ class Bootstrap:
         )
         self._kali_runtime_probe = kali_runtime_probe
         self._kali_operation_process_adapter = kali_operation_process_adapter
+        self._vmware_kali_host_readiness_probe = vmware_kali_host_readiness_probe
         # A caller with its own worker (the desktop) resumes restored missions
         # after it is visible instead of inside initialize().
         self._defer_mission_recovery = defer_mission_recovery
@@ -291,6 +304,9 @@ class Bootstrap:
             kali_runtime_probe=Bootstrap._load_process_kali_runtime_probe(),
             kali_operation_process_adapter=(
                 Bootstrap._load_process_kali_operation_process_adapter()
+            ),
+            vmware_kali_host_readiness_probe=(
+                Bootstrap._load_process_vmware_kali_host_readiness_probe()
             ),
             defer_mission_recovery=defer_mission_recovery,
         )
@@ -428,7 +444,7 @@ class Bootstrap:
         return os.environ.get("HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED") == "true"
 
     @staticmethod
-    def _load_process_kali_runtime_probe() -> WslKaliRuntimeProbe | None:
+    def _load_process_kali_runtime_probe() -> ResearchKaliRuntimeProbe | None:
         """Install the reviewed WSL/Kali readiness probe only by explicit opt-in."""
         if not kali_operation_execution_enabled(os.environ):
             return None
@@ -436,12 +452,28 @@ class Bootstrap:
 
     @staticmethod
     def _load_process_kali_operation_process_adapter() -> (
-        WslKaliOperationProcessAdapter | None
+        ResearchKaliOperationProcessAdapter | None
     ):
         """Install the reviewed WSL/Kali process adapter only by explicit opt-in."""
         if not kali_operation_execution_enabled(os.environ):
             return None
         return WslKaliOperationProcessAdapter()
+
+    @staticmethod
+    def _load_process_vmware_kali_host_readiness_probe() -> (
+        ResearchVMwareKaliHostReadinessProbe | None
+    ):
+        """Install the VMware host-readiness probe only by explicit opt-in.
+
+        Constructing this probe starts no process and performs no VM power
+        action, guest login or guest command; it only ever makes the
+        read-only `vmrun ... list` check reachable for an explicit, separate
+        caller that supplies its own trusted `ResearchVMwareKaliHostRequirement`.
+        Nothing in Bootstrap wires this probe to chat or to guest execution.
+        """
+        if not vmware_kali_host_readiness_enabled(os.environ):
+            return None
+        return VmrunVMwareKaliHostReadinessProbe()
 
     @staticmethod
     def _load_process_semantic_memory_index_runtime(
@@ -815,6 +847,8 @@ class Bootstrap:
             container.register(self._kali_runtime_probe)
         if self._kali_operation_process_adapter is not None:
             container.register(self._kali_operation_process_adapter)
+        if self._vmware_kali_host_readiness_probe is not None:
+            container.register(self._vmware_kali_host_readiness_probe)
 
         self.container = container
 

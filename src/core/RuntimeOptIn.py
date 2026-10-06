@@ -26,6 +26,9 @@ RESEARCH_EXECUTION_PERSISTENCE_ENABLED_VARIABLE = (
 BACKGROUND_RESEARCH_ENABLED_VARIABLE = "HYPATIA_BACKGROUND_RESEARCH_ENABLED"
 PLAN_AUTHORIZATION_ENABLED_VARIABLE = "HYPATIA_PLAN_AUTHORIZATION_ENABLED"
 KALI_OPERATION_EXECUTION_ENABLED_VARIABLE = "HYPATIA_KALI_OPERATION_EXECUTION_ENABLED"
+VMWARE_KALI_HOST_READINESS_ENABLED_VARIABLE = (
+    "HYPATIA_VMWARE_KALI_HOST_READINESS_ENABLED"
+)
 
 #: The single accepted value. Anything else, including "True", "1", and "yes",
 #: leaves the capability off. An opt-in that guesses what someone meant is an
@@ -91,3 +94,15 @@ def kali_operation_execution_enabled(environment: Mapping[str, str]) -> bool:
     explicit run opt-in gates first.
     """
     return opted_in(environment, KALI_OPERATION_EXECUTION_ENABLED_VARIABLE)
+
+
+def vmware_kali_host_readiness_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether the VMware Kali host-readiness probe is installed.
+
+    Off by default and independent of `kali_operation_execution_enabled`.
+    This only ever installs a read-only host inspection probe (`vmrun ...
+    list`); it never powers a VM on or off, never logs into a guest and
+    grants no operation-run authority by itself -- there is no guest
+    execution path wired to this flag at all.
+    """
+    return opted_in(environment, VMWARE_KALI_HOST_READINESS_ENABLED_VARIABLE)

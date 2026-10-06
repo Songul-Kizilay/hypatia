@@ -2,6 +2,57 @@
 
 All notable project changes are recorded here.
 
+## [0.3.449] - 2026-10-06
+
+### Added
+
+- A separate, explicit `ResearchKaliCommandTransport.VMWARE_KALI` transport
+  identity alongside the existing `WSL_KALI`, threaded through
+  `ResearchKaliOperationPreview`/`kali_operation_command_plan()` with a
+  default of `WSL_KALI` -- every existing caller and every existing digest
+  for a WSL-transport operation is unchanged. Transport is trusted,
+  code-owned configuration only: it is never read from request metadata,
+  model output or a user-supplied string, and it is bound into the
+  operation's digest, so an authorization recorded for one transport can
+  never be replayed against a preview built for the other.
+- A new, VMware-specific **host-only** readiness contract
+  (`ResearchVMwareKaliHostReadiness`) and a real adapter
+  (`VmrunVMwareKaliHostReadinessProbe`) that distinguishes, fail-closed: a
+  missing `vmrun` executable, a missing Kali `.vmx`, a VMX whose own
+  recorded identity does not match the trusted configured identity, the VM
+  not being in the running list, and host inspection failure (bad/timed-out/
+  malformed `vmrun` output) -- from the one positive `HOST_READY` state. The
+  probe runs exactly one read-only `vmrun -T ws list` call; it never starts
+  or stops the VM, never logs into the guest, never supplies a guest
+  credential and never runs a guest command. `HOST_READY` is deliberately
+  never named or shaped so it could be read as guest-execution-ready: the
+  report type carries a `guest_execution_verified` field that is
+  structurally pinned to `False`.
+- `vmware_kali_host_readiness_enabled()` in `RuntimeOptIn.py` (env var
+  `HYPATIA_VMWARE_KALI_HOST_READINESS_ENABLED`, default off, independent of
+  the existing WSL/Kali execution opt-in): installs only the host-readiness
+  probe in `Bootstrap`, wired to nothing chat-facing. Constructing the probe
+  or its requirement never starts a process or touches the network; only an
+  explicit `.readiness(requirement)` call does, and only ever a
+  `vmrun ... list`.
+
+### Changed
+
+- `Bootstrap`'s existing `kali_runtime_probe`/`kali_operation_process_adapter`
+  parameters and factory methods are now typed against the abstract
+  `ResearchKaliRuntimeProbe`/`ResearchKaliOperationProcessAdapter` contracts
+  instead of the concrete WSL classes (a type-annotation-only change; the
+  default WSL construction is unchanged). This is the "small typed change"
+  needed so a future transport-neutral adapter can be injected through the
+  same parameters without touching `CognitiveEngine`, which already used the
+  abstract contracts.
+
+### Scope
+
+- Zero guest command execution, zero target network traffic (no DNS, no
+  HTTPS) and no new Kali operation kind or catalogue entry in this milestone.
+  No VM power-on/off. No guest credential anywhere in this diff.
+
 ## [0.3.448] - 2026-10-05
 
 ### Fixed
