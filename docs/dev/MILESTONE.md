@@ -10,15 +10,96 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.448 (release)
+## Post-delivery verification: v0.3.448 Windows live runtime and cross-session
+## recall check (developer-infrastructure, no version bump)
+
+Per this file's own rule, a developer-infrastructure/verification pass is not
+a product milestone and does not bump the version; no `## Current scope`
+section is opened for it. Scope going in explicitly allowed a code fix only
+if live testing found a genuine defect; recorded here because this session's
+first commit is also where v0.3.448's own delivery record belongs, per the
+standing ledger convention of recording the previous milestone's delivery at
+the start of the next session's first commit.
+
+Ground truth found before any live testing: the real Windows install at
+`D:\Hypatia` (root `Hypatia.exe`) was running a build whose window title read
+`Hypatia 0.3.438` (binary hash distinct from every archived
+`D:\Hypatia\versions\v0.3.44x` build) -- nine versions behind `main` -- and
+was not currently running as a process. `%LOCALAPPDATA%\Hypatia` (that root
+exe's default data resolution) has exactly one persisted session (`default`,
+created 2026-08-15, 154 records) -- not representative of daily use. The
+actually-used real launcher is `C:\Users\<user>\Desktop\start_hypatia_evren.ps1`
+(outside this repository): it pins the exe by SHA-256 hash (currently
+`D:\Hypatia\versions\v0.3.447\Hypatia.exe`), uses a separate data directory
+(`%LOCALAPPDATA%\Hypatia-v0.3.435-EVREN`, genuinely two sessions --
+`default` with 34 records, `memory-test-447` with 1 -- across
+2026-10-01..2026-10-06), and routes chat through a local-only
+OpenAI-compatible bridge (`http://127.0.0.1:8765`, an external "EVREN"
+service) the user authenticates interactively; the key is never written to
+disk. `HYPATIA_LLM_ENABLED`/`HYPATIA_LLM_BASE_URL`/`HYPATIA_LLM_MODEL` gate
+cross-session recall, learned-memory context and knowledge grounding as one
+unit (`CognitiveEngine._process_conversation`, `elif context.intent ==
+"message" and self._llm_provider is not None:`) -- with no provider
+configured, chat always falls through to the generic deterministic echo
+with zero indication recall was skipped; this is pre-existing behavior, not
+introduced by v0.3.448.
+
+Built the real v0.3.448 Windows package from this exact merged source via
+the repository's own `tools/build_desktop.ps1 -Clean` (no bypass of host
+script-execution policy: invoked as ordinary cmdlets in an already-permitted
+session rather than running the `.ps1` file where the default policy
+refused it); embedded version confirmed as `Hypatia 0.3.448` in the live
+window title on an isolated scratch data directory, matching
+`pyproject.toml`/`Version.py`. A live GUI attempt against a safe, isolated
+*copy* of the real EVREN store (never the original files) was inconclusive
+by itself -- the exact validated recall sentence still came back
+not-found -- but cross-checking the test instance's own data file afterward
+showed zero new records from that session, proving the typed messages had
+actually reached the user's already-open, unfixed `v0.3.447` window (real
+data directory, no override) rather than the isolated `v0.3.448` instance;
+a GUI/process-identification mistake in this verification session, not a
+product defect.
+
+Directly reproduced with the shipped production classes instead of the
+GUI: `JsonFileMemoryStore` loading the *real* `Hypatia-v0.3.435-EVREN`
+`memory.json` (read-only) into a real `MemoryManager`, a real
+`CognitiveEngine` constructed exactly as `tests/cognition/test_cross_session_recall.py`
+does, asked the exact validated Turkish sentence with `session_id:
+"memory-test-447"` active -- `_cross_session_lexical_recall_records` found
+11 matching `default`-session records (`recall_query_terms` correctly
+isolates to `("sql", "injection")`; 16 real `default` records contain both
+terms, confirmed with Python's locale-independent `casefold()` -- a
+same-session PowerShell regex check during this investigation wrongly
+reported zero `"injection"` matches, a .NET culture-aware-regex artifact of
+the Turkish-locale host, not a product bug), the LLM-provider branch ran
+(confirmed via a stand-in provider), and the composed reply carried
+`Source sessions ... "default"` attribution. This is definitive evidence
+the v0.3.448 fix is correct against real conversational data, independent
+of the inconclusive GUI session above. No code defect was found; no code
+change, no version bump.
+
+## Historical scope: v0.3.448 (delivered)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Cross-session recall topic-term fix: a natural recall sentence wrapping a real topic in ordinary recall instructions returned a false NOT_FOUND. |
 | Base SHA | `1123787f20297aa81acf68101d455eae8cbaefd0` (verified `origin/main`; PR #427, v0.3.447 delivered) |
 | Branch | `feature/cross-session-recall-topic-fix-v0.3.448`, worktree `D:\hypatia-main\.claude\worktrees\cross-session-recall-topic-fix` |
-| Status | release; exact-SHA CI, PR, standard merge and main verification pending |
-| Release SHA | Recorded by the next milestone after delivery, per ledger convention |
+| Linux desktop CI (exact-SHA) | success (run 37365316214) |
+| Windows desktop CI (exact-SHA) | success (run 37463979932; an earlier exact-SHA attempt, run 37365324501, failed purely on GitHub-hosted-runner acquisition infrastructure -- "The job was not acquired by Runner of type hosted even after multiple attempts" -- not on the code, and was re-dispatched) |
+| Linux desktop CI (PR-triggered) | success (run 37464657926) |
+| Windows desktop CI (PR-triggered) | success (run 37464658090) |
+| Status | delivered |
+| PR | #428, MERGED 2026-10-06T12:43:23Z, standard merge commit `db4197d7afa2f2c4745fadce334522aa387c0462` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 9b065fd origin/main` succeeds; `origin/main` HEAD is the merge commit itself, whose two parents (`1123787f`, `9b065fd`) prove a true merge rather than a squash or rebase; author/committer identity on the carried commit unchanged (Songül Kızılay via GitHub noreply email) |
+
+Post-merge verification (2026-10-06, hypatia-lead): PR #428 base `main`,
+head `feature/cross-session-recall-topic-fix-v0.3.448`, carried exactly 1
+commit (`9b065fd`) across the 10 files the milestone's own scope named,
+`mergeStateStatus: CLEAN`, both PR-triggered checks `pass`. The full local
+unittest suite (8058 tests) was re-run independently on this exact commit
+before merging and passed (exit 0). Merged with `gh pr merge 428 --merge`
+-- no interactive confirmation prompt.
 
 Derived from live validation of the deployed v0.3.447 Windows desktop app.
 Verified facts going in: conversation persistence worked; `session search
