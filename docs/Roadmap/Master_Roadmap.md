@@ -1041,7 +1041,31 @@ VMware, adds a new operation kind, or widens the Kali tool catalogue: zero
 target traffic, zero guest execution. Real VMware-backed `DNS_RECORD_LOOKUP`
 execution (item 11-adjacent: the gateway dispatching to a second, equally
 reviewed transport) remains a distinct, separately-authorized future
-milestone.
+milestone. v0.3.450 took the next step of that deferred future milestone,
+still not real execution: a VMware **guest** readiness boundary verifying,
+only once host readiness is already `HOST_READY`, whether the one fixed,
+networkless command `/usr/bin/dig -v` is reachable inside the Kali guest.
+Read-only inspection of this host's real `vmrun.exe` usage text confirmed
+its guest-authentication flags (`-gu`/`-gp`) require the guest password as
+a plaintext command-line argument -- rejected as a production credential
+transport, since that would place a secret in process argv visible to any
+other process able to list command lines. Restricted SSH was chosen
+instead: key-based authentication only, a pinned host key
+(`StrictHostKeyChecking=yes` against a dedicated known_hosts file),
+password/keyboard-interactive authentication disabled, no agent or port
+forwarding, no pseudo-terminal, and the remote command is a module-level
+constant with no parameter that could substitute a different executable or
+argument. `GUEST READY != EXECUTION AUTHORITY`: the readiness report's own
+`kali_operation_authorization_created` field is structurally pinned
+`False`, and nothing in this milestone wires the guest probe into
+`KaliToolGateway` or any other real-dispatch path. On this development
+machine the Kali VM was confirmed powered off (read-only `vmrun list`,
+never a power action) throughout, so live guest execution was not
+verified; the dedicated SSH key, pinned host-key entry and minimum-
+privilege guest account this boundary requires do not exist yet either --
+deliberately not created automatically, reported as a user-setup blocker
+instead. Real VMware-backed `DNS_RECORD_LOOKUP` execution remains a
+distinct, separately-authorized future milestone.
 
 With this, every leg of M1's target lifecycle (Finding -> Evidence ->
 Validation -> Confidence -> Contradiction -> Final State) now has a

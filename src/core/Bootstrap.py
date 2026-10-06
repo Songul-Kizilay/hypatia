@@ -24,6 +24,7 @@ from core.RuntimeOptIn import (
     plan_authorization_enabled,
     reflection_enabled,
     research_execution_persistence_enabled,
+    vmware_kali_guest_readiness_enabled,
     vmware_kali_host_readiness_enabled,
     vulnerability_graph_enabled,
 )
@@ -161,11 +162,15 @@ from research.ResearchSecurityFindingLifecycleIntegrity import (
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.ResearchVMwareKaliGuestReadiness import (
+    ResearchVMwareKaliGuestReadinessProbe,
+)
 from research.ResearchVMwareKaliHostReadiness import (
     ResearchVMwareKaliHostReadinessProbe,
 )
 from research.RoutedResearchSourceFetcher import RoutedResearchSourceFetcher
 from research.SemanticComparisonStepOperation import SemanticComparisonStepOperation
+from research.SshVMwareKaliGuestReadinessProbe import SshVMwareKaliGuestReadinessProbe
 from research.VmrunVMwareKaliHostReadinessProbe import VmrunVMwareKaliHostReadinessProbe
 from research.WslKaliOperationProcessAdapter import WslKaliOperationProcessAdapter
 from research.WslKaliRuntimeProbe import WslKaliRuntimeProbe
@@ -218,6 +223,9 @@ class Bootstrap:
         vmware_kali_host_readiness_probe: (
             ResearchVMwareKaliHostReadinessProbe | None
         ) = None,
+        vmware_kali_guest_readiness_probe: (
+            ResearchVMwareKaliGuestReadinessProbe | None
+        ) = None,
         semantic_comparison_transport: ChatCompletionTransport | None = None,
         defer_mission_recovery: bool = False,
     ) -> None:
@@ -251,6 +259,7 @@ class Bootstrap:
         self._kali_runtime_probe = kali_runtime_probe
         self._kali_operation_process_adapter = kali_operation_process_adapter
         self._vmware_kali_host_readiness_probe = vmware_kali_host_readiness_probe
+        self._vmware_kali_guest_readiness_probe = vmware_kali_guest_readiness_probe
         # A caller with its own worker (the desktop) resumes restored missions
         # after it is visible instead of inside initialize().
         self._defer_mission_recovery = defer_mission_recovery
@@ -307,6 +316,9 @@ class Bootstrap:
             ),
             vmware_kali_host_readiness_probe=(
                 Bootstrap._load_process_vmware_kali_host_readiness_probe()
+            ),
+            vmware_kali_guest_readiness_probe=(
+                Bootstrap._load_process_vmware_kali_guest_readiness_probe()
             ),
             defer_mission_recovery=defer_mission_recovery,
         )
@@ -474,6 +486,25 @@ class Bootstrap:
         if not vmware_kali_host_readiness_enabled(os.environ):
             return None
         return VmrunVMwareKaliHostReadinessProbe()
+
+    @staticmethod
+    def _load_process_vmware_kali_guest_readiness_probe() -> (
+        ResearchVMwareKaliGuestReadinessProbe | None
+    ):
+        """Install the VMware guest-readiness probe only by explicit opt-in.
+
+        Constructing this probe starts no process, opens no connection and
+        performs no guest login; it only ever makes the one restricted,
+        key-based SSH version probe (`/usr/bin/dig -v`) reachable for an
+        explicit, separate caller that supplies its own already-verified
+        `ResearchVMwareKaliHostReadiness` and trusted
+        `ResearchVMwareKaliGuestTransportRequirement`. Nothing in Bootstrap
+        wires this probe to chat, to any target operation, or to a Kali
+        operation authorization.
+        """
+        if not vmware_kali_guest_readiness_enabled(os.environ):
+            return None
+        return SshVMwareKaliGuestReadinessProbe()
 
     @staticmethod
     def _load_process_semantic_memory_index_runtime(
@@ -849,6 +880,8 @@ class Bootstrap:
             container.register(self._kali_operation_process_adapter)
         if self._vmware_kali_host_readiness_probe is not None:
             container.register(self._vmware_kali_host_readiness_probe)
+        if self._vmware_kali_guest_readiness_probe is not None:
+            container.register(self._vmware_kali_guest_readiness_probe)
 
         self.container = container
 

@@ -2,6 +2,77 @@
 
 All notable project changes are recorded here.
 
+## [0.3.450] - 2026-10-06
+
+### Added
+
+- A VMware **guest-only** readiness boundary (`ResearchVMwareKaliGuestReadiness.py`,
+  `SshVMwareKaliGuestReadinessProbe.py`): the first check that can verify
+  whether a single, fixed, networkless command (`/usr/bin/dig -v`) is
+  reachable *inside* the Kali guest, built strictly on top of an
+  already-computed `HOST_READY` result from v0.3.449's host boundary --
+  verified by reading the actual line order, the guest probe refuses any
+  attempt at all unless `host_readiness.host_ready` is `True`.
+- Nine fail-closed guest states: `GUEST_READY`, `HOST_NOT_READY`,
+  `GUEST_TRANSPORT_UNCONFIGURED`, `GUEST_UNREACHABLE`,
+  `GUEST_IDENTITY_UNVERIFIED`, `AUTHENTICATION_UNAVAILABLE`, `TOOL_MISSING`,
+  `TOOL_VERSION_MISMATCH`, `GUEST_INSPECTION_FAILED`. `GUEST_READY` is
+  structurally incapable of being read as execution authority: the report
+  type's `kali_operation_authorization_created` field is pinned `False` by
+  its own constructor.
+- Restricted, key-based SSH as the guest transport: `IdentitiesOnly=yes`,
+  `BatchMode=yes`, `PasswordAuthentication=no`,
+  `KbdInteractiveAuthentication=no`, `ChallengeResponseAuthentication=no`,
+  `StrictHostKeyChecking=yes` against a dedicated `UserKnownHostsFile`,
+  `ForwardAgent=no`, `ForwardX11=no`, no pseudo-terminal, closed stdin,
+  `shell=False`, a bounded timeout. The one remote command
+  (`/usr/bin/dig -v`) is a module-level constant -- there is no field,
+  parameter, request-metadata read or model-output path anywhere that
+  could substitute a different executable or argument.
+- `vmware_kali_guest_readiness_enabled()` in `RuntimeOptIn.py` (env var
+  `HYPATIA_VMWARE_KALI_GUEST_READINESS_ENABLED`, default off, independent
+  of the v0.3.449 host opt-in): installs only the guest probe in
+  `Bootstrap`, wired to nothing chat-facing, no `KaliToolGateway`, no
+  operation-run path. Constructing the probe or its transport requirement
+  never starts a process or touches the network.
+
+### Decision
+
+- Evaluated `vmrun runProgramInGuest` against restricted SSH for guest
+  command execution. Rejected `vmrun`: this host's real `vmrun.exe` usage
+  text requires the guest password via `-gu`/`-gp` flags placed directly in
+  process argv, visible to any other process on the host that can list
+  command lines -- not an acceptable production credential transport. No
+  credential of any kind appears in argv, in the returned result, in any
+  exception text, or in `repr()` under the chosen key-based design (there
+  is no password in the design to leak in the first place).
+
+### Fixed (pre-release, found by independent QA review)
+
+- A bare `"permission denied"` substring match could have misclassified a
+  guest-side file-permission failure (POSIX exit code 126, "found but not
+  executable") as `AUTHENTICATION_UNAVAILABLE` ("SSH public-key
+  authentication was not accepted") instead of `TOOL_MISSING`. Fixed by
+  checking the shell's own exit-code convention (126 or 127) before the
+  generic text match, removing the ambiguity instead of guessing from
+  substrings. Classification text (stdout and stderr) is now also bounded
+  *before* concatenation for classification, not just before use as
+  `observed_version` -- an adversarial or compromised guest returning
+  unbounded output can no longer cost an unbounded local
+  `casefold()`/concatenation. Both closed with new regression tests before
+  release.
+
+### Scope
+
+- Zero target DNS/HTTP traffic, zero VM power-state mutation (verified
+  read-only `vmrun -T ws list` only), zero guest command beyond the one
+  fixed version probe, no new Kali operation kind, no new target-execution
+  authority. On this development machine the Kali VM was confirmed powered
+  off throughout (never auto-started), and the dedicated SSH key, pinned
+  host-key entry and minimum-privilege guest account this boundary requires
+  do not exist yet -- deliberately not created automatically; live guest
+  execution was not verified this milestone.
+
 ## [0.3.449] - 2026-10-06
 
 ### Added

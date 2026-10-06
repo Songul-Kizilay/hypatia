@@ -29,6 +29,9 @@ KALI_OPERATION_EXECUTION_ENABLED_VARIABLE = "HYPATIA_KALI_OPERATION_EXECUTION_EN
 VMWARE_KALI_HOST_READINESS_ENABLED_VARIABLE = (
     "HYPATIA_VMWARE_KALI_HOST_READINESS_ENABLED"
 )
+VMWARE_KALI_GUEST_READINESS_ENABLED_VARIABLE = (
+    "HYPATIA_VMWARE_KALI_GUEST_READINESS_ENABLED"
+)
 
 #: The single accepted value. Anything else, including "True", "1", and "yes",
 #: leaves the capability off. An opt-in that guesses what someone meant is an
@@ -106,3 +109,18 @@ def vmware_kali_host_readiness_enabled(environment: Mapping[str, str]) -> bool:
     execution path wired to this flag at all.
     """
     return opted_in(environment, VMWARE_KALI_HOST_READINESS_ENABLED_VARIABLE)
+
+
+def vmware_kali_guest_readiness_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether the VMware Kali guest-readiness probe is installed.
+
+    Off by default and independent of every other opt-in here, including
+    `vmware_kali_host_readiness_enabled`. This only ever installs a
+    restricted-SSH probe for one fixed, networkless command
+    (`/usr/bin/dig -v`); it never powers a VM on or off, never attempts a
+    guest connection unless host readiness was already verified `HOST_READY`
+    by a separate caller, and grants no target-operation authority -- there
+    is no DNS dispatch, chat surface or operation-run path wired to this
+    flag at all.
+    """
+    return opted_in(environment, VMWARE_KALI_GUEST_READINESS_ENABLED_VARIABLE)
