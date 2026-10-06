@@ -116,6 +116,27 @@ class ResearchVMwareKaliHostRequirementTests(unittest.TestCase):
                     vm_identity=VM_IDENTITY,
                 )
 
+    def test_accepts_a_posix_style_absolute_path_but_still_rejects_relative(
+        self,
+    ) -> None:
+        """`vmrun`/VMware Workstation are Windows-only in real deployment, but
+        this same format check also runs on a non-Windows CI runner against
+        real, OS-native temporary-file paths (see `_HostFixture` below) --
+        so an absolute POSIX-style path must be accepted here, while a
+        genuinely relative path must still be rejected on every platform.
+        """
+        ResearchVMwareKaliHostRequirement(
+            vmrun_executable_path="/tmp/fake/vmrun.exe",
+            vmx_path="/tmp/fake/kali.vmx",
+            vm_identity=VM_IDENTITY,
+        )
+        with self.assertRaises(ResearchError):
+            ResearchVMwareKaliHostRequirement(
+                vmrun_executable_path="tmp/fake/vmrun.exe",
+                vmx_path="/tmp/fake/kali.vmx",
+                vm_identity=VM_IDENTITY,
+            )
+
     def test_rejects_an_invalid_timeout(self) -> None:
         for bad_timeout in (0, -1.0, 31.0, True):
             with self.assertRaises(ResearchError):

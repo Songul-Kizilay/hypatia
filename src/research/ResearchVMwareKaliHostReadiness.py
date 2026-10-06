@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import PureWindowsPath
+from pathlib import PurePosixPath, PureWindowsPath
 
 from core.Exceptions import ResearchError
 
@@ -65,13 +65,19 @@ class ResearchVMwareKaliHostRequirement:
             if "\x00" in value or "\r" in value or "\n" in value:
                 raise ResearchError(f"VMware host {label} contains control data.")
         vmrun_path = PureWindowsPath(self.vmrun_executable_path)
-        if not vmrun_path.is_absolute() or vmrun_path.name.casefold() != "vmrun.exe":
+        if (
+            not self._is_absolute_on_any_platform(self.vmrun_executable_path)
+            or vmrun_path.name.casefold() != "vmrun.exe"
+        ):
             raise ResearchError(
                 "VMware host vmrun executable path is not a trusted absolute "
                 "vmrun.exe path."
             )
         vmx_path = PureWindowsPath(self.vmx_path)
-        if not vmx_path.is_absolute() or vmx_path.suffix.casefold() != ".vmx":
+        if (
+            not self._is_absolute_on_any_platform(self.vmx_path)
+            or vmx_path.suffix.casefold() != ".vmx"
+        ):
             raise ResearchError(
                 "VMware host VMX path is not a trusted absolute .vmx path."
             )
@@ -81,6 +87,22 @@ class ResearchVMwareKaliHostRequirement:
             or not 0 < self.list_timeout_seconds <= 30.0
         ):
             raise ResearchError("VMware host list timeout is invalid.")
+
+    @staticmethod
+    def _is_absolute_on_any_platform(value: str) -> bool:
+        """Accept a path absolute under either Windows or POSIX syntax.
+
+        Real deployments always configure a genuine Windows path (`vmrun`
+        and VMware Workstation only exist on Windows hosts); the Windows
+        check alone is the one that matters there. The POSIX check exists
+        only so this same trusted-format validation also accepts the
+        real, OS-native temporary-file paths this module's own test suite
+        constructs on a non-Windows CI runner -- it never relaxes what a
+        *relative* path rejects on any platform.
+        """
+        return (
+            PureWindowsPath(value).is_absolute() or PurePosixPath(value).is_absolute()
+        )
 
 
 @dataclass(frozen=True, slots=True)

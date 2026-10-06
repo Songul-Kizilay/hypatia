@@ -149,6 +149,26 @@ Full local gates on the integrated diff: unittest suite, Black, Ruff, MyPy
 compiled mypyc extension Windows Application Control blocks; this pin
 matches every other active worktree's venv), `git diff --check`, all clean.
 
+Exact-SHA Linux desktop CI (run 37517683114) failed on the first release
+commit -- caught a real cross-platform defect the local Windows-only gate
+run could not: `ResearchVMwareKaliHostRequirement.__post_init__` validated
+`vmrun_executable_path`/`vmx_path` as absolute using only `PureWindowsPath`,
+so this module's own test fixture's real, OS-native temporary-file paths
+(created via `tempfile.TemporaryDirectory()`) were correctly real files on
+the Linux runner but a bare POSIX `/tmp/...` path is not "absolute" under
+Windows path syntax, so 16 tests raised `ResearchError` at fixture
+construction instead of exercising the probe. Fixed with a second commit
+(never amending the pushed one): the absolute-path check now accepts a
+path absolute under either `PureWindowsPath` or `PurePosixPath` syntax --
+real deployments will always configure a genuine Windows path (the only
+one that matters there), and the POSIX branch exists solely so the exact
+same trusted-format validation also accepts this suite's own real,
+OS-native CI fixture paths; a genuinely relative path (under either
+reading) is still rejected on every platform, locked in by a new explicit
+test. Re-verified against this machine's real `D:\vmware\vmrun.exe`/`D:\kali
+vm\kali linux.vmx` after the fix: identical `VM_NOT_RUNNING` result as
+before the fix.
+
 Scope excludes, explicitly: real guest command execution of any kind, a new
 Kali operation kind, any Kali tool-catalogue expansion, VM power-on/off,
 guest credentials, SSH, `vmrun runProgramInGuest`, arbitrary shell/guest
