@@ -23,7 +23,28 @@ landed in v0.3.450, using restricted, key-based, host-key-pinned SSH rather
 than `vmrun runProgramInGuest` (this host's real `vmrun` requires the guest
 password as a plaintext command-line argument via `-gu`/`-gp`, rejected as a
 production credential transport); guest readiness still grants no
-target-execution authority and is wired to nothing chat-facing.
+target-execution authority and is wired to nothing chat-facing. v0.3.452
+connects the existing, already-reviewed `DNS_RECORD_LOOKUP` operation to the
+`KaliToolGateway` authority chain over `VMWARE_KALI`, reusing the v0.3.450/451
+restricted-SSH guest boundary unchanged: a new `VmwareKaliRuntimeProbe`
+composes host- then guest-readiness behind the existing
+`ResearchKaliRuntimeProbe` contract, and a new `VmwareKaliOperationProcessAdapter`
+runs only the one reviewed `dig` argv plan over the same restricted SSH
+flags. Transport selection is trusted, code-owned Bootstrap configuration
+(`HYPATIA_KALI_OPERATION_TRANSPORT`, a strict `wsl_kali`/`vmware_kali`
+allowlist that fails closed on anything else) -- never request metadata,
+model output or chat text -- and is bound into the existing operation
+digest, so an authorization for one transport can never run the other.
+Production bootstrap installs the VMware execution pair only when every
+one of its independent opt-ins (execution, host readiness, guest
+readiness) and its trusted VMware configuration are all present; any one
+missing leaves VMware execution unavailable, never silently falling back
+to WSL or to a partially configured VMware path. On this development
+machine the Kali VM was confirmed running (read-only `vmrun list`), but no
+dedicated, pinned Hypatia guest SSH key/known_hosts pair exists -- only the
+operator's personal key does, which this boundary must not reuse -- so live
+guest execution remains a reported blocker, not a workaround; zero target
+traffic occurred.
 
 ## Purpose
 
@@ -101,6 +122,19 @@ effects, budget and evidence handling are known before they run.
   this milestone, so live guest execution was not verified; the dedicated
   SSH key, pinned host-key entry and guest account this boundary requires
   do not exist yet either, and were deliberately not created automatically.
+- The reviewed `DNS_RECORD_LOOKUP` operation can now actually execute over
+  `VMWARE_KALI` (v0.3.452), through the same single `KaliToolGateway`
+  dispatch path WSL already uses: preview -> digest -> authorization ->
+  runtime readiness -> consume-before-dispatch -> process adapter ->
+  untrusted output. `VmwareKaliOperationProcessAdapter` accepts only an
+  exact, structurally re-validated dig argv plan (fixed options, A/AAAA/CNAME
+  only, a defense-in-depth hostname grammar check mirroring the
+  authoritative scope-level one) and dispatches it over the same
+  restricted, key-only, host-key-pinned SSH flags the guest-readiness probe
+  already uses -- never `vmrun -gu`/`-gp`. Transport is trusted Bootstrap
+  configuration only, fails closed on anything unrecognized, and remains
+  default-off until execution, host-readiness, guest-readiness and
+  complete VMware configuration are all explicitly opted in.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every

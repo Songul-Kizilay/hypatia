@@ -12,6 +12,7 @@ from core.Exceptions import ResearchError
 from research.PublicHttpsUrlValidator import PublicHttpsUrlValidator
 from research.ResearchKaliOperationPreview import (
     ResearchDnsRecordType,
+    ResearchKaliCommandTransport,
     ResearchKaliOperationKind,
     ResearchKaliOperationPreview,
 )
@@ -45,11 +46,17 @@ class KaliOperationPreviewApplicationService:
         *,
         clock: Callable[[], datetime] | None = None,
         https_url_validator: PublicHttpsUrlValidator | None = None,
+        transport: ResearchKaliCommandTransport = (
+            ResearchKaliCommandTransport.WSL_KALI
+        ),
     ) -> None:
         self._response_composer = response_composer
         self._program_scope_revision_store = program_scope_revision_store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._https_url_validator = https_url_validator or PublicHttpsUrlValidator()
+        if not isinstance(transport, ResearchKaliCommandTransport):
+            raise ResearchError("Kali operation preview transport is invalid.")
+        self._transport = transport
 
     @staticmethod
     def is_preview_request(request: BrainRequest) -> bool:
@@ -129,6 +136,7 @@ class KaliOperationPreviewApplicationService:
             max_requests_per_minute=policy.max_requests_per_minute,
             max_seconds=policy.max_seconds,
             created_at=self._clock(),
+            transport=self._transport,
         )
 
     @staticmethod

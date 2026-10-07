@@ -29,6 +29,7 @@ from research.ResearchKaliOperationExecution import (
     ResearchKaliOperationRun,
 )
 from research.ResearchKaliOperationPreview import (
+    ResearchKaliCommandTransport,
     ResearchKaliOperationKind,
     is_kali_operation_digest,
 )
@@ -113,7 +114,7 @@ class KaliToolGateway:
 
             stage = KaliToolGatewayStage.RUNTIME_READINESS
             readiness = self._runtime_probe.readiness(
-                self._runtime_requirement(preview.operation_kind)
+                self._runtime_requirement(preview.operation_kind, preview.transport)
             )
             if not readiness.ready:
                 raise ResearchError(f"Kali runtime is not ready: {readiness.reason}")
@@ -162,15 +163,18 @@ class KaliToolGateway:
     @staticmethod
     def _runtime_requirement(
         operation_kind: ResearchKaliOperationKind,
+        transport: ResearchKaliCommandTransport,
     ) -> ResearchKaliRuntimeRequirement:
         if operation_kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
             return ResearchKaliRuntimeRequirement(
+                transport=transport,
                 executable_path=EXPECTED_DIG_EXECUTABLE,
                 version_prefix=EXPECTED_DIG_VERSION_PREFIX,
                 version_arguments=("-v",),
             )
         if operation_kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
             return ResearchKaliRuntimeRequirement(
+                transport=transport,
                 executable_path=EXPECTED_CURL_EXECUTABLE,
                 version_prefix=EXPECTED_CURL_VERSION_PREFIX,
                 version_arguments=("--version",),

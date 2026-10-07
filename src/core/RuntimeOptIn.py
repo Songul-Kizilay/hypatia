@@ -26,6 +26,7 @@ RESEARCH_EXECUTION_PERSISTENCE_ENABLED_VARIABLE = (
 BACKGROUND_RESEARCH_ENABLED_VARIABLE = "HYPATIA_BACKGROUND_RESEARCH_ENABLED"
 PLAN_AUTHORIZATION_ENABLED_VARIABLE = "HYPATIA_PLAN_AUTHORIZATION_ENABLED"
 KALI_OPERATION_EXECUTION_ENABLED_VARIABLE = "HYPATIA_KALI_OPERATION_EXECUTION_ENABLED"
+KALI_OPERATION_TRANSPORT_VARIABLE = "HYPATIA_KALI_OPERATION_TRANSPORT"
 VMWARE_KALI_HOST_READINESS_ENABLED_VARIABLE = (
     "HYPATIA_VMWARE_KALI_HOST_READINESS_ENABLED"
 )
@@ -97,6 +98,23 @@ def kali_operation_execution_enabled(environment: Mapping[str, str]) -> bool:
     explicit run opt-in gates first.
     """
     return opted_in(environment, KALI_OPERATION_EXECUTION_ENABLED_VARIABLE)
+
+
+def kali_operation_transport_name(environment: Mapping[str, str]) -> str | None:
+    """Return the raw trusted Kali operation transport selection, or None.
+
+    This is deliberately not an `opted_in`-style boolean: it names which of
+    several mutually exclusive transports is trusted, not whether one
+    capability is on. Unset means "keep today's WSL-only default".
+    Translating this raw string into exactly one `ResearchKaliCommandTransport`
+    value -- with an explicit, fail-closed rejection of anything unrecognized
+    -- is Bootstrap's job alone, never this function's: Bootstrap is where
+    every other strict allowlist/enum translation in this codebase already
+    lives. This function reads only this process's own environment; it is
+    never given request metadata, model output or any other untrusted
+    source.
+    """
+    return environment.get(KALI_OPERATION_TRANSPORT_VARIABLE)
 
 
 def vmware_kali_host_readiness_enabled(environment: Mapping[str, str]) -> bool:

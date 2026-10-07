@@ -1073,7 +1073,40 @@ requires exit 255 and a complete endpoint-specific OpenSSH stderr line.
 Generic permission errors do not imply authentication failure. This is
 diagnostic hardening only: zero target traffic, no live guest probe, no VM
 power mutation, no credential setup and no new execution authority.
-v0.3.452 DNS execution remains unstarted and separately authorized.
+
+v0.3.452 took the deferred step those milestones set up for: the existing,
+already-reviewed `DNS_RECORD_LOOKUP` operation now actually executes over
+`ResearchKaliCommandTransport.VMWARE_KALI`, through the same single
+`KaliToolGateway` authority chain WSL already used -- no second dispatch
+path, no new operation kind, no widened tool catalogue. A new
+`VmwareKaliRuntimeProbe` composes the unchanged v0.3.449/450 host- and
+guest-readiness contracts behind the existing `ResearchKaliRuntimeProbe`
+interface; a new `VmwareKaliOperationProcessAdapter` runs only the one
+reviewed `dig +time=5 +tries=1 +short <hostname> <A|AAAA|CNAME>` argv plan
+over the same restricted, key-only, host-key-pinned SSH flags the guest
+probe already used, never `vmrun -gu`/`-gp`. The adapter structurally
+re-validates the exact argv shape (fixed options, allowed record types,
+and a hostname-grammar re-check mirroring -- never relaxing -- the
+authoritative `ResearchTargetScope` grammar) before any subprocess starts,
+closing the specific risk that OpenSSH joins remote arguments unquoted for
+the guest shell to parse. `TRANSPORT AVAILABLE != EXECUTION AUTHORITY`
+gained a second concrete form: transport is trusted, code-owned Bootstrap
+configuration (`HYPATIA_KALI_OPERATION_TRANSPORT`, strict `wsl_kali`/
+`vmware_kali` allowlist, fails closed on anything else), never request
+metadata, model output or chat text, and is bound into the existing
+operation digest -- changing transport changes the digest, so an
+authorization for one transport can never run the other. Production
+bootstrap installs the VMware execution pair only when execution,
+host-readiness and guest-readiness opt-ins and complete trusted VMware
+configuration are *all* present; any one missing leaves VMware execution
+unavailable rather than silently substituting WSL or a partial VMware
+path. On this development machine the Kali VM was confirmed running
+(read-only `vmrun list`, no power action), but no dedicated, pinned
+Hypatia guest SSH key/known_hosts pair exists -- only the operator's own
+personal key does, which this boundary must not reuse -- so real live DNS
+execution remains a reported blocker, not a workaround; zero target
+traffic occurred. v0.3.453+ (HTTPS over VMware, or any new Kali tool)
+remains separately authorized and unstarted.
 
 With this, every leg of M1's target lifecycle (Finding -> Evidence ->
 Validation -> Confidence -> Contradiction -> Final State) now has a

@@ -5,6 +5,7 @@ from __future__ import annotations
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.Exceptions import ResearchError
+from research.ResearchKaliOperationPreview import ResearchKaliCommandTransport
 from research.ResearchKaliRuntimeEnvironment import (
     ResearchKaliRuntimeProbe,
     ResearchKaliRuntimeRequirement,
@@ -23,9 +24,15 @@ class KaliRuntimeReadinessApplicationService:
         response_composer: ResponseComposer,
         *,
         probe: ResearchKaliRuntimeProbe | None = None,
+        transport: ResearchKaliCommandTransport = (
+            ResearchKaliCommandTransport.WSL_KALI
+        ),
     ) -> None:
         self._response_composer = response_composer
         self._probe = probe or UnavailableResearchKaliRuntimeProbe()
+        if not isinstance(transport, ResearchKaliCommandTransport):
+            raise ResearchError("Kali runtime readiness transport is invalid.")
+        self._transport = transport
 
     @staticmethod
     def is_readiness_request(request: BrainRequest) -> bool:
@@ -46,4 +53,6 @@ class KaliRuntimeReadinessApplicationService:
     def _readiness(self, request: BrainRequest):
         if request.metadata.get("operator_opt_in") is not True:
             raise ResearchError("Kali runtime readiness requires explicit opt-in.")
-        return self._probe.readiness(ResearchKaliRuntimeRequirement())
+        return self._probe.readiness(
+            ResearchKaliRuntimeRequirement(transport=self._transport)
+        )

@@ -2,6 +2,57 @@
 
 All notable project changes are recorded here.
 
+## [0.3.452] - 2026-10-07
+
+### Added
+
+- The existing, already-reviewed `DNS_RECORD_LOOKUP` operation can now
+  execute over a new `ResearchKaliCommandTransport.VMWARE_KALI` transport,
+  through the same single `KaliToolGateway` authority chain the existing
+  WSL transport already uses: preview, exact digest, authorization,
+  runtime readiness, consume-before-dispatch, process adapter, untrusted
+  output. No new operation kind, no new allowed command, no second
+  dispatch path.
+- `VmwareKaliRuntimeProbe` composes the unchanged v0.3.449/450 VMware
+  host- and guest-readiness contracts behind the existing
+  `ResearchKaliRuntimeProbe` interface; refuses immediately for any
+  non-`VMWARE_KALI` runtime requirement, with no host or guest attempt.
+- `VmwareKaliOperationProcessAdapter` runs only the one reviewed
+  `/usr/bin/dig +time=5 +tries=1 +short <hostname> <A|AAAA|CNAME>` argv
+  plan, over the same restricted, key-only, host-key-pinned,
+  no-password/no-interactive/no-forwarding/no-pty SSH flags the guest
+  probe already used (never `vmrun -gu`/`-gp`). Every field of the
+  command plan -- transport, executable, fixed options, record type and
+  hostname grammar -- is structurally re-validated before any subprocess
+  starts, closing the specific risk that OpenSSH joins remote arguments
+  unquoted for the guest shell to parse; this re-check mirrors, and never
+  relaxes, the authoritative `ResearchTargetScope` hostname grammar that
+  already gates every preview.
+- Transport selection (`HYPATIA_KALI_OPERATION_TRANSPORT`) is trusted,
+  code-owned Bootstrap configuration only -- a strict `wsl_kali`/
+  `vmware_kali` allowlist that fails closed on anything else -- never
+  request metadata, model output or chat text, and is bound into the
+  existing operation digest, so an authorization recorded for one
+  transport can never execute the other.
+- Production bootstrap installs the VMware execution pair only when
+  execution, host-readiness and guest-readiness opt-ins and complete,
+  valid trusted VMware configuration (`HYPATIA_VMWARE_KALI_*`) are *all*
+  present; any one missing or malformed leaves VMware execution
+  unavailable or fails the process loudly, never silently substituting
+  WSL or a partially configured VMware path. WSL behavior is unchanged.
+
+### Scope
+
+- Target traffic ZERO this milestone: the Kali VM was confirmed running
+  (read-only `vmrun list`, no power action), but no dedicated, pinned
+  Hypatia guest SSH key/known_hosts pair exists on this machine -- only
+  the operator's personal SSH identity does, which this boundary must not
+  reuse -- so no live DNS lookup was attempted; reported as a blocker, not
+  worked around. No VM power mutation, no credential setup, no authority
+  widening. `TRANSPORT AVAILABLE != EXECUTION AUTHORITY`; `GUEST READY !=
+  TARGET AUTHORITY`. v0.3.453+ (HTTPS over VMware, or any other tool)
+  remains separately authorized and unstarted.
+
 ## [0.3.451] - 2026-10-06
 
 ### Fixed
