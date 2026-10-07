@@ -2,10 +2,22 @@
 
 ## Runtime Version
 
-`v0.3.453 (Genesis)`
+`v0.3.454 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.454 adds pure capability version-drift assessment: a
+deterministic, immutable comparison of an already-supplied, bounded,
+untrusted observed-version observation against a capability's existing
+`ProductCapabilityRecord.version` rule, returning `MATCH`/`DRIFT`/
+`UNKNOWN`/`NOT_APPLICABLE`. `VERSION COMPATIBILITY != EXECUTION AUTHORITY`:
+the comparison is a pure function with no process/network/registry-
+mutation path, reuses the existing prefix-containment semantic (no
+invented SemVer comparison), and never fabricates a version rule for a
+capability that has none. No live version discovery, no policy engine, no
+automatic remediation. Pure addition; zero existing files modified; not
+wired into Bootstrap, chat, or the desktop. v0.3.455 is not started.
 
 Version v0.3.453 adds the first descriptive slice of the Phase 9 Tool/
 Capability Platform: an immutable, typed catalog (`tools.ProductCapabilityCatalog`)

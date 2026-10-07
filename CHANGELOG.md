@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.454] - 2026-10-07
+
+### Added
+
+- Pure capability version-drift assessment (`tools.ProductCapabilityVersionObservation`,
+  `tools.ProductCapabilityVersionAssessment`, `assess_capability_version`) --
+  the second descriptive Phase 9 slice. Compares an already-untrusted,
+  bounded observed-version observation against a capability's existing
+  `ProductCapabilityRecord.version` rule and returns a deterministic,
+  immutable `MATCH`/`DRIFT`/`UNKNOWN`/`NOT_APPLICABLE` fact. Reuses the one
+  version-check semantic that already exists in the repository (plain
+  substring containment of a trusted expected prefix, exactly as
+  `WslKaliRuntimeProbe`/`SshVMwareKaliGuestReadinessProbe` already check)
+  rather than inventing SemVer comparison where none exists.
+- `VERSION COMPATIBILITY != EXECUTION AUTHORITY`: assessment is a pure
+  function with no process, network, store, or registry-mutation
+  capability of any kind; a capability with no authoritative version rule
+  correctly reports `NOT_APPLICABLE` rather than fabricating one; the
+  `reason` field is always one of a small fixed set of code-owned
+  sentences, never built from the untrusted observed text.
+
+### Scope
+
+- No live version discovery: this milestone assesses only already-supplied
+  observed text, never runs a process, probes a path, or starts SSH/WSL/
+  VMware to obtain one. No policy engine, no automatic remediation
+  (install/upgrade/downgrade/repair), no change to `ToolRegistry`,
+  `ToolExecutionService`, `KaliToolGateway`, or any existing authority
+  chain. Pure addition; zero existing files modified. Not wired into
+  Bootstrap, chat, or the desktop. Target traffic ZERO; SSH attempts ZERO;
+  VMware/WSL/Kali guest execution ZERO; credential changes ZERO.
+  v0.3.455 is not started.
+
 ## [0.3.453] - 2026-10-07
 
 ### Added
