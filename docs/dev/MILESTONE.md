@@ -10,7 +10,143 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.452 (release)
+## Current scope: v0.3.453 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Typed tool/capability registry -- descriptive foundation only (Phase 9, first slice). No policy engine, no new executable capability. |
+| Base SHA | `e140a59447cd8d8fcee4d7547e84ec6a59fda468` (verified remote main; standard merge of PR #433). |
+| Branch | `feature/typed-tool-registry-v0.3.453`, worktree `D:\hypatia-worktrees\typed-tool-registry` |
+| Status | release; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | Registry != authority. No process/network/VM/SSH/credential effect at construction or lookup. No new Kali operation kind, no HTTPS-over-VMware, no policy ALLOW/DENY/REQUIRE_APPROVAL. Target traffic ZERO; VM power mutation ZERO; SSH attempts ZERO. v0.3.454 not started. |
+
+Per the standing ledger convention, v0.3.452 delivery was re-verified before
+this milestone began: release `f19290535da758a4159d09138bc06662d8114cc2`,
+PR #433 MERGED, standard merge `e140a59447cd8d8fcee4d7547e84ec6a59fda468`
+with parents `b1e951c3982b59145318be1df8cd8697aba8026c` and the release SHA
+(confirmed by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor f192905... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.452 is delivered. (A bounded,
+operator-directed post-delivery deployment/setup pass followed on the real
+VMware/Kali machine -- generating a dedicated host-side Ed25519 key,
+independently fingerprint-verifying and pinning the guest's real ED25519
+host key, and diagnosing a guest-side SSH authentication rejection that
+remains unresolved -- but made zero repository changes and is not part of
+this or any numbered milestone's delivered scope.)
+
+Repository-grounded audit before implementation found a mature, already-
+generic local "Tool Layer" (`tools.ToolCapability`, `tools.ToolDescriptor`,
+`tools.ToolRegistry`, `tools.ToolExecutionService`, composed by
+`tools.ToolRuntime`) covering exactly the two unconditionally-registered
+capabilities (`CLOCK_READ`, `TEXT_STATISTICS`) plus three more conditional
+on desktop composition (`FILESYSTEM_LIST`/`FILESYSTEM_METADATA`/
+`FILESYSTEM_READ`). Two further `ToolCapability` members
+(`RESEARCH_STATE_SUMMARY`, `KNOWLEDGE_DOCUMENT_LIST`) are declared in the
+enum but have no concrete `Tool` implementation anywhere and are never
+constructed by `ToolRuntime._build` -- confirmed absent, not merely
+unobserved, and correctly excluded from this milestone's catalog. Kali
+operations are a wholly separate, narrower, already-authoritative chain
+(`KaliOperationPreviewApplicationService` -> digest -> authorization ->
+`KaliToolGateway`) that was never routed through `ToolRegistry`. The
+Phase 9 roadmap gap is therefore precise: no single typed, descriptive
+index spans both families today. Reading `VmwareKaliOperationProcessAdapter`
+confirmed it accepts only the reviewed `DNS_RECORD_LOOKUP` dig plan, so
+`HTTPS_HEADER_LOOKUP` over `VMWARE_KALI` -- though a syntactically valid
+enum combination -- cannot actually be dispatched in production; describing
+it would have claimed a capability that does not exist, so it is correctly
+absent from the catalog's three Kali-side entries.
+
+Delivered: three new files under `src/tools/` --
+`ProductCapabilityRecord.py` (a frozen `ProductCapabilityCategory` enum and
+`ProductCapabilityRecord` dataclass: stable identity, display name,
+category, network/credential/target-scope/destructive booleans, and
+absent-unless-real version/timeout/retry/availability-reference fields),
+`ProductCapabilityCatalog.py` (an immutable identity-keyed container
+mirroring `ToolRegistry`'s own construct-once/no-mutation/no-fallback
+shape: `lookup`, `described`, `identities`, duplicate-identity and
+unknown-identity both fail deterministically), and
+`ProductCapabilityCatalogDefaults.py` (pure projector functions: local-tool
+records are read directly from a real `ToolRegistry`'s own registered
+`ToolDescriptor`s -- never a second, separately-authored copy of their
+effects -- and the three executable Kali records are built from existing
+named constants (`EXPECTED_DIG_VERSION_PREFIX`, `EXPECTED_CURL_VERSION_PREFIX`,
+`MAX_KALI_OPERATION_TIMEOUT_SECONDS`) and the existing
+`ResearchKaliOperationKind`/`ResearchKaliCommandTransport` enums, never a
+re-authored copy of the reviewed argv or the authority chain). No existing
+file was modified; this milestone is a pure addition, which itself proves
+existing execution behavior (including every Kali authority-chain test) is
+unchanged. Not wired into `Bootstrap`, `CognitiveEngine`, chat, or the
+desktop in this milestone -- deliberately deferred, so the registry has no
+caller to begin granting authority to yet.
+
+`CAPABILITY REGISTERED != CAPABILITY PERMITTED` is proven, not merely
+asserted: 36 tests (`tests/tools/test_product_capability_catalog.py`)
+cover zero process/network side effects at construction and lookup
+(including the full Kali-record set, patched `subprocess.run`/
+`subprocess.Popen`/`socket.getaddrinfo`); that neither type exposes any
+execute/invoke/run/dispatch/authorize/grant/consume/register/mutate/call/
+apply/exec/eval/set/delete/write/perform/trigger/fire method (checked
+structurally via `hasattr`, so no caller -- chat, model, or otherwise --
+could reach one that does not exist); that repeated lookup of one identity
+never consumes it (unlike a one-shot Kali authorization); that
+`availability_reference` is inert text (calling it raises `TypeError`,
+proving it is not a live readiness check); that duplicate identities and
+unknown identities both fail deterministically (`ResearchError` /
+`None`); that `ProductCapabilityRecord` instances are frozen
+(`dataclasses.FrozenInstanceError` on reassignment); that the catalog
+constructor accepts only an already-built tuple of bounded records (a
+string, dict, int, or loose dict-in-tuple are all refused); that the three
+new modules import none of `brain`/`cognition`/`llm`/`response` at all
+(checked via `ast`-parsed imports), so no chat/model/request path can even
+name a type that could inject, replace, or redefine a capability; that an
+empty `ToolRegistry` yields zero local-tool records without crashing; and
+13 direct negative-path tests exercising every `ProductCapabilityRecord
+.__post_init__` guard individually (empty/whitespace/control-character/
+overlong fields, non-enum category, non-boolean flags, and -- the classic
+Python trap -- that `bool` being an `int` subclass does not let
+`retry_count=True`/`timeout_seconds=True` slip past their numeric checks).
+
+Independent security review (hypatia-security, subagent): PASS on all six
+traced properties (no new authority path -- confirmed zero callers of the
+new types exist anywhere outside their own tests; no untrusted-input path;
+no process/network side effect; immutability/fail-closed lookup; honesty
+of the three described Kali combinations verified against the real
+`WslKaliOperationProcessAdapter`/`VmwareKaliOperationProcessAdapter`
+validation logic; `requires_credentials=True` set only for `VMWARE_KALI`).
+No CONFIRMED issues. One informational note (not fixed, not blocking):
+`_NO_LOCAL_TOOL_REQUIRES_CREDENTIALS`/`_NO_LOCAL_TOOL_IS_TARGET_SCOPE_RELEVANT`
+are category-wide constants rather than per-tool derived facts -- honest
+today (true of every currently-registered local tool) but worth revisiting
+if a credentialed local tool is ever added; the module's own docstring
+already states this is a fact about the current registered set.
+
+Independent QA review (hypatia-qa, subagent): confirmed all gates green
+and found no production-code defect, but found a real test-coverage gap --
+the entire `ProductCapabilityRecord.__post_init__` validation body (length/
+emptiness/control-character checks, category bounding, boolean-flag
+checks, and both `bool`-vs-`int` traps) was completely unexercised by the
+original 23 tests, which only ever constructed already-valid records; a
+future change that silently weakened or deleted any of those checks would
+have passed every original test undetected. QA also flagged that
+`FORBIDDEN_METHOD_NAMES` did not yet cover `call`/`apply`/`exec`/`eval`
+(explicitly requested) and that an empty-`ToolRegistry` edge case had zero
+coverage. Closed before release: 13 new direct negative-path tests added
+for every validation guard, `FORBIDDEN_METHOD_NAMES` widened to 24 names,
+and one new empty-registry test -- re-verified passing (36/36) before the
+full suite re-run below. QA separately confirmed, by direct code reading
+and construction, that the identity-prefix collision scheme (`tool:`/
+`kali:`) and the duplicate-identity detection are sound for every current
+call site, and that the `HTTPS_HEADER_LOOKUP`-over-`VMWARE_KALI` exclusion
+matches a real, mechanical rejection in `VmwareKaliOperationProcessAdapter`,
+not an assumption.
+
+Full local gates re-run after the QA fix: unittest discover 8210 tests, OK
+(164.6s); Black --check . clean (1092 files); Ruff check . clean; MyPy src
+clean (634 source files); git diff --check clean. `git status` confirms
+zero existing files modified -- four new files only.
+
+## Previous scope: v0.3.452 (release record before integration)
 
 | Field | Value |
 | --- | --- |
