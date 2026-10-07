@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.453] - 2026-10-07
+
+### Added
+
+- A descriptive, immutable typed capability catalog (`tools.ProductCapabilityRecord`,
+  `tools.ProductCapabilityCatalog`, `tools.ProductCapabilityCatalogDefaults`)
+  -- the first bounded slice of the Phase 9 Tool/Capability Platform.
+  Describes, without granting anything: the two unconditionally-registered
+  local tools (`CLOCK_READ`, `TEXT_STATISTICS`), projected directly from
+  their real `ToolDescriptor`s, and the three Kali operation/transport
+  combinations an actual production process adapter accepts
+  (`DNS_RECORD_LOOKUP` over `WSL_KALI` and `VMWARE_KALI`;
+  `HTTPS_HEADER_LOOKUP` over `WSL_KALI` only -- `VMWARE_KALI` is correctly
+  excluded, since no process adapter accepts it today).
+- `CAPABILITY REGISTERED != CAPABILITY PERMITTED`: the catalog is a pure
+  lookup table with no execute/invoke/authorize/grant/consume/mutate
+  method of any kind, construction and lookup touch no process or network
+  (including the Kali/VMware/WSL path its records only describe), entries
+  are frozen and duplicate/unknown identities both fail deterministically,
+  and none of the three new modules can even import a chat, model, or
+  request-carrying type.
+
+### Scope
+
+- Descriptive foundation only. No policy engine (`ALLOW`/`DENY`/
+  `REQUIRE_APPROVAL`), no new executable capability, no change to
+  `ToolRegistry`, `ToolExecutionService`, `KaliToolGateway`, or any
+  existing authority chain -- this milestone is a pure addition; zero
+  existing files were modified. Not yet wired into Bootstrap, chat, or the
+  desktop. Target traffic ZERO; VM power mutation ZERO; SSH attempts ZERO;
+  no credential changes. v0.3.454 is not started.
+
 ## [0.3.452] - 2026-10-07
 
 ### Added

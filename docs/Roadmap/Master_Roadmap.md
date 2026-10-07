@@ -716,14 +716,44 @@ Unchanged from prior state — all confirmed `[ ]`, no contradicting evidence fo
 
 ## Phase 9 — Tool / capability platform
 
-Unchanged — confirmed absent; Kali operations remain a narrow, two-kind
-mechanism, not a general typed tool registry.
+v0.3.453 delivered the first bounded slice — a descriptive foundation only,
+not the platform: `tools.ProductCapabilityCatalog`, an immutable,
+identity-keyed index describing capabilities that already exist, built by
+projecting two already-authoritative sources rather than re-declaring
+either's rules. Local-tool records read a real `ToolRegistry`'s own
+registered `ToolDescriptor`s directly (capability, effects, read-only/
+reaches-outside), so a tool absent from a given runtime composition is
+correctly absent from the catalog, not silently assumed. Kali operation
+records are built from existing named constants
+(`EXPECTED_DIG_VERSION_PREFIX`, `EXPECTED_CURL_VERSION_PREFIX`,
+`MAX_KALI_OPERATION_TIMEOUT_SECONDS`) and the existing
+`ResearchKaliOperationKind`/`ResearchKaliCommandTransport` enums, covering
+only the three kind/transport pairs a real production process adapter
+actually accepts today (`DNS_RECORD_LOOKUP` over both transports;
+`HTTPS_HEADER_LOOKUP` over `WSL_KALI` only — `VmwareKaliOperationProcessAdapter`
+accepts no other plan, so `HTTPS_HEADER_LOOKUP` over `VMWARE_KALI` is
+correctly absent rather than claimed). `CAPABILITY REGISTERED !=
+CAPABILITY PERMITTED` throughout: the catalog has no execute, invoke,
+authorize, grant, or consume method of any kind (asserted structurally, so
+no caller could reach one that does not exist), construction and lookup
+touch no process or network, entries are frozen, duplicate/unknown
+identities both fail deterministically, and none of the three new modules
+import anything that could carry chat, model, or request content. Not yet
+wired into Bootstrap, `CognitiveEngine`, chat, or the desktop — this
+milestone gave the registry something to describe, deliberately not yet
+a caller to grant anything to. The remaining Phase 9 items — a policy
+engine, input/output schemas, tool-version drift detection, a live
+availability *check* rather than a descriptive reference, cost estimation
+— remain separate, unstarted, future milestones.
 
-- [ ] Typed tool registry, tool identity/version, input/output schemas,
-      required authority/scope, network/credential requirement, side-effect
-      classification, destructive/non-destructive classification,
-      timeout/retry policy, cost estimate, tool availability check,
-      tool-version drift detection, capability != permission
+- [x] v0.3.453 — typed tool/capability identity, human-readable name,
+      category, network/credential/target-scope/destructive classification,
+      version/timeout/retry where already authoritative (absent otherwise),
+      availability *reference* (descriptive text, not a live check),
+      capability != permission (proven structurally, not merely asserted)
+- [ ] Input/output schemas, a policy engine any of this can be checked
+      against, tool-version drift detection, a live availability check,
+      cost estimate
 - [ ] Filesystem/network restrictions, process allowlist, working-directory
       isolation, environment sanitization, resource limits, no shell
       interpolation by default, typed argv, WSL boundary controls,

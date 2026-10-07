@@ -2,10 +2,22 @@
 
 ## Runtime Version
 
-`v0.3.452 (Genesis)`
+`v0.3.453 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.453 adds the first descriptive slice of the Phase 9 Tool/
+Capability Platform: an immutable, typed catalog (`tools.ProductCapabilityCatalog`)
+describing capabilities that already exist -- two local tools projected
+from their real `ToolDescriptor`s, and the three Kali operation/transport
+combinations a real production process adapter actually accepts -- without
+granting anything. `CAPABILITY REGISTERED != CAPABILITY PERMITTED`: the
+catalog has no execute/authorize/grant/consume method, construction and
+lookup touch no process or network, entries are frozen, and no chat/model/
+request path can reach it. No policy engine yet; no existing authority
+chain changed; zero existing files modified; not wired into Bootstrap,
+chat, or the desktop. v0.3.454 is not started.
 
 Version v0.3.452 connects the existing, already-reviewed
 `DNS_RECORD_LOOKUP` operation to real execution over a second transport,
