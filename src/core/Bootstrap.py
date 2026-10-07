@@ -13,6 +13,7 @@ from cognition.TrustedOneShotDeferredExecutionScheduler import (
 )
 from core.Config import Config
 from core.DependencyContainer import DependencyContainer
+from core.Exceptions import ResearchError
 from core.ExclusiveStoreOwnership import claim, claim_directory
 from core.Logger import Logger
 from core.RuntimeOptIn import (
@@ -21,6 +22,7 @@ from core.RuntimeOptIn import (
     failure_memory_enabled,
     hypothesis_engine_enabled,
     kali_operation_execution_enabled,
+    kali_operation_transport_name,
     plan_authorization_enabled,
     reflection_enabled,
     research_execution_persistence_enabled,
@@ -154,6 +156,7 @@ from research.ResearchClaimContradictionProposalProvider import (
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchKaliOperationExecution import ResearchKaliOperationProcessAdapter
+from research.ResearchKaliOperationPreview import ResearchKaliCommandTransport
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSecurityFindingLifecycleIntegrity import (
@@ -164,14 +167,20 @@ from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProv
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from research.ResearchVMwareKaliGuestReadiness import (
     ResearchVMwareKaliGuestReadinessProbe,
+    ResearchVMwareKaliGuestTransportRequirement,
 )
 from research.ResearchVMwareKaliHostReadiness import (
     ResearchVMwareKaliHostReadinessProbe,
+    ResearchVMwareKaliHostRequirement,
 )
 from research.RoutedResearchSourceFetcher import RoutedResearchSourceFetcher
 from research.SemanticComparisonStepOperation import SemanticComparisonStepOperation
 from research.SshVMwareKaliGuestReadinessProbe import SshVMwareKaliGuestReadinessProbe
 from research.VmrunVMwareKaliHostReadinessProbe import VmrunVMwareKaliHostReadinessProbe
+from research.VmwareKaliOperationProcessAdapter import (
+    VmwareKaliOperationProcessAdapter,
+)
+from research.VmwareKaliRuntimeProbe import VmwareKaliRuntimeProbe
 from research.WslKaliOperationProcessAdapter import WslKaliOperationProcessAdapter
 from research.WslKaliRuntimeProbe import WslKaliRuntimeProbe
 from response.ResponseComposer import ResponseComposer
@@ -220,6 +229,7 @@ class Bootstrap:
         kali_operation_process_adapter: (
             ResearchKaliOperationProcessAdapter | None
         ) = None,
+        kali_operation_transport: ResearchKaliCommandTransport | None = None,
         vmware_kali_host_readiness_probe: (
             ResearchVMwareKaliHostReadinessProbe | None
         ) = None,
@@ -258,6 +268,9 @@ class Bootstrap:
         )
         self._kali_runtime_probe = kali_runtime_probe
         self._kali_operation_process_adapter = kali_operation_process_adapter
+        self._kali_operation_transport = (
+            kali_operation_transport or ResearchKaliCommandTransport.WSL_KALI
+        )
         self._vmware_kali_host_readiness_probe = vmware_kali_host_readiness_probe
         self._vmware_kali_guest_readiness_probe = vmware_kali_guest_readiness_probe
         # A caller with its own worker (the desktop) resumes restored missions
@@ -314,6 +327,7 @@ class Bootstrap:
             kali_operation_process_adapter=(
                 Bootstrap._load_process_kali_operation_process_adapter()
             ),
+            kali_operation_transport=Bootstrap._load_process_kali_operation_transport(),
             vmware_kali_host_readiness_probe=(
                 Bootstrap._load_process_vmware_kali_host_readiness_probe()
             ),
@@ -456,20 +470,159 @@ class Bootstrap:
         return os.environ.get("HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED") == "true"
 
     @staticmethod
+    def _load_process_kali_operation_transport() -> ResearchKaliCommandTransport:
+        """Translate the trusted transport selection with a strict allowlist.
+
+        This decides, once, which transport every Kali-operation preview,
+        runtime probe and process adapter in this process will use. Unset
+        keeps today's WSL-only default. Any other value must name exactly
+        one recognized transport; anything else -- unknown, malformed,
+        mixed case, extra whitespace -- fails closed with a loud
+        `ResearchError` rather than silently guessing which transport was
+        meant. This reads only this process's own environment, never
+        request metadata, model output or any other untrusted source.
+        """
+        raw = kali_operation_transport_name(os.environ)
+        if raw is None:
+            return ResearchKaliCommandTransport.WSL_KALI
+        if raw == ResearchKaliCommandTransport.WSL_KALI.value:
+            return ResearchKaliCommandTransport.WSL_KALI
+        if raw == ResearchKaliCommandTransport.VMWARE_KALI.value:
+            return ResearchKaliCommandTransport.VMWARE_KALI
+        raise ResearchError("Kali operation transport configuration is invalid.")
+
+    @staticmethod
+    def _load_process_vmware_kali_host_requirement() -> (
+        ResearchVMwareKaliHostRequirement | None
+    ):
+        """Build the trusted VMware host requirement only by explicit opt-in.
+
+        Reads only code-owned process environment variables -- never
+        request metadata, model output or a user-supplied string. A missing
+        readiness opt-in returns `None` (the capability is simply off); an
+        opt-in that is on with incomplete or malformed configuration fails
+        closed with a loud `ResearchError` rather than silently running with
+        a partial or guessed trusted identity.
+        """
+        if not vmware_kali_host_readiness_enabled(os.environ):
+            return None
+        vmrun_path = os.environ.get("HYPATIA_VMWARE_KALI_VMRUN_PATH")
+        vmx_path = os.environ.get("HYPATIA_VMWARE_KALI_VMX_PATH")
+        vm_identity = os.environ.get("HYPATIA_VMWARE_KALI_VM_IDENTITY")
+        if not vmrun_path or not vmx_path or not vm_identity:
+            raise ResearchError("VMware Kali host configuration is incomplete.")
+        return ResearchVMwareKaliHostRequirement(
+            vmrun_executable_path=vmrun_path,
+            vmx_path=vmx_path,
+            vm_identity=vm_identity,
+        )
+
+    @staticmethod
+    def _load_process_vmware_kali_guest_transport_requirement() -> (
+        ResearchVMwareKaliGuestTransportRequirement | None
+    ):
+        """Build the trusted VMware guest transport only by explicit opt-in.
+
+        Mirrors `_load_process_vmware_kali_host_requirement`'s fail-closed
+        discipline exactly: opt-in off returns `None`; opt-in on with
+        incomplete or malformed configuration raises `ResearchError`. No
+        guest password is ever read, accepted or forwarded here -- this
+        requirement type has no field for one.
+        """
+        if not vmware_kali_guest_readiness_enabled(os.environ):
+            return None
+        ssh_path = os.environ.get("HYPATIA_VMWARE_KALI_SSH_PATH")
+        private_key_path = os.environ.get("HYPATIA_VMWARE_KALI_PRIVATE_KEY_PATH")
+        known_hosts_path = os.environ.get("HYPATIA_VMWARE_KALI_KNOWN_HOSTS_PATH")
+        guest_user = os.environ.get("HYPATIA_VMWARE_KALI_GUEST_USER")
+        guest_host = os.environ.get("HYPATIA_VMWARE_KALI_GUEST_HOST")
+        if (
+            not ssh_path
+            or not private_key_path
+            or not known_hosts_path
+            or not guest_user
+            or not guest_host
+        ):
+            raise ResearchError("VMware Kali guest configuration is incomplete.")
+        guest_port_raw = os.environ.get("HYPATIA_VMWARE_KALI_GUEST_PORT")
+        port_kwargs: dict[str, int] = {}
+        if guest_port_raw:
+            try:
+                port_kwargs["guest_port"] = int(guest_port_raw)
+            except ValueError as error:
+                raise ResearchError(
+                    "VMware Kali guest port configuration is invalid."
+                ) from error
+        return ResearchVMwareKaliGuestTransportRequirement(
+            ssh_executable_path=ssh_path,
+            private_key_path=private_key_path,
+            known_hosts_path=known_hosts_path,
+            guest_user=guest_user,
+            guest_host=guest_host,
+            **port_kwargs,
+        )
+
+    @staticmethod
     def _load_process_kali_runtime_probe() -> ResearchKaliRuntimeProbe | None:
-        """Install the reviewed WSL/Kali readiness probe only by explicit opt-in."""
+        """Install the reviewed Kali readiness probe only by explicit opt-in.
+
+        Which transport's probe is installed is decided entirely by
+        `_load_process_kali_operation_transport`'s own strict translation.
+        The VMware probe is installed only when every one of its own
+        independent opt-ins (execution, host readiness, guest readiness)
+        and its trusted configuration are already present; any one missing
+        leaves this `None`, so DNS execution stays unavailable rather than
+        silently falling back to WSL or to a partially configured VMware
+        path.
+        """
         if not kali_operation_execution_enabled(os.environ):
             return None
-        return WslKaliRuntimeProbe()
+        transport = Bootstrap._load_process_kali_operation_transport()
+        if transport is ResearchKaliCommandTransport.WSL_KALI:
+            return WslKaliRuntimeProbe()
+        host_requirement = Bootstrap._load_process_vmware_kali_host_requirement()
+        guest_transport = (
+            Bootstrap._load_process_vmware_kali_guest_transport_requirement()
+        )
+        if host_requirement is None or guest_transport is None:
+            return None
+        return VmwareKaliRuntimeProbe(
+            host_readiness_probe=VmrunVMwareKaliHostReadinessProbe(),
+            host_requirement=host_requirement,
+            guest_readiness_probe=SshVMwareKaliGuestReadinessProbe(),
+            guest_transport=guest_transport,
+        )
 
     @staticmethod
     def _load_process_kali_operation_process_adapter() -> (
         ResearchKaliOperationProcessAdapter | None
     ):
-        """Install the reviewed WSL/Kali process adapter only by explicit opt-in."""
+        """Install the reviewed Kali process adapter only by explicit opt-in.
+
+        Mirrors `_load_process_kali_runtime_probe`'s transport selection and
+        fail-closed discipline exactly, so the installed probe and the
+        installed adapter always agree on which transport (if any) is
+        live. The VMware adapter itself only ever needs guest transport
+        configuration, never host configuration -- it still additionally
+        requires `vmware_kali_host_readiness_enabled` so that no VMware
+        execution machinery of any kind appears unless *both* independent
+        VMware readiness opt-ins (host and guest) are on, matching the
+        runtime probe's own requirement exactly rather than leaving an
+        adapter installed with no matching probe to pair it with.
+        """
         if not kali_operation_execution_enabled(os.environ):
             return None
-        return WslKaliOperationProcessAdapter()
+        transport = Bootstrap._load_process_kali_operation_transport()
+        if transport is ResearchKaliCommandTransport.WSL_KALI:
+            return WslKaliOperationProcessAdapter()
+        if not vmware_kali_host_readiness_enabled(os.environ):
+            return None
+        guest_transport = (
+            Bootstrap._load_process_vmware_kali_guest_transport_requirement()
+        )
+        if guest_transport is None:
+            return None
+        return VmwareKaliOperationProcessAdapter(guest_transport=guest_transport)
 
     @staticmethod
     def _load_process_vmware_kali_host_readiness_probe() -> (
@@ -794,6 +947,7 @@ class Bootstrap:
             kali_operation_authorization_store=kali_operation_authorization_store,
             kali_runtime_probe=self._kali_runtime_probe,
             kali_operation_process_adapter=self._kali_operation_process_adapter,
+            kali_operation_transport=self._kali_operation_transport,
             program_scope_revision_store=program_scope_revision_store,
             vulnerability_graph_store=vulnerability_graph_store,
             asset_inventory_store=asset_inventory_store,

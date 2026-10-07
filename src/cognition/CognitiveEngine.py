@@ -251,7 +251,10 @@ from research.ResearchKaliOperationAuthorizationStore import (
 from research.ResearchKaliOperationExecution import (
     ResearchKaliOperationProcessAdapter,
 )
-from research.ResearchKaliOperationPreview import ResearchKaliOperationKind
+from research.ResearchKaliOperationPreview import (
+    ResearchKaliCommandTransport,
+    ResearchKaliOperationKind,
+)
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
 from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
@@ -389,6 +392,7 @@ class CognitiveEngine:
         kali_operation_process_adapter: (
             ResearchKaliOperationProcessAdapter | None
         ) = None,
+        kali_operation_transport: ResearchKaliCommandTransport | None = None,
         program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         asset_inventory_store: ResearchAssetInventoryStore | None = None,
@@ -892,15 +896,22 @@ class CognitiveEngine:
         self._kali_operation_run_service: KaliOperationRunApplicationService | None = (
             None
         )
+        resolved_kali_operation_transport = (
+            kali_operation_transport
+            if kali_operation_transport is not None
+            else ResearchKaliCommandTransport.WSL_KALI
+        )
         self._kali_runtime_readiness_service = KaliRuntimeReadinessApplicationService(
             response_composer,
             probe=kali_runtime_probe,
+            transport=resolved_kali_operation_transport,
         )
         if program_scope_revision_store is not None:
             self._kali_operation_preview_service = (
                 KaliOperationPreviewApplicationService(
                     response_composer,
                     program_scope_revision_store,
+                    transport=resolved_kali_operation_transport,
                 )
             )
             self._kali_operation_authorization_service = (

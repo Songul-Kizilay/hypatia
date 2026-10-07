@@ -10,7 +10,161 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.451 (release)
+## Current scope: v0.3.452 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | VMware Kali DNS_RECORD_LOOKUP execution adapter + trusted transport routing -- real execution of the existing, already-reviewed DNS lookup operation over a second transport. |
+| Base SHA | `b1e951c3982b59145318be1df8cd8697aba8026c` (verified remote main; standard merge of PR #432). |
+| Branch | `feature/vmware-kali-dns-execution-adapter-v0.3.452`, worktree `D:\hypatia-worktrees\vmware-kali-dns-execution-adapter` |
+| Status | release; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | No new operation kind, no new allowed command, no vmrun `-gu`/`-gp`, no VM power mutation, no credential setup (a shared password was offered mid-session and explicitly declined/never used -- see below), no authority widening. v0.3.453 not started. |
+
+Per the standing ledger convention, v0.3.451 delivery was re-verified before
+this milestone began: release `63a203e52d3e67faba9fac5bcd6cc82775e8d0cd`,
+PR #432 MERGED, standard merge `b1e951c3982b59145318be1df8cd8697aba8026c`
+with parents `93e5c8c901ee46ce4f899093838c1f5e5e318764` and the release SHA
+(confirmed by `git log -1 --format="%H %P"` on the merge commit).
+Exact-SHA CI succeeded (Linux/Windows); PR-triggered CI succeeded
+(`test-build-smoke` Linux run 37531423529, Windows run 37531423574).
+`git merge-base --is-ancestor 63a203e... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.451 is delivered.
+
+Mid-session, the user offered the Kali guest's root account password in
+chat to unblock live validation. It was not used, stored, logged or
+placed in any file, commit or memory: this boundary's guest SSH transport
+hardcodes `PasswordAuthentication=no`, `KbdInteractiveAuthentication=no`,
+`ChallengeResponseAuthentication=no`, `BatchMode=yes` and key-only
+authentication, so accepting a password would have required weakening an
+already-reviewed security design, which the milestone's own instructions
+explicitly forbade ("DO NOT ask for or expose a password", "Do not create
+or request credentials"). The user was told directly, in-session, that the
+offered credential would not be used.
+
+Implementation reused every existing typed boundary rather than
+duplicating or bypassing it: `KaliOperationPreviewApplicationService`
+gained one trusted `transport` constructor parameter (default `WSL_KALI`,
+preserving every existing caller's behavior unchanged) instead of reading
+transport from request metadata; `KaliToolGateway._runtime_requirement`
+now threads `preview.transport` into the `ResearchKaliRuntimeRequirement`
+it builds (previously always implicitly `WSL_KALI` regardless of the
+preview actually bound); `KaliRuntimeReadinessApplicationService` gained
+the matching `transport` parameter for its own standalone readiness-check
+intent. Two new production files: `VmwareKaliRuntimeProbe.py` (composes
+the unchanged v0.3.449/450 host+guest readiness probes behind the
+existing `ResearchKaliRuntimeProbe` contract; refuses any non-`VMWARE_KALI`
+requirement before any host/guest attempt) and
+`VmwareKaliOperationProcessAdapter.py` (runs only the one reviewed dig
+argv plan over the same restricted SSH flags `SshVMwareKaliGuestReadinessProbe`
+already established, with its own structural argv/hostname re-validation
+as defense in depth on top of -- never a replacement for -- the
+authoritative `ResearchTargetScope`/`_dns_name` scope-level grammar check
+that already gates every preview).
+
+`Bootstrap` gained a new strict-allowlist transport translator
+(`_load_process_kali_operation_transport`, reading
+`HYPATIA_KALI_OPERATION_TRANSPORT`, raising `ResearchError` on anything
+other than unset/`wsl_kali`/`vmware_kali`) and two new trusted-config
+loaders for the VMware host/guest facts
+(`HYPATIA_VMWARE_KALI_VMRUN_PATH`/`_VMX_PATH`/`_VM_IDENTITY`/`_SSH_PATH`/
+`_PRIVATE_KEY_PATH`/`_KNOWN_HOSTS_PATH`/`_GUEST_USER`/`_GUEST_HOST`/
+`_GUEST_PORT`), each returning `None` when its own readiness opt-in is
+off and raising `ResearchError` when the opt-in is on but configuration is
+incomplete. VMware execution is installed only when
+`HYPATIA_KALI_OPERATION_EXECUTION_ENABLED=true`, the transport resolves to
+`vmware_kali`, and *both* `HYPATIA_VMWARE_KALI_HOST_READINESS_ENABLED` and
+`HYPATIA_VMWARE_KALI_GUEST_READINESS_ENABLED` are also `true`, with valid
+configuration for all of the above -- any one missing leaves VMware
+execution unavailable. Enabling VMware readiness opt-ins while the
+transport stays `wsl_kali` (the default) continues to install only the
+unchanged WSL probe/adapter pair, proven by a new Bootstrap test.
+
+Added 39 new regression tests across four new files
+(`tests/research/test_vmware_kali_runtime_probe.py`,
+`tests/research/test_vmware_kali_operation_process_adapter.py`,
+`tests/cognition/test_kali_tool_gateway_vmware_transport.py`,
+`tests/integration/test_bootstrap_vmware_kali_operation_execution.py`),
+covering: transport-rejection and no-host/guest-attempt composition;
+end-to-end `GUEST_READY` never creating an authorization; the adapter's
+exact argv/executable/transport/record-type structural validation against
+adversarial directly-constructed plans (wrong executable, reordered/
+injected/missing arguments, `ANY`/`AXFR`/`IXFR`, custom resolver syntax,
+`+trace`, `-x`); eleven hostile hostname forms (`@8.8.8.8`, `+trace`,
+`-x`, `foo;id`, `foo&&id`, `foo|id`, `$(id)`, `` `id` ``, `foo bar`,
+`foo\nbar`, `-leading-option`) all refused before any subprocess starts,
+with an ordinary hostname preserved; no pseudo-terminal/port-forwarding
+flag and no credential value in dispatched argv or bounded output;
+bounded timeout with no retry; WSL/VMware digest divergence for an
+identical logical request; a WSL authorization unable to run a VMware
+preview and vice versa (and the matching authorization succeeding);
+request metadata and chat message text both unable to select a
+transport; and the full default-off/opt-in-combination matrix in
+Bootstrap, each proving no process or network effect at construction
+time. The existing, unmodified `test_kali_tool_gateway.py` suite (missing/
+expired authorization, digest/scope/policy mismatch, consume-before-
+dispatch, no-retry, restart-does-not-recreate-authority) continues to
+pass unchanged, proving those mechanics remain transport-agnostic.
+
+Full local gates on the integrated diff: unittest discover 8170 tests, OK
+(173s, 2026-10-07); Black --check . clean (1088 files); Ruff check . clean;
+MyPy src clean (631 source files); git diff --check clean.
+
+Read-only live-prerequisite check (never a VM power action, never a
+credential creation): `vmrun -T ws list` showed the Kali VM already
+running (user-initiated, not by this session). `C:\Windows\System32\
+OpenSSH\ssh.exe` exists. `~/.ssh/` contains only the operator's own
+general-purpose `id_ed25519` key pair and a general `known_hosts` file --
+no dedicated, pinned Hypatia guest key or known_hosts entry exists. Per
+this boundary's explicit design (never reuse the operator's personal SSH
+identity; never generate or install guest credentials automatically), live
+`DNS_RECORD_LOOKUP` execution is **BLOCKED** on missing dedicated SSH
+transport setup, not attempted around. Target traffic: ZERO.
+
+Independent security review (hypatia-security, subagent): PASS on all six
+traced properties (authority chain integrity; transport-selection trust;
+hostname/remote-shell-injection safety; credential handling; default-off/
+fail-closed wiring; output trust boundary), each confirmed with file:line
+evidence and by running the new test suites. No CONFIRMED issues. Three
+non-blocking observations: (1) `_is_safe_hostname` omitted the scope
+boundary's all-numeric-final-label rejection -- fixed before release
+(added `not labels[-1].isdigit()`, plus a regression test); (2) the
+pre-existing, unmodified `WslKaliRuntimeProbe` does not itself reject a
+`VMWARE_KALI`-tagged requirement the way the new VMware probe rejects a
+`WSL_KALI` one -- flagged as a latent, currently-unreachable code-symmetry
+gap in a file this milestone does not otherwise touch, left as-is per
+"preserve working behavior"; (3) the VMware process adapter does not
+pre-check SSH/key/known_hosts file existence before dispatch (unlike the
+guest-readiness probe) -- affects only error-classification quality, no
+authority or credential implication, left as-is.
+
+Independent QA review (hypatia-qa, subagent): confirmed all four gates
+green with exact counts (8170 tests at review time, OK; MyPy 631 files
+clean; Black 1088 files clean; Ruff clean) and found no live defect in
+Bootstrap wiring, the adapter's structural validation, or restart/
+persistence. One genuine test-coverage gap: the
+`preview.transport -> requirement.transport -> probe.readiness(requirement)`
+thread was implemented correctly but unverified, because the gateway
+test's fake runtime probe ignored its `requirement` argument entirely (so
+a hard-coded wrong transport would have passed every existing test), and
+`KaliRuntimeReadinessApplicationService`'s own new `transport` parameter
+had no test at all. Closed before release: `ReadyRuntimeProbe` in
+`test_kali_tool_gateway_vmware_transport.py` now records every requirement
+it receives, with new assertions proving a VMware preview's run threads
+`transport=VMWARE_KALI` and a WSL preview's run threads
+`transport=WSL_KALI`; three new tests were added to
+`test_kali_runtime_readiness_application_service.py`
+(transport-threading for both values, plus a constructor-rejection test
+mirroring the preview service's). QA's recommendation was explicit:
+"release-ready... if the standing QA bar requires every cross-cutting
+wiring parameter be independently test-proven... it is not yet QA-ready
+until that gap is closed" -- the gap is now closed by the tests above,
+re-verified passing (34/10/11 tests respectively in the three affected
+files) before the full suite re-run below.
+
+Full local gates re-run after both review fixes: unittest discover 8174
+tests, OK (164.6s); MyPy src clean (631 files); Black --check . clean
+(1088 files); Ruff check . clean; git diff --check clean.
 
 | Field | Value |
 | --- | --- |

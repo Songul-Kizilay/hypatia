@@ -18,6 +18,7 @@ from cognition.KaliRuntimeReadinessApplicationService import (
     KaliRuntimeReadinessApplicationService,
 )
 from core.Exceptions import ResearchError
+from research.ResearchKaliOperationPreview import ResearchKaliCommandTransport
 from research.ResearchKaliRuntimeEnvironment import (
     ResearchKaliRuntimeReadiness,
     ResearchKaliRuntimeReadinessState,
@@ -42,6 +43,25 @@ class FakeReadyKaliRuntimeProbe:
             reason="Reviewed fake runtime facts match.",
             observed_distribution=requirement.distribution,
             observed_executable_path=requirement.executable_path,
+            observed_version=f"{requirement.version_prefix}18.36",
+        )
+
+
+class RecordingRuntimeProbe:
+    """Records the exact requirement passed, to prove transport threading."""
+
+    def __init__(self) -> None:
+        self.calls: list[ResearchKaliRuntimeRequirement] = []
+
+    def readiness(
+        self,
+        requirement: ResearchKaliRuntimeRequirement,
+    ) -> ResearchKaliRuntimeReadiness:
+        self.calls.append(requirement)
+        return ResearchKaliRuntimeReadiness(
+            requirement=requirement,
+            state=ResearchKaliRuntimeReadinessState.READY,
+            reason="ready",
             observed_version=f"{requirement.version_prefix}18.36",
         )
 
@@ -282,6 +302,40 @@ class KaliRuntimeReadinessApplicationServiceTests(unittest.TestCase):
             with self.subTest(kwargs=kwargs):
                 with self.assertRaises(ResearchError):
                     WslKaliRuntimeProbe(**kwargs)
+
+    def test_configured_transport_is_threaded_into_the_requirement(self) -> None:
+        probe = RecordingRuntimeProbe()
+        service = KaliRuntimeReadinessApplicationService(
+            ResponseComposer(),
+            probe=probe,
+            transport=ResearchKaliCommandTransport.VMWARE_KALI,
+        )
+
+        response = service.process_readiness(self.request(operator_opt_in=True))
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(len(probe.calls), 1)
+        self.assertIs(
+            probe.calls[0].transport, ResearchKaliCommandTransport.VMWARE_KALI
+        )
+
+    def test_default_transport_is_wsl_kali(self) -> None:
+        probe = RecordingRuntimeProbe()
+        service = KaliRuntimeReadinessApplicationService(
+            ResponseComposer(), probe=probe
+        )
+
+        service.process_readiness(self.request(operator_opt_in=True))
+
+        self.assertEqual(len(probe.calls), 1)
+        self.assertIs(probe.calls[0].transport, ResearchKaliCommandTransport.WSL_KALI)
+
+    def test_constructor_rejects_a_non_enum_transport(self) -> None:
+        with self.assertRaises(ResearchError):
+            KaliRuntimeReadinessApplicationService(
+                ResponseComposer(),
+                transport="vmware_kali",  # type: ignore[arg-type]
+            )
 
 
 if __name__ == "__main__":

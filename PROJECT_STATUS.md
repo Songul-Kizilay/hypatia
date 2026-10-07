@@ -2,10 +2,30 @@
 
 ## Runtime Version
 
-`v0.3.451 (Genesis)`
+`v0.3.452 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.452 connects the existing, already-reviewed
+`DNS_RECORD_LOOKUP` operation to real execution over a second transport,
+`ResearchKaliCommandTransport.VMWARE_KALI`, through the same single
+`KaliToolGateway` dispatch path the existing WSL transport already uses --
+no new operation kind, no second authority path. `VmwareKaliRuntimeProbe`
+composes the unchanged v0.3.449/450 VMware host- and guest-readiness
+checks; `VmwareKaliOperationProcessAdapter` runs only the one reviewed dig
+lookup over the same restricted, key-only, host-key-pinned SSH flags the
+guest probe already used, never a `vmrun` guest password. Every argv field
+is structurally re-validated before any subprocess starts. Transport is
+trusted Bootstrap configuration only (a strict allowlist that fails closed
+on anything unrecognized), bound into the existing operation digest, so an
+authorization for one transport can never run the other. Production
+bootstrap installs VMware execution only when execution, host-readiness,
+guest-readiness and complete VMware configuration are all explicitly
+opted in; WSL behavior is unchanged. On this machine the Kali VM was
+confirmed running, but no dedicated Hypatia guest SSH key exists yet, so
+no live DNS lookup occurred this milestone -- target traffic ZERO,
+reported as a blocker. v0.3.453+ is not started.
 
 Version v0.3.451 hardens only VMware SSH guest-readiness diagnostics:
 exit 126 reports `TOOL_UNEXECUTABLE`, 127 reports `TOOL_MISSING`, and
