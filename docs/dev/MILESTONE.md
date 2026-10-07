@@ -10,7 +10,49 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.450 (release)
+## Current scope: v0.3.451 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | VMware SSH guest-readiness failure-classification hardening; diagnostic correctness only. |
+| Base SHA | `93e5c8c901ee46ce4f899093838c1f5e5e318764` (verified remote main; standard merge of PR #431). |
+| Branch | `feature/vmware-kali-guest-classification-hardening-v0.3.451`, worktree `D:\hypatia-worktrees\vmware-kali-guest-classification-hardening` |
+| Status | release; independent QA/security review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | Target traffic ZERO; no live guest probe, VM power mutation, credential setup, KaliToolGateway/chat execution changes or authority widening. v0.3.452 not started. |
+
+Inherited two uncommitted source changes from Claude Code's interrupted
+session. The user explicitly authorized stopping only its verified PID
+9612; after termination, process/worktree checks found no competing writer
+for this worktree. Other processes and unrelated worktree changes were
+left untouched.
+
+Exit 126 now means `TOOL_UNEXECUTABLE`, 127 means `TOOL_MISSING`, ahead
+of text fallbacks. Authentication classification requires exit 255 plus
+a complete OpenSSH stderr rejection line for the configured user/host,
+with a complete `publickey` method token. Generic permission errors and
+non-255 failures cannot imply authentication failure. Existing host-key
+and connection failure distinctions remain covered. All diagnostic tests
+mock subprocess execution and preserve fail-closed/no-authority results.
+
+Independent read-only QA/security-boundary review: PASS; independently
+ran the focused module (34 tests, OK). Full local gates: unittest discover
+8131 tests, OK (skipped=3), 226.397s, exit 0; Black --check . clean
+(1082 files); Ruff check . clean; MyPy src clean (629 source files);
+git diff --check clean. The test process emitted unclosed-file
+ResourceWarnings after its successful result; no test failure occurred.
+
+Per the standing ledger convention, v0.3.450 delivery was re-verified:
+release `72f2861b425f735452036983e6161420234681d1`, PR #431 MERGED,
+standard merge `93e5c8c901ee46ce4f899093838c1f5e5e318764` with parents
+`7178c3e66c1eac25ef031e7136a43e5e4853061a` and the release SHA.
+Exact-SHA dispatch CI succeeded: Linux 37526728155, Windows 37526732930;
+PR-triggered CI succeeded: Linux 37527355131, Windows 37527355133.
+The release is the second parent of verified remote main; author identity
+is Songul Kizilay's existing GitHub noreply identity. v0.3.450 is delivered.
+v0.3.451 delivery SHA/CI will be recorded in the next milestone's first
+commit, per ledger convention; this does not authorize starting that work.
+
+## Previous scope: v0.3.450 (release record before integration)
 
 | Field | Value |
 | --- | --- |
