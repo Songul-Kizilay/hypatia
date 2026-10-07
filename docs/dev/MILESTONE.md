@@ -10,7 +10,139 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.453 (release)
+## Current scope: v0.3.454 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Pure capability version-drift assessment -- second descriptive Phase 9 slice. No live version discovery, no policy engine, no automatic remediation. |
+| Base SHA | `4aaddd9fe00e594d240514a93564ca201b46bcea` (verified remote main; standard merge of PR #434). |
+| Branch | `feature/capability-version-drift-assessment-v0.3.454`, worktree `D:\hypatia-worktrees\capability-version-drift` |
+| Status | release; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | VERSION COMPATIBILITY != EXECUTION AUTHORITY. No process/network/VM/SSH/credential effect at construction or assessment. No live discovery, no SemVer invention, no policy ALLOW/DENY/REQUIRE_APPROVAL, no remediation. Target traffic ZERO; SSH attempts ZERO; VMware/WSL/Kali guest execution ZERO. v0.3.455 not started. |
+
+Per the standing ledger convention, v0.3.453 delivery was re-verified before
+this milestone began: release `6d28870e61dc02ae31c977ddbeb07ada43d12ea1`,
+PR #434 MERGED, standard merge `4aaddd9fe00e594d240514a93564ca201b46bcea`
+with parents `e140a59447cd8d8fcee4d7547e84ec6a59fda468` and the release SHA
+(confirmed by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor 6d28870... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.453 is delivered.
+
+Repository-grounded audit before implementation found that the *only*
+version-comparison semantic anywhere in the repository is plain substring
+containment of a trusted, code-owned expected prefix inside observed text
+(`WslKaliRuntimeProbe.readiness`: `requirement.version_prefix not in
+output`; `SshVMwareKaliGuestReadinessProbe.readiness`:
+`EXPECTED_GUEST_DIG_VERSION_PREFIX in stdout`) -- no SemVer parser, no
+`>=`/`<=` comparator and no package-manager equivalence exists anywhere.
+`ProductCapabilityRecord.version` (v0.3.453) already holds exactly this
+kind of authoritative expected-prefix fact (`"DiG 9."`/`"curl "` for the
+two Kali operation kinds; `None` for every local tool, which has no
+authoritative version rule at all) -- it required no change and no
+evolution to support drift assessment; this milestone reuses it exactly
+as it already exists, adding nothing to `ProductCapabilityRecord` itself.
+`ToolDescriptor` was confirmed to carry no version semantics of any kind.
+
+Delivered: two new files under `src/tools/` --
+`ProductCapabilityVersionObservation.py` (a frozen, bounded, untrusted
+observation: `capability_identity`, `observed_version_text` -- reusing
+the existing `MAX_KALI_OPERATION_OUTPUT_LINE_CHARACTERS` bound rather than
+inventing a new one -- and an optional `provenance_reference`; empty
+observed text is a legitimate, representable fact, not a construction
+error) and `ProductCapabilityVersionAssessment.py` (the closed
+`ProductCapabilityVersionAssessmentStatus` enum --
+`MATCH`/`DRIFT`/`UNKNOWN`/`NOT_APPLICABLE` -- the frozen
+`ProductCapabilityVersionAssessment` record, and the pure function
+`assess_capability_version(record, observation)`). The function requires
+`record.identity == observation.capability_identity`, raising otherwise;
+when `record.version is None` it returns `NOT_APPLICABLE` with no
+fabricated reference; when the observation is empty/whitespace it returns
+`UNKNOWN`; otherwise it returns `MATCH`/`DRIFT` by the exact substring
+check the existing probes already use. `reason` is always one of four
+fixed, code-owned sentences -- never text built from the untrusted
+observed value. No existing file was modified; this milestone is a pure
+addition. Not wired into `Bootstrap`, `ToolExecutionService`,
+`KaliToolGateway`, `CognitiveEngine`, chat, or the desktop.
+
+36 tests (`tests/tools/test_product_capability_version_assessment.py`)
+cover: genuine `MATCH`/`DRIFT`/`NOT_APPLICABLE`/`UNKNOWN` outcomes against
+the real `DNS_RECORD_LOOKUP`/`WSL_KALI` and `CLOCK_READ` records; an
+unregistered capability identity remaining absent from the catalog;
+`assess_capability_version` rejecting a non-record, non-observation, or
+mismatched-identity call; both new types being frozen
+(`dataclasses.FrozenInstanceError`); assessing a record never changes
+what the catalog describes or the record's own `version` field; ten
+adversarial observed-text strings (`; id`, `&& whoami`, `$(id)`,
+backtick-quoted commands, a fake `--upgrade` option, literal `ALLOW`/
+`REQUIRE_APPROVAL` text, a fake system instruction, and a near-maximum-
+length string) all remaining inert data that never changes the expected-
+version reference and never appears inside the fixed `reason` text;
+neither new type exposing any execute/invoke/run/dispatch/authorize/
+grant/consume/register/mutate/repair/install/upgrade/downgrade method
+(structural `hasattr` check); zero `subprocess`/`socket` calls at
+construction or assessment, including over every adversarial string;
+neither new module importing `subprocess`, `socket`, or anything from
+`brain`/`cognition`/`llm`/`response`; oversized observed text (501
+characters) rejected while exactly 500 is accepted; control characters
+rejected; non-string input rejected; `status=True` and `status="not_applicable"`
+both rejected rather than coerced to the real enum (the classic
+`bool`-is-an-`int`-subclass trap has no analogue here since `status` is
+checked by `isinstance` against the enum type directly, but the
+string-vs-enum confusion is now explicitly tested); repeated assessment
+of identical input returning an equal result every time; and that the
+result carries no authorization-bearing field. The existing, unmodified
+`tests/tools/test_product_capability_catalog.py` (524 tests across
+`tests/tools/` total, including this milestone's own file) and
+`tests/cognition/test_kali_tool_gateway*.py` (23 tests) suites continue to
+pass unchanged.
+
+Independent security review (hypatia-security, subagent): PASS on all six
+traced properties (no new authority path -- zero callers of the new
+types exist anywhere outside their own tests, confirmed by grep; untrusted
+observation cannot become authority; `reason` never built from the
+observation; the `MATCH`/`DRIFT` comparison is exactly the same
+case-sensitive substring-containment direction `WslKaliRuntimeProbe`
+already uses, not a weaker rule; `NOT_APPLICABLE` cannot carry a
+fabricated reference, enforced on the type itself; zero process/network
+side effects, re-verified by independently running the test suite). No
+CONFIRMED issues, no PLAUSIBLE concerns. Separately noted, as context
+rather than a finding: `SshVMwareKaliGuestReadinessProbe` casefolds its
+own comparison while `WslKaliRuntimeProbe` does not -- a narrower,
+pre-existing inconsistency between those two unmodified probes, not
+introduced by this milestone; `assess_capability_version` faithfully
+mirrors the stricter (case-sensitive) of the two.
+
+Independent QA review (hypatia-qa, subagent): confirmed all gates green
+and found no production defect, but found two real test-quality gaps.
+First: `ProductCapabilityVersionAssessment.__post_init__` enforced the
+`NOT_APPLICABLE`/`MATCH`/`DRIFT` cross-field invariants but had no
+equivalent rule for `UNKNOWN`, so the type itself permitted constructing
+`status=UNKNOWN, expected_version_reference=None` directly even though
+`assess_capability_version` never produces that combination (`UNKNOWN` is
+only reached after `record.version is None` has already been diverted to
+`NOT_APPLICABLE`, so a real `UNKNOWN` always carries the real
+`record.version`) -- a gap between what the function guarantees and what
+the type enforced. Second: no test exercised a case-mismatched observation
+(for example real lowercase shell output like `"dig 9.18.36"` against the
+expected `"DiG 9."`), so the deliberate case-sensitivity decision the
+module's own docstring describes was documented but unproven. Closed
+before release: `__post_init__` now also requires `UNKNOWN` to carry a
+non-`None` expected-version reference (matching the function's actual
+behavior exactly), with a new construction-rejection test; a new
+case-mismatch regression test proving `DRIFT`, not `MATCH`, for lowercase
+observed text; and two new tests proving the `UNKNOWN` and
+`NOT_APPLICABLE` reason texts are also fixed, code-owned sentences (the
+original reason-echo test only ever reached `MATCH`/`DRIFT`, since every
+adversarial string it used was non-empty). Re-verified passing (36/36)
+before the full suite re-run below.
+
+Full local gates re-run after the QA fix: unittest discover 8246 tests, OK
+(166.2s); Black --check . clean (1095 files); Ruff check . clean; MyPy src
+clean (636 source files); git diff --check clean. `git status` confirms
+zero existing files modified -- three new files only.
+
+## Previous scope: v0.3.453 (release record before integration)
 
 | Field | Value |
 | --- | --- |

@@ -741,18 +741,45 @@ identities both fail deterministically, and none of the three new modules
 import anything that could carry chat, model, or request content. Not yet
 wired into Bootstrap, `CognitiveEngine`, chat, or the desktop — this
 milestone gave the registry something to describe, deliberately not yet
-a caller to grant anything to. The remaining Phase 9 items — a policy
-engine, input/output schemas, tool-version drift detection, a live
-availability *check* rather than a descriptive reference, cost estimation
-— remain separate, unstarted, future milestones.
+a caller to grant anything to. v0.3.454 added the second bounded slice —
+pure capability version-drift *assessment*, still not live version
+*discovery*: `tools.assess_capability_version(record, observation)`
+compares an already-supplied, bounded, untrusted
+`ProductCapabilityVersionObservation` against the same
+`ProductCapabilityRecord.version` field v0.3.453 already carried, which
+required no change at all — it already held exactly the authoritative
+expected-prefix fact (`"DiG 9."`/`"curl "`, or `None` where no rule
+exists) this milestone needed. The comparison reuses the one
+version-check semantic that already existed in the repository (plain
+substring containment, as `WslKaliRuntimeProbe`/
+`SshVMwareKaliGuestReadinessProbe` already perform) rather than inventing
+SemVer `>=`/`<=` comparison the codebase has never had. `VERSION
+COMPATIBILITY != EXECUTION AUTHORITY`: the function is pure (no process,
+network, or registry-mutation path of any kind), a capability with no
+version rule reports `NOT_APPLICABLE` rather than fabricating one, and
+`reason` is always one of four fixed, code-owned sentences, never text
+built from the untrusted observation — proven against ten adversarial
+observed-version strings (shell metacharacters, a fake `--upgrade`
+option, literal `ALLOW`/`REQUIRE_APPROVAL` text, a fake system
+instruction) that all remain inert data. Not wired into `Bootstrap`,
+`ToolExecutionService`, `KaliToolGateway`, chat, or the desktop. The
+remaining Phase 9 items — a policy engine, input/output schemas, live
+version *discovery* (actually running a tool to find its version, out of
+scope for both v0.3.453 and v0.3.454), a live availability *check* rather
+than a descriptive reference, cost estimation — remain separate,
+unstarted, future milestones.
 
 - [x] v0.3.453 — typed tool/capability identity, human-readable name,
       category, network/credential/target-scope/destructive classification,
       version/timeout/retry where already authoritative (absent otherwise),
       availability *reference* (descriptive text, not a live check),
       capability != permission (proven structurally, not merely asserted)
+- [x] v0.3.454 — pure version-drift *assessment* against an already-supplied
+      observation (`MATCH`/`DRIFT`/`UNKNOWN`/`NOT_APPLICABLE`), reusing the
+      existing prefix-containment semantic; version compatibility !=
+      execution authority (proven structurally); no live discovery
 - [ ] Input/output schemas, a policy engine any of this can be checked
-      against, tool-version drift detection, a live availability check,
+      against, live tool-version *discovery*, a live availability check,
       cost estimate
 - [ ] Filesystem/network restrictions, process allowlist, working-directory
       isolation, environment sanitization, resource limits, no shell
