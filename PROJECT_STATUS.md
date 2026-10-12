@@ -2,10 +2,27 @@
 
 ## Runtime Version
 
-`v0.3.454 (Genesis)`
+`v0.3.455 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.455 adds a descriptive typed input/output schema foundation: an
+immutable vocabulary (`tools.ProductCapabilitySchema`,
+`tools.ProductCapabilitySchemaCatalog`, `tools.ProductCapabilitySchemaDefaults`)
+describing the logical input/output shape of capabilities that already
+exist -- `CLOCK_READ`, `TEXT_STATISTICS`, `FILESYSTEM_LIST`,
+`FILESYSTEM_METADATA`, `FILESYSTEM_READ`, and the three production-real
+Kali operation/transport combinations already in the catalog. `SCHEMA
+KNOWN != INPUT AUTHORIZED`, `SCHEMA VALID != EXECUTION AUTHORIZED`, `OUTPUT
+SHAPE KNOWN != OUTPUT TRUSTED`: construction and lookup touch no process
+or network, no existing execution path (`ToolExecutionService`,
+`KaliToolGateway`) depends on this module, and a capability with no
+sufficiently grounded schema is simply absent, never fabricated. No new
+executable capability, no new Kali operation, no policy engine, no live
+availability/version-discovery check. Pure addition; zero existing files
+modified; not wired into Bootstrap, chat, or the desktop. v0.3.456 is not
+started.
 
 Version v0.3.454 adds pure capability version-drift assessment: a
 deterministic, immutable comparison of an already-supplied, bounded,

@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.455] - 2026-10-12
+
+### Added
+
+- A descriptive typed input/output schema foundation
+  (`tools.ProductCapabilitySchema`, `tools.ProductCapabilitySchemaCatalog`,
+  `tools.ProductCapabilitySchemaDefaults`) -- the third descriptive Phase 9
+  slice. Describes the logical input/output shape of capabilities that
+  already exist: `CLOCK_READ`, `TEXT_STATISTICS`, `FILESYSTEM_LIST`,
+  `FILESYSTEM_METADATA`, and `FILESYSTEM_READ`, plus the three
+  production-real Kali operation/transport combinations the existing
+  catalog already enumerates (`DNS_RECORD_LOOKUP` over `WSL_KALI` and
+  `VMWARE_KALI`; `HTTPS_HEADER_LOOKUP` over `WSL_KALI` only).
+- A small, closed value-kind vocabulary (`FREE_TEXT`/`WHOLE_NUMBER_TEXT`/
+  `BOOLEAN_TEXT`/`CLOSED_ENUM_TEXT`) that never rewrites a bounded-string
+  boundary as though a native typed value already crossed it; an explicit
+  `ProductCapabilitySchemaCompleteness` (`COMPLETE`/`PARTIAL`/`UNDECLARED`)
+  so a schema never pretends more precision than current code can prove;
+  and a `ProductCapabilityOutputChannel` distinguishing ordinary labelled
+  result values from `FILESYSTEM_READ`'s separate typed content channel
+  and from a reviewed Kali operation's plain, unlabelled, ordered stdout
+  lines.
+- `SCHEMA KNOWN != INPUT AUTHORIZED`, `SCHEMA VALID != EXECUTION
+  AUTHORIZED`, `OUTPUT SHAPE KNOWN != OUTPUT TRUSTED`: schema construction
+  and lookup touch no process or network, no existing execution path
+  (`ToolExecutionService`, `KaliToolGateway`) depends on this module, and a
+  capability without a sufficiently grounded schema (for example
+  `RESEARCH_STATE_SUMMARY`/`KNOWLEDGE_DOCUMENT_LIST`, which have no
+  concrete `Tool` implementation today) is simply absent, never fabricated.
+
+### Scope
+
+- No new executable capability, no new Kali operation, no new execution
+  path, no change to `ToolExecutionService` or `KaliToolGateway` behavior,
+  no policy engine, no live availability check, no live version discovery.
+  Pure addition; zero existing files modified. Not wired into Bootstrap,
+  `CognitiveEngine`, chat, or the desktop. Target traffic ZERO; SSH
+  attempts ZERO; VMware/WSL/Kali guest execution ZERO; DNS/HTTP target
+  operations ZERO; credential changes ZERO; VM power mutation ZERO.
+  v0.3.456 is not started.
+
 ## [0.3.454] - 2026-10-07
 
 ### Added
