@@ -2,6 +2,56 @@
 
 All notable project changes are recorded here.
 
+## [0.3.457] - 2026-10-12
+
+### Added
+
+- Real replay-protection semantics (Guest-Agent roadmap step 2) over the
+  already-existing inert `nonce` field on `GuestAgentRequest`
+  (`research.GuestAgentReplayNonceRecord`,
+  `research.GuestAgentReplayNonceStore`,
+  `research.JsonFileGuestAgentReplayNonceStore`,
+  `research.GuestAgentReplayProtector`). `GuestAgentReplayProtector.consume_once(request)`
+  durably spends one request's replay identity -- the
+  `(protocol_version, operation_digest, nonce)` triple, not `nonce` alone,
+  so two unrelated requests cannot accidentally alias merely by reusing
+  nonce text -- at most once, atomically (consume-before-effect: there is
+  no separate `is_consumed()`/`mark_consumed()` pair).
+- Durable, fail-closed persistence (`JsonFileGuestAgentReplayNonceStore`)
+  mirroring the repository's existing atomic-JSON store convention
+  (strict document/entry field sets, schema version, bounded bytes/
+  entries, temp-file + fsync + atomic rename). A corrupt, truncated, or
+  schema-mismatched document never reads as "no nonces were used" -- it
+  raises instead of silently reopening every token it ever protected.
+  Capacity is bounded (500 entries) and fails closed on exhaustion rather
+  than evicting an older, still-consumed record.
+- `GuestAgentResponseStatus.REPLAY_REJECTED` -- a real, descriptive
+  protocol outcome now that real replay logic exists; grants nothing,
+  carries no output, and uses a fixed, code-owned detail.
+- `REPLAY PROTECTION != EXECUTION AUTHORITY`: `consume_once` answers only
+  "has this one-time token already been consumed," never "may this
+  operation execute." A re-entrant lock shared process-wide by every
+  store instance addressing the same resolved file path makes concurrent
+  consumption attempts -- even from independently constructed
+  store/protector pairs, not only threads sharing one object -- resolve
+  to exactly one acceptance within one Hypatia process; this does not
+  claim cross-process atomicity, which no store in this repository
+  provides today.
+
+### Scope
+
+- No real Kali Guest Agent, no capability dispatch, no mTLS/certificates,
+  no sockets, no HTTP/RPC, no VMware networking, no SSH replacement, no
+  WSL/Kali execution, no new Kali operation. No change to
+  `KaliToolGateway` or either existing process adapter. Zero production
+  callers; not wired into Bootstrap, `CognitiveEngine`,
+  `ToolExecutionService`, chat, or the desktop. Pure addition plus one
+  additive enum member on an existing v0.3.456 type; zero existing
+  execution-path files modified. Target traffic ZERO; SSH attempts ZERO;
+  VMware/WSL/Kali guest execution ZERO; socket listeners ZERO; network
+  clients ZERO; certificate generation ZERO; credential changes ZERO.
+  v0.3.458 is not started.
+
 ## [0.3.456] - 2026-10-12
 
 ### Added

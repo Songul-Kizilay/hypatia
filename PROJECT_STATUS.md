@@ -2,10 +2,34 @@
 
 ## Runtime Version
 
-`v0.3.456 (Genesis)`
+`v0.3.457 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.457 delivers Guest-Agent roadmap step 2, real replay-protection
+semantics over the already-existing inert `nonce` field
+(`research.GuestAgentReplayNonceRecord`,
+`research.GuestAgentReplayNonceStore`,
+`research.JsonFileGuestAgentReplayNonceStore`,
+`research.GuestAgentReplayProtector`). `REPLAY PROTECTION != EXECUTION
+AUTHORITY`: `consume_once(request)` durably spends the
+`(protocol_version, operation_digest, nonce)` replay identity at most
+once -- consume-before-effect, atomic, no separate check-then-mark pair --
+and answers only whether that one-time token was already used, never
+whether an operation may execute. Persistence is durable and fail-closed
+(atomic JSON, strict schema, bounded entries), because a purely in-memory
+store would silently reopen replay on every restart; capacity exhaustion
+fails closed rather than evicting a still-consumed record. A lock shared
+process-wide by every store instance addressing the same file makes
+concurrent consumption resolve to exactly one acceptance within one
+Hypatia process -- not a cross-process guarantee, which no store in this
+repository provides. `GuestAgentResponseStatus.REPLAY_REJECTED` is now a
+real, descriptive outcome. No real Kali Guest Agent, capability dispatch,
+mTLS, sockets, HTTP/RPC, VMware networking, SSH replacement, or WSL/Kali
+execution. Zero production callers; not wired into Bootstrap,
+`CognitiveEngine`, `ToolExecutionService`, `KaliToolGateway`, chat, or the
+desktop. v0.3.458 is not started.
 
 Version v0.3.456 starts the Hypatia Kali Guest-Agent direction (Windows
 Hypatia -> typed authenticated Guest-Agent protocol -> future Hypatia Kali

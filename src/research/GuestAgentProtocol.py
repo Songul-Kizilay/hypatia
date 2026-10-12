@@ -93,10 +93,15 @@ class GuestAgentResponseStatus(StrEnum):
     """Name one closed, bounded outcome a future guest-agent response may report.
 
     Only outcomes meaningful at the protocol-contract level today are
-    listed. `REPLAY_REJECTED` is deliberately absent: no replay-detection
-    logic exists yet in this foundation milestone (no store, no state, no
-    one-time-use enforcement), and adding the status without the logic
-    behind it would be a promise this milestone does not keep.
+    listed. `REPLAY_REJECTED` names that a request's one-time replay
+    identity (see `research.GuestAgentReplayProtector`) was already
+    consumed -- it is a descriptive protocol outcome only, exactly like
+    every other member here: it grants nothing, it is never produced by
+    the host deciding anything about *authority*, and it carries no
+    successful output (`permits_output` is `False` for it, same as every
+    non-`SUCCESS` member). REPLAY REJECTED != AUTHORITY DECISION: this
+    status says a token was already spent, never that an operation was
+    disallowed.
     """
 
     SUCCESS = "success"
@@ -104,6 +109,7 @@ class GuestAgentResponseStatus(StrEnum):
     FAILED = "failed"
     UNSUPPORTED_CAPABILITY = "unsupported_capability"
     INVALID_REQUEST = "invalid_request"
+    REPLAY_REJECTED = "replay_rejected"
 
     @property
     def permits_output(self) -> bool:

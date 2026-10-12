@@ -965,11 +965,13 @@ consume-before-dispatch authority is not replaced or weakened by any of them.
 
 Recorded priority order:
 
-1. Protocol foundation: an immutable, typed, transport-neutral request/
-   response contract describing reviewed capabilities and typed logical
-   inputs only — no arbitrary command channel, ever.
-2. Replay-protection semantics (a real one-time nonce store/consumption
-   rule) over the protocol foundation's already-present but inert nonce field.
+1. **(delivered, v0.3.456)** Protocol foundation: an immutable, typed,
+   transport-neutral request/response contract describing reviewed
+   capabilities and typed logical inputs only — no arbitrary command
+   channel, ever.
+2. **(delivered, v0.3.457)** Replay-protection semantics (a real one-time
+   nonce store/consumption rule) over the protocol foundation's
+   previously inert nonce field.
 3. mTLS / peer authentication for the transport.
 4. The actual transport (an RPC-style server/client) carrying the protocol
    between Windows Hypatia and a guest process.
@@ -992,8 +994,25 @@ existing `is_kali_operation_digest` validator, the existing Kali
 output-line bounds/trust label, and the existing canonical-JSON convention
 rather than inventing parallel versions of any of them. No socket, no
 process, no VMware/SSH/WSL contact, no mTLS, no replay persistence/state;
-zero production callers. Steps 2-7 remain separate, unstarted, future
-milestones, each requiring its own authorization.
+zero production callers. v0.3.457 delivered step 2, real replay-protection
+semantics over that protocol foundation's previously-inert `nonce` field
+(`research.GuestAgentReplayNonceRecord`,
+`research.GuestAgentReplayNonceStore`,
+`research.JsonFileGuestAgentReplayNonceStore`,
+`research.GuestAgentReplayProtector`): `consume_once(request)` durably
+spends the `(protocol_version, operation_digest, nonce)` replay identity
+at most once, atomically, with no separate check-then-mark pair; durable
+fail-closed JSON persistence (a purely in-memory store would silently
+reopen replay on every restart); bounded capacity failing closed rather
+than evicting a still-consumed record; a lock shared process-wide by
+every same-path store instance, so concurrent consumption resolves to
+exactly one acceptance within one Hypatia process (not a cross-process
+guarantee, which no store in this repository provides).
+`GuestAgentResponseStatus.REPLAY_REJECTED` is now a real, descriptive
+outcome. REPLAY PROTECTION != EXECUTION AUTHORITY: no execution, dispatch,
+network, or second Kali-authority path exists; zero production callers.
+Steps 3-7 remain separate, unstarted, future milestones, each requiring
+its own authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,
