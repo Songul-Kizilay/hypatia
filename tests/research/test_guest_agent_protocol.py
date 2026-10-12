@@ -290,6 +290,31 @@ class ProtocolVersionTests(unittest.TestCase):
             guest_agent_response_from_document(document)
 
 
+class ReplayRejectedStatusTests(unittest.TestCase):
+    """`REPLAY_REJECTED` is a real v0.3.457 addition: a descriptive
+    protocol outcome only, grants nothing, carries no output, and
+    round-trips through canonical serialization like every other status.
+    """
+
+    def test_replay_rejected_is_part_of_the_closed_status_enum(self) -> None:
+        self.assertIn(
+            GuestAgentResponseStatus.REPLAY_REJECTED, list(GuestAgentResponseStatus)
+        )
+
+    def test_replay_rejected_does_not_permit_output(self) -> None:
+        self.assertFalse(GuestAgentResponseStatus.REPLAY_REJECTED.permits_output)
+
+    def test_a_replay_rejected_response_constructs_and_round_trips(self) -> None:
+        response = _response(
+            status=GuestAgentResponseStatus.REPLAY_REJECTED,
+            detail="This request's replay identity was already consumed.",
+            output_lines=(),
+        )
+        data = canonical_guest_agent_response_bytes(response)
+        restored = guest_agent_response_from_bytes(data)
+        self.assertEqual(restored, response)
+
+
 class RequestFieldValidationTests(unittest.TestCase):
     """Requirements 5, 6, 7, 11, 12: strict request-field validation."""
 
@@ -557,6 +582,7 @@ class ResponseUntrustedBoundaryTests(unittest.TestCase):
             GuestAgentResponseStatus.FAILED,
             GuestAgentResponseStatus.UNSUPPORTED_CAPABILITY,
             GuestAgentResponseStatus.INVALID_REQUEST,
+            GuestAgentResponseStatus.REPLAY_REJECTED,
         ):
             with self.subTest(status=status):
                 with self.assertRaises(ResearchError):

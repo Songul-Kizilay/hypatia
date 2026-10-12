@@ -10,7 +10,187 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.456 (implementation)
+## Current scope: v0.3.457 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent roadmap step 2 only -- real replay-protection semantics over the already-existing inert `nonce` field. Durable, fail-closed, atomic-JSON nonce store; a lock shared process-wide by same-path store instances; no real agent, no capability dispatch, no mTLS, no sockets, no new execution path. |
+| Base SHA | `0a6e74d190f4543e0e0c6314f2f905f489547f67` (verified remote main; standard merge of PR #437). |
+| Branch | `feature/guest-agent-replay-protection-v0.3.457`, worktree `D:\hypatia-worktrees\guest-agent-replay-protection` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | REPLAY PROTECTION != EXECUTION AUTHORITY. REPLAY ACCEPTED != AUTHORITY TO EXECUTE. REPLAY REJECTED != AUTHORITY DECISION. RESTART != NEW NONCE. Zero production callers; not wired into Bootstrap, CognitiveEngine, ToolExecutionService, KaliToolGateway, chat, or the desktop. Target traffic ZERO; SSH attempts ZERO; VMware/WSL/Kali guest execution ZERO; socket listeners ZERO; network clients ZERO; certificate generation ZERO; credential changes ZERO. v0.3.458 not started. |
+
+Per the standing ledger convention, v0.3.456 delivery was re-verified before
+this milestone began: release `ee60f35700c4a0af1952dab8a9f56bce7a0f5910`,
+PR #437 MERGED, standard merge `0a6e74d190f4543e0e0c6314f2f905f489547f67`
+with parents `837c264e2edcb46a97ff00e3a8c62ca4dddba3c5` and the release SHA
+(confirmed by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor ee60f357... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.456 is delivered.
+
+Repository-grounded audit before implementation covered
+`ResearchKaliOperationAuthorization`/`AuthorizationStore`/
+`JsonFileResearchKaliOperationAuthorizationStore` (the exact-field-set,
+bounded-bytes/entries, temp-file+fsync+atomic-rename JSON store
+convention this milestone's own store mirrors), `ResearchPlanAuthorizationConsumer`/
+`ResearchPlanAuthorizationConsumption` (whose own docstring states the
+consume-before-effect doctrine this milestone's `consume_once` follows:
+"Consuming is deliberately part of asking. A separate verify-then-consume
+pair would leave a window..."), `DeferredExecutionGrantStore`,
+`OneShotDeferredExecutionScheduleStore`/`JsonFileOneShotDeferredExecutionScheduleStore`,
+and `TrustedOneShotDeferredExecutionScheduler` (the one existing
+implementation in this repository that wraps a load-check-save sequence
+in an explicit lock -- the strongest existing precedent for the exact
+problem shape here, since `KaliToolGateway.run` itself does not lock its
+own load-consume-save sequence). A repository-wide search confirmed no
+existing nonce/replay abstraction exists anywhere (every earlier "replay"
+hit across the codebase is doctrine prose or an unrelated idempotent-write
+pattern). Found and reused rather than reinvented: the atomic-JSON store
+shape itself (strict document/entry field sets, schema version, bounded
+bytes/entries, safe temp-file cleanup), `is_kali_operation_digest` (reused
+again, unchanged, as a pure shape check -- never compared against a real
+authorization record), and the consume-before-effect API doctrine. No
+authoritative lifetime for a `GuestAgentRequest` exists anywhere in the
+repository, so no time-based nonce expiry was invented; capacity is
+instead bounded and fails closed.
+
+Delivered: four new files under `src/research/` --
+`GuestAgentReplayNonceRecord.py` (frozen record: `protocol_version`,
+`operation_digest`, `nonce`, `request_id`, `consumed_at`; the
+`.replay_identity` property returns the exact `(protocol_version,
+operation_digest, nonce)` triple a duplicate must match -- not `nonce`
+alone, since `operation_digest` already commits to exactly which reviewed
+operation a nonce belongs to, so two unrelated requests cannot alias
+merely by reusing nonce text; `operation_kind` is deliberately not a
+separate field because `operation_digest` already implies it),
+`GuestAgentReplayNonceStore.py` (a `Protocol`: `load`/`save`, mirroring
+`ResearchKaliOperationAuthorizationStore` exactly), `JsonFileGuestAgentReplayNonceStore.py`
+(the durable, atomic, fail-closed implementation: 1&nbsp;MB / 500-entry
+bounds, strict exact-field-set parsing, schema-version check, duplicate-
+identity rejection, temp-file+fsync+`os.replace` writes -- a corrupt,
+truncated, or schema-mismatched document always raises, never degrades to
+an empty list, which would silently reopen every token it ever protected;
+also exposes a `lock` property returning one re-entrant lock shared,
+process-wide, by every instance resolving to the same file path), and
+`GuestAgentReplayProtector.py` (`GuestAgentReplayOutcome` --
+`ACCEPTED`/`ALREADY_CONSUMED` -- and `consume_once(request)`, the sole
+atomic entry point: load, check, and append-and-save happen inside one
+lock-held region in one function, with no separate `is_consumed()`/
+`mark_consumed()` pair exposed anywhere a future caller could misuse into
+an unsafe check-then-consume race). One additive change to the existing
+v0.3.456 `GuestAgentProtocol.py`: `GuestAgentResponseStatus` gains
+`REPLAY_REJECTED` (its `permits_output` correctly returns `False` without
+any special-casing, since that property already returns `True` only for
+`SUCCESS`); `REPLAY_REJECTED` was deliberately absent from v0.3.456
+precisely because no replay logic existed yet, and now it does. No other
+existing file was modified. Not wired into `Bootstrap`, `CognitiveEngine`,
+`ToolExecutionService`, `KaliToolGateway`, chat, or the desktop; zero
+production callers confirmed by grep across all of `src/`.
+
+Concurrency guarantee, stated precisely and proved, not merely claimed:
+an in-process re-entrant lock makes concurrent `consume_once` calls
+resolve to exactly one acceptance -- and, after a real finding from
+independent security review (below), that lock is shared process-wide by
+every store instance addressing the same resolved file path, not private
+per `GuestAgentReplayProtector` object, so two independently constructed
+protector/store pairs racing on the same file still correctly serialize.
+This does not provide cross-process mutual exclusion -- no store anywhere
+in this repository uses OS-level file locking, and Hypatia runs as one
+local desktop process with no existing multi-process writer for any
+durable store -- so that is the honest, repository-consistent guarantee
+documented and tested, not a weaker one dressed up as stronger and not an
+invented cross-process guarantee this milestone does not actually
+deliver.
+
+141 tests (`tests/research/test_guest_agent_replay_nonce_record.py` --
+15, `tests/research/test_json_file_guest_agent_replay_nonce_store.py` --
+20, `tests/research/test_guest_agent_replay_protector.py` -- 26, plus one
+new `REPLAY_REJECTED` test class and one parametrized-test addition in
+the existing `tests/research/test_guest_agent_protocol.py`) cover: first
+consumption accepted, second use of the identical replay identity
+rejected, repeated replay attempts remaining rejected, a different nonce
+succeeding independently, the same nonce under a different
+`operation_digest` correctly treated as a different identity (proving the
+triple binding, not nonce-alone), `operation_digest`/`nonce`/`request_id`
+each independently proven non-authoritative, zero
+`ToolExecutionService`/`KaliToolGateway`/subprocess/socket calls (patched
+and asserted uncalled, including over adversarial nonce values), state
+surviving a brand-new store/protector instance pointed at the same file
+(restart safety) and remaining consumed across three such reloads,
+capacity exhaustion failing closed for a genuinely new identity while
+never evicting or losing the 500 existing entries and still correctly
+recognizing an already-consumed identity at full capacity, real
+multi-threaded concurrency (`threading.Thread` + `threading.Barrier`) for
+both the same identity (exactly one acceptance among eight) and distinct
+identities (all eight succeed independently), the specific
+independently-constructed-protector-pair race (sixteen threads, each
+building its own store and protector object against the identical file,
+still resolving to exactly one acceptance), every malformed-persistence
+shape (missing/unknown document or entry field, wrong schema version,
+non-list entries, duplicate on-disk identity, truncated/corrupt JSON,
+oversized file, non-dict document) failing closed rather than degrading
+to empty, a mid-write failure leaving the prior valid document
+byte-for-byte intact with no leftover temporary file, hostile nonce/
+request-id values (`../../../etc/passwd`, shell metacharacters, `ALLOW`,
+`REQUIRE_APPROVAL`, `system_instruction`) remaining inert bounded data
+that never touches any path outside the one configured store file, and a
+fixed, non-reflective error message when an invalid request type is
+passed. The existing, unmodified `tests/research/test_guest_agent_protocol.py`
+baseline, `tests/tools/test_guest_agent_request_schema_validation.py`,
+and every other `tests/research`/`tests/tools` suite (3151/613 tests via
+full discover) continue to pass unchanged.
+
+Independent security review (hypatia-security, subagent): found one real,
+CONFIRMED Medium-severity defect, closed before release. The documented
+"exactly one acceptance" concurrency guarantee held only for calls
+sharing one `GuestAgentReplayProtector` instance; nothing prevented
+constructing a second protector (or a second store) against the same
+file, and nothing shared a lock between them. Reproduced directly: 30
+threads, each with its own independent store/protector pair addressing
+the identical file, raced `consume_once` on one identity -- 9 of 30 wrongly
+received `ACCEPTED` for the same already-claimed token (the rest hit a
+Windows `os.replace` collision; on POSIX the race would not even raise,
+since `rename` is atomic and simply lets the last writer win silently).
+Closed by adding a module-level, path-keyed lock registry to
+`JsonFileGuestAgentReplayNonceStore` (a `lock` property shared, process-
+wide, by every instance resolving to the same path) and having
+`GuestAgentReplayProtector` reuse that shared lock when the store offers
+one, falling back to a private lock otherwise. Re-reproduced the exact
+30-thread scenario after the fix: exactly 1 `ACCEPTED`, 29
+`ALREADY_CONSUMED`, zero exceptions, one durable record. A new regression
+test (`test_independently_constructed_protector_and_store_pairs_still_share_the_lock`)
+proves this with sixteen threads. Every other traced property passed
+without a finding: nonce/digest/request-id non-authoritative; consume-
+before-effect with no exploitable window; the same token cannot be
+accepted twice (now including the multi-instance case); restart cannot
+reopen consumed state; malformed persistence fails closed; capacity
+exhaustion cannot reopen a still-protected nonce; no path is built from
+protocol input; no execution, network, or second Kali dispatch path
+exists; `KaliToolGateway` is untouched; the replay subsystem creates or
+consumes no Kali operation authorization itself. No other CONFIRMED
+issues.
+
+Independent QA review (hypatia-qa, subagent): confirmed all ten design
+claims (replay-identity triple, consume-before-effect API shape, the
+concurrency scoping claim, bounded fail-closed capacity, absence of
+time-based expiry, fail-closed persistence against hand-built malformed
+documents, restart durability, absence of any execution/dispatch path,
+hostile-input inertness, and the `REPLAY_REJECTED` addition being the
+only change to the existing file) directly against the code rather than
+the docstrings, and found no additional defect beyond the same
+single-instance-lock-scope observation independent security review had
+already confirmed and this milestone closed. All gates were re-verified
+independently as green. This milestone is QA-ready.
+
+Full local gates re-run after the security fix: unittest discover 8461
+tests, OK (205.1s); Black --check . clean (1111 files); Ruff check .
+clean; MyPy src clean (646 source files); git diff --check clean. `git
+status` confirms exactly two existing files modified (the additive
+`REPLAY_REJECTED` enum member and its test coverage) and seven new files
+-- no other existing file touched.
+
+## Previous scope: v0.3.456 (release record before integration)
 
 | Field | Value |
 | --- | --- |
