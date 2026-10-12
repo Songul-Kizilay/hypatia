@@ -2,10 +2,41 @@
 
 ## Runtime Version
 
-`v0.3.457 (Genesis)`
+`v0.3.458 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.458 delivers an offline mTLS / peer-authentication
+**foundation** for Guest-Agent roadmap step 3 -- not all of step 3, and
+not the RPC transport (step 4)
+(`research.GuestAgentMtlsTrustConfiguration`,
+`research.GuestAgentPeerCertificateIdentity`,
+`research.GuestAgentMtlsContext`). `AUTHENTICATED PEER != EXECUTION
+AUTHORITY`, `TRUSTED CERTIFICATE != EXECUTION AUTHORITY`, `TLS HANDSHAKE
+SUCCESS != EXECUTION AUTHORITY`: two closed peer roles (`HOST`/`GUEST`)
+with a fixed, code-owned URI SAN identity per role (never a DNS name or
+IP address); a trusted configuration holding only certificate/key
+*paths*, never key material, with the expected peer identity always
+derived from `own_role`, never independently settable; a pure parser and
+exact-match-only comparison function operating on the real
+`ssl.SSLSocket.getpeercert()` dict shape; two strict `ssl.SSLContext`
+builders -- TLS 1.3 only (min and max both pinned), `CERT_REQUIRED`
+explicit on both sides (overriding the server's insecure `CERT_NONE`
+default), both sides presenting their own certificate (genuinely mutual,
+not one-sided), never `ssl.create_default_context()` (which would
+auto-load the OS's global CA bundle). Independent security review found
+and this release fixes a real design defect: `check_hostname` cannot
+validate a `URI` SAN (OpenSSL only matches `dNSName`/CN), so it is now
+explicitly `False` on both sides, with peer identity checked
+symmetrically, post-handshake, via the same pure matching function on
+both ends. No certificate or private key was provisioned; no socket, TLS
+handshake, or network client exists; no change to
+`GuestAgentRequest`/`GuestAgentResponse` or to v0.3.457's replay
+semantics, which remain independent -- mTLS and replay protection are
+both required, neither substitutes for the other. Zero production
+callers; not wired into `KaliToolGateway`, `ToolExecutionService`,
+`CognitiveEngine`, chat, or the desktop. v0.3.459 is not started.
 
 Version v0.3.457 delivers Guest-Agent roadmap step 2, real replay-protection
 semantics over the already-existing inert `nonce` field

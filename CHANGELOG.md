@@ -2,6 +2,64 @@
 
 All notable project changes are recorded here.
 
+## [0.3.458] - 2026-10-12
+
+### Added
+
+- An offline mTLS / peer-authentication **foundation** for Guest-Agent
+  roadmap step 3 (`research.GuestAgentMtlsTrustConfiguration`,
+  `research.GuestAgentPeerCertificateIdentity`,
+  `research.GuestAgentMtlsContext`). Two closed peer roles (`HOST`/`GUEST`);
+  a fixed, code-owned URI SAN identity per role following this
+  repository's existing `"hypatia-<concept>/<n>"` naming convention
+  (never a DNS name or IP address); a trusted configuration type holding
+  only certificate/key *paths* (never key material) with the expected
+  peer role/identity always derived, never independently settable; a pure
+  parser and exact-match-only comparison function operating on the same
+  dict shape `ssl.SSLSocket.getpeercert()` already returns; and two
+  strict `ssl.SSLContext` builder functions for the future host-client
+  and guest-server sides.
+- Strict, explicit TLS policy on both sides: TLS 1.3 only (minimum and
+  maximum both pinned, not merely "at least 1.2"); `verify_mode =
+  ssl.CERT_REQUIRED` explicitly on the server side too (a bare
+  `PROTOCOL_TLS_SERVER` context defaults to `CERT_NONE` -- anonymous
+  clients accepted -- which this module never leaves in place); both
+  sides present their own certificate, so this is genuinely mutual, not
+  one-sided; compression disabled; key logging forced off, never read
+  from `SSLKEYLOGFILE`; never `ssl.create_default_context()`, which would
+  auto-load the OS's global CA bundle.
+- `AUTHENTICATED PEER != EXECUTION AUTHORITY`, `TRUSTED CERTIFICATE !=
+  EXECUTION AUTHORITY`, `TLS HANDSHAKE SUCCESS != EXECUTION AUTHORITY`,
+  `PEER IDENTITY MATCH != EXECUTION AUTHORITY`: mTLS authenticates who is
+  on the other end; the existing host-side scope/preview/digest/
+  authorization/consume-before-dispatch chain remains the only thing that
+  decides what may execute, untouched by this milestone. "Certificate
+  chains to the trusted CA" and "is the correct application peer" are
+  modeled as two separate checks, never folded into one.
+
+### Scope
+
+- **Foundation only, not all of roadmap step 3.** No RPC transport (step
+  4), no real Kali Guest Agent, no real certificates or private keys
+  provisioned, no socket, no network client, no TLS handshake performed.
+  Independent security review found and this milestone's included
+  commits fix a real design defect before release: the client-side
+  context originally set `check_hostname=True`, but OpenSSL's hostname
+  checking only matches `dNSName` SANs (and legacy CN), never the `URI`
+  SANs this design uses -- `check_hostname` is now explicitly `False` on
+  both sides, with peer identity checked symmetrically, post-handshake,
+  via the same pure `peer_identity_matches` function on both ends. No
+  change to `GuestAgentRequest`/`GuestAgentResponse` (no certificate,
+  fingerprint, peer-role, or credential field was added to the wire
+  protocol) and no change to v0.3.457's replay-protection semantics --
+  mTLS and replay protection remain two independently required
+  mechanisms, neither substituting for the other. Zero production
+  callers; not wired into `KaliToolGateway`, `ToolExecutionService`,
+  `CognitiveEngine`, chat, or the desktop. Target traffic ZERO; TLS
+  handshakes ZERO; socket listeners ZERO; network clients ZERO; real
+  certificate/private-key generation ZERO; credential changes ZERO.
+  v0.3.459 is not started.
+
 ## [0.3.457] - 2026-10-12
 
 ### Added

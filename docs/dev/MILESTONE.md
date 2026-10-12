@@ -10,7 +10,176 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.457 (implementation)
+## Current scope: v0.3.458 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Offline mTLS / peer-authentication foundation for Guest-Agent roadmap step 3 -- foundation only, not the RPC transport (step 4), no real agent, no real certificates/private keys, no socket, no network activity. |
+| Base SHA | `e7137ae0c1f32a50ad2d567c6142904292bdf381` (verified remote main; standard merge of PR #438). |
+| Branch | `feature/guest-agent-mtls-foundation-v0.3.458`, worktree `D:\hypatia-worktrees\guest-agent-mtls-foundation` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | AUTHENTICATED PEER != EXECUTION AUTHORITY. TRUSTED CERTIFICATE != EXECUTION AUTHORITY. TLS HANDSHAKE SUCCESS != EXECUTION AUTHORITY. PEER IDENTITY MATCH != EXECUTION AUTHORITY. Zero production callers; not wired into KaliToolGateway, ToolExecutionService, CognitiveEngine, GuestAgentReplayProtector's authority meaning, chat, or the desktop. Target traffic ZERO; TLS handshakes ZERO; socket listeners ZERO; network clients ZERO; real certificate/private-key generation ZERO; credential changes ZERO. v0.3.459 not started. |
+
+Per the standing ledger convention, v0.3.457 delivery was re-verified before
+this milestone began: release `463dd2dbc5082928ed4c77f00bddc76e49b9b05c`,
+PR #438 MERGED, standard merge `e7137ae0c1f32a50ad2d567c6142904292bdf381`
+with parents `0a6e74d190f4543e0e0c6314f2f905f489547f67` and the release SHA
+(confirmed by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor 463dd2db... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.457 is delivered.
+
+Repository-grounded audit before implementation covered existing TLS/SSL
+code (`research.PinnedHttpsTransport` -- outbound public-HTTPS research
+fetches using `ssl.create_default_context()`'s system CA trust, a
+deliberately different and inapplicable trust model for a private,
+project-controlled mTLS channel), the existing trusted-configuration
+pattern (`research.ResearchVMwareKaliGuestReadiness.ResearchVMwareKaliGuestTransportRequirement`
+-- paths validated as bounded strings only, never read at construction
+time, mirrored exactly for the new mTLS trust configuration), the
+existing `RuntimeOptIn`/Bootstrap environment-variable opt-in convention
+(not wired in this milestone, but naming precedent noted for a future
+one), and this repository's own `"hypatia-<concept>/<n>"` identity-string
+convention (`research.GuestAgentProtocol.GuestAgentProtocolVersion.V1 ==
+"hypatia-kali-guest-agent/1"`, `knowledge.Parser`'s `"hypatia:knowledge-chunk:v1:..."`,
+and several others) -- reused directly for the two fixed peer-identity
+URI SANs rather than inventing a new naming scheme. Confirmed empirically
+against this project's actual Python 3.14 / OpenSSL 3.0.20 build: a raw
+`ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)` defaults to `verify_mode ==
+CERT_NONE` (anonymous clients accepted) and `check_hostname == False`;
+`ssl.create_default_context()` loads the OS's global CA bundle via
+`load_default_certs()`, which a raw `ssl.SSLContext(protocol)`
+constructor does not do (`cert_store_stats()` is all zeros); TLS 1.3 is
+fully supported, so pinning both `minimum_version` and `maximum_version`
+to it is an honest requirement, not an invented one.
+
+Delivered: `src/research/GuestAgentMtlsTrustConfiguration.py`
+(`GuestAgentPeerRole` -- a closed two-member `HOST`/`GUEST` enum, never a
+`GuestAgentRequest` field; `GuestAgentPeerIdentity` -- binds a role to
+its own fixed, validated URI SAN, with `role`/`uri` required to agree;
+`GuestAgentMtlsTrustConfiguration` -- trusted CA/own-certificate/own-key
+*paths* only, an optional pinned SHA-256 fingerprint, and
+`expected_peer_role`/`expected_peer_identity` always derived from
+`own_role.other`, with no constructor parameter that could set either
+independently), `src/research/GuestAgentPeerCertificateIdentity.py`
+(`GuestAgentPeerCertificateIdentityObservation` -- bounded DNS/URI SAN
+tuples, a validity window, an optional fingerprint, with no
+caller-settable "verified" flag of any kind;
+`parse_peer_certificate_identity` -- a pure parser matching Python's real
+`ssl.SSLSocket.getpeercert()` dict shape exactly, failing closed on
+anything else; `peer_identity_matches` -- exact URI-tuple-membership
+match only, plus a defense-in-depth validity-window check, plus an
+optional pinned-fingerprint check, plus a new consistency guard requiring
+`expected` and `trust_configuration.expected_peer_identity` to agree when
+both are supplied), and `src/research/GuestAgentMtlsContext.py`
+(`build_host_client_tls_context`/`build_guest_server_tls_context` --
+strict `ssl.SSLContext` builders: TLS 1.3 only, `CERT_REQUIRED` explicit
+on both sides, compression disabled, key logging forced off, both sides
+always presenting their own certificate, role cross-checked before any
+context is built). No existing file was modified; this milestone is a
+pure addition. Not wired into `KaliToolGateway`, `ToolExecutionService`,
+`CognitiveEngine`, `GuestAgentReplayProtector`, chat, or the desktop; zero
+production callers confirmed by grep across all of `src/`.
+
+93 tests across 4 new files (`test_guest_agent_mtls_trust_configuration.py`
+-- 24, `test_guest_agent_peer_certificate_identity.py` -- 32 (now 34 after
+the QA/security fixes below), `test_guest_agent_mtls_context.py` -- 28,
+`test_guest_agent_mtls_protocol_separation.py` -- 9) cover: exactly two
+closed peer roles with no confusion possible; immutable, bounded
+identities failing closed on adversarial strings (`ALLOW`,
+`REQUIRE_APPROVAL`, `peer=guest`, `../../key.pem`, `file://...`,
+`localhost`, `127.0.0.1`, `*.local`, prefix/substring variants of the real
+identity, control characters, very long strings); trusted configuration
+paths validated as bounded, absolute, control-character-free strings with
+no existence check at construction time; the expected peer identity
+provably derivable only from `own_role`, never independently settable;
+fail-closed parsing of every malformed `getpeercert()`-shaped input
+(missing SAN, non-tuple SAN, malformed entry shape, unparseable date);
+exact-match-only identity comparison proven against superstring, prefix,
+and substring attack strings; expired and not-yet-valid certificates
+failing the match even with the correct identity; optional SHA-256
+fingerprint pinning with strict 64-lowercase-hex-only validation and exact
+(not partial/prefix) comparison; zero authorization creation/consumption
+anywhere in the new modules (structural import checks); a raw
+`PROTOCOL_TLS_SERVER` context's real `CERT_NONE` default, proving the
+server builder's override is load-bearing, not redundant; both builders
+reaching the identical strict `verify_mode`/TLS-version/compression/
+keylog configuration with no parameter or branch that could produce a
+weaker one; zero sockets, subprocesses, or forbidden imports (`socket`,
+`requests`, `httpx`, `paramiko`, `KaliToolGateway`, `ToolExecutionService`,
+the VMware/SSH/WSL adapters) anywhere in the three new modules, checked by
+real AST parsing of `Call`/`Attribute`/`Import` nodes specifically so a
+docstring that correctly *names* `CERT_NONE`/`create_default_context`
+while explaining their absence cannot accidentally pass (or fail) the
+check by coincidence; `GuestAgentRequest`/`GuestAgentResponse`'s exact,
+unchanged v0.3.456/457 field sets, proving no certificate/fingerprint/
+peer-role/credential field was added to the wire protocol; and a direct
+behavioral regression exercise of the unmodified v0.3.457
+`GuestAgentReplayProtector` (`ACCEPTED` then `ALREADY_CONSUMED`) proving
+replay semantics are unchanged and independent of this milestone. The
+existing, unmodified `tests/research` (3244 tests) and `tests/tools` (613
+tests) suites continue to pass unchanged via full discover.
+
+Independent security review (hypatia-security, subagent): PASS on all
+seventeen traced properties -- authenticated peer/TLS success/peer
+identity match never create, alter, or consume any authorization or
+scope; client authenticates guest and guest authenticates client,
+confirmed genuinely mutual (both sides always present their own
+certificate); wrong-role and trusted-CA-but-wrong-identity certificates
+both fail closed, reproduced directly; no verification bypass, confirmed
+by real AST inspection distinguishing docstring prose from actual
+`Attribute`/`Call` usage; no TLS downgrade path; no private credential in
+the wire protocol or in any `repr`/`str`/exception path (no key *bytes*
+are ever held by any of the three new types, only path strings); replay
+protection independent and intact (re-run directly); zero RPC/network
+path; `KaliToolGateway` untouched; no arbitrary command channel. No
+CONFIRMED issues from this review's own pass. Two informational notes,
+both addressed before release even though informational: (1) a narrower
+constructor path on `GuestAgentPeerIdentity` could in principle accept a
+non-canonical future-version URI if ever fed untrusted input directly
+(not currently reachable -- `for_role` is the only real call site) --
+left as-is, noted for any future milestone that might construct this type
+from outside `for_role`; (2) `peer_identity_matches` did not cross-check
+that a supplied `expected` identity agreed with a supplied
+`trust_configuration`'s own derived expectation -- closed by adding that
+exact consistency guard, with two new regression tests proving both the
+mismatched-rejection and the consistent-success cases.
+
+Independent QA review (hypatia-qa, subagent): confirmed all ten design
+claims and ran every gate independently (234 focused tests at review
+time, full `tests/research`/`tests/tools` discover, Black/Ruff/MyPy,
+`git diff --check`), then found one real, substantive defect beyond
+security review's scope, closed before release. `build_host_client_tls_context`
+set `check_hostname = True` on the documented theory that a future
+transport would pass `server_hostname` equal to the guest's URI SAN
+identity at `wrap_socket`/`wrap_bio` time -- but Python's `ssl` module
+delegates hostname verification entirely to OpenSSL's `X509_check_host`
+machinery, which matches only `dNSName` SAN entries (and, as a legacy
+fallback, the Subject CN); it has no defined behavior for a `URI` SAN at
+all. Since this design deliberately uses URI SANs and explicitly rejects
+DNS-based identity (the module's own docstring already explains why), the
+documented client-side mechanism could never actually validate the
+expected identity on a correctly-issued certificate -- a real,
+unverified-until-now correctness gap in foundation code whose explicit
+purpose is to be the basis for the transport milestone. Fixed by setting
+`check_hostname = False` on the client context (chain verification via
+`verify_mode = ssl.CERT_REQUIRED` is unaffected and remains fully
+enforced) and making both sides symmetric: a future transport checks peer
+identity via `parse_peer_certificate_identity`/`peer_identity_matches`
+after the handshake, on *both* ends, using the one mechanism this
+repository can actually prove correct for a URI SAN. Both modules'
+docstrings were rewritten to state this precisely; the test asserting
+`check_hostname` was rewritten from `assertTrue` to `assertFalse`, with
+an added assertion that `verify_mode` remains `CERT_REQUIRED` regardless.
+Re-verified passing (236/236 across all mTLS/protocol/replay focused
+suites) before the full suite re-run below.
+
+Full local gates re-run after the QA/security fixes: unittest discover
+8556 tests, OK (217.4s); Black --check . clean (1118 files); Ruff check .
+clean; MyPy src clean (649 source files); git diff --check clean. `git
+status` confirms zero existing files modified -- seven new files only.
+
+## Previous scope: v0.3.457 (release record before integration)
 
 | Field | Value |
 | --- | --- |
