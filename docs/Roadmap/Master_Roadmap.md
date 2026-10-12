@@ -945,6 +945,56 @@ Unchanged — confirmed not started.
       safety
 - [-] Unrestricted autonomous pentesting
 
+### Kali Guest-Agent: bounded roadmap direction (recorded 2026-10-12,
+product-direction only — not scoped as a whole, not authorized as a whole,
+not started beyond the one delivered step named below)
+
+The operator has chosen a long-term direction for how Hypatia reaches a
+Kali toolchain, replacing today's WSL/VMware process-adapter transports with
+a typed, authenticated channel to a dedicated guest-side agent:
+
+    Windows Hypatia -> typed authenticated Guest-Agent protocol ->
+    future Hypatia Kali Guest Agent -> strict allowlisted reviewed
+    Kali capabilities
+
+This is long-term product direction, not a locked milestone. Each step
+below still requires its own repository-grounded discovery, scope lock, and
+review discipline. GUEST AGENT READY != EXECUTION AUTHORITY and AUTHENTICATED
+PEER != AUTHORITY apply to every step; host-side scope/preview/authorization/
+consume-before-dispatch authority is not replaced or weakened by any of them.
+
+Recorded priority order:
+
+1. Protocol foundation: an immutable, typed, transport-neutral request/
+   response contract describing reviewed capabilities and typed logical
+   inputs only — no arbitrary command channel, ever.
+2. Replay-protection semantics (a real one-time nonce store/consumption
+   rule) over the protocol foundation's already-present but inert nonce field.
+3. mTLS / peer authentication for the transport.
+4. The actual transport (an RPC-style server/client) carrying the protocol
+   between Windows Hypatia and a guest process.
+5. The guest-side agent itself: a process that receives one authenticated,
+   already-authorized request and dispatches it to the one allowlisted Kali
+   implementation it names — never an arbitrary command.
+6. Migrating the two existing reviewed Kali operations
+   (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
+   process adapters onto the guest-agent transport, only once steps 1-5 are
+   real and independently reviewed.
+7. Retiring the SSH-based VMware guest path once the guest-agent transport
+   is proven equivalent or stronger, not before.
+
+**Delivered so far**: v0.3.456 — step 1's protocol foundation only
+(`research.GuestAgentProtocol`, `research.GuestAgentProtocolSerialization`,
+`tools.GuestAgentRequestSchemaValidation`): an immutable, in-memory,
+deterministic, transport-neutral `GuestAgentRequest`/`GuestAgentResponse`
+contract reusing `ResearchKaliOperationKind` as capability identity, the
+existing `is_kali_operation_digest` validator, the existing Kali
+output-line bounds/trust label, and the existing canonical-JSON convention
+rather than inventing parallel versions of any of them. No socket, no
+process, no VMware/SSH/WSL contact, no mTLS, no replay persistence/state;
+zero production callers. Steps 2-7 remain separate, unstarted, future
+milestones, each requiring its own authorization.
+
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,
 not started beyond the one delivered step named below)

@@ -10,7 +10,166 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.455 (implementation)
+## Current scope: v0.3.456 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Hypatia Kali Guest-Agent protocol foundation only -- the immutable, in-memory, deterministic, transport-neutral typed message contract for a future Windows-host-to-Kali-guest-agent channel. No real agent, no socket, no VMware/SSH/WSL contact, no mTLS, no replay persistence, no new execution path. |
+| Base SHA | `837c264e2edcb46a97ff00e3a8c62ca4dddba3c5` (verified remote main; standard merge of PR #436). |
+| Branch | `feature/kali-guest-agent-protocol-v0.3.456`, worktree `D:\hypatia-worktrees\kali-guest-agent-protocol` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | PROTOCOL REQUEST != EXECUTION AUTHORITY. REQUEST DIGEST != AUTHORIZATION. NONCE != AUTHORIZATION. REQUEST ID != AUTHORIZATION. AGENT RESPONSE != TRUSTED FACT. Zero production callers; not wired into Bootstrap, CognitiveEngine, ToolExecutionService, KaliToolGateway, chat, or the desktop. Target traffic ZERO; SSH attempts ZERO; VMware/WSL/Kali guest execution ZERO; socket listeners ZERO; network clients ZERO; certificate generation ZERO; credential changes ZERO. v0.3.457 not started. |
+
+Per the standing ledger convention, v0.3.455 delivery was re-verified before
+this milestone began: release `57c654e0bf3a9255a53f57fe5ab8373cb16c03dd`,
+PR #436 MERGED, standard merge `837c264e2edcb46a97ff00e3a8c62ca4dddba3c5`
+with parents `2a025761ba99708b07cb4e7dfb1161037d57ecc0` and the release SHA
+(confirmed by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor 57c654e0... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.455 is delivered.
+
+Repository-grounded audit before implementation covered
+`ProductCapabilityRecord`/`Catalog`/`CatalogDefaults`, `ProductCapabilitySchema`/
+`SchemaCatalog`/`SchemaDefaults`, `ProductCapabilityVersionObservation`/
+`VersionAssessment`, `ResearchKaliOperationKind`, `ResearchKaliCommandTransport`,
+`ResearchKaliOperationPreview`, `ResearchKaliOperationExecution`,
+`KaliOperationPreviewApplicationService`, `KaliToolGateway`,
+`ResearchKaliOperationAuthorization`/`AuthorizationStore`, and a repository-
+wide search for any existing nonce/replay abstraction (none found -- every
+"replay" hit was doctrine prose or an unrelated idempotent-write pattern,
+confirmed by direct inspection). Found and reused rather than reinvented:
+`is_kali_operation_digest` (the one existing operation-digest validator),
+`ResearchKaliOperationKind` (the existing, exactly-two-member closed
+enum -- used directly as this protocol's capability identity rather than
+the transport-bound `kali:<kind>:<transport>` catalog identity, since a
+guest-agent message travels over a transport that does not exist in
+`ResearchKaliCommandTransport` today and binding to `WSL_KALI`/`VMWARE_KALI`
+would be a false claim, not a reuse), the `tuple[(name, value)]` bounded-pair
+convention already used by `ToolInvocation.arguments`/`ToolResult.values`,
+`MAX_KALI_OPERATION_OUTPUT_LINES`/`MAX_KALI_OPERATION_OUTPUT_LINE_CHARACTERS`/
+`KALI_OPERATION_OUTPUT_TRUST` (the existing bounds and trust label for
+exactly this kind of untrusted Kali process output), and the one existing
+canonical-JSON convention (`canonical_kali_operation_preview_bytes`'s
+`json.dumps(..., sort_keys=True, ensure_ascii=True, separators=(",", ":"),
+allow_nan=False)`). No second authority digest, no second capability
+registry, and no second canonical-serialization convention were created.
+
+Delivered: `src/research/GuestAgentProtocol.py` (`GuestAgentProtocolVersion`
+-- exactly one member today, `GuestAgentResponseStatus` -- `SUCCESS`/
+`DECLINED`/`FAILED`/`UNSUPPORTED_CAPABILITY`/`INVALID_REQUEST`, deliberately
+omitting `REPLAY_REJECTED` since no replay-detection logic exists yet; the
+frozen `GuestAgentRequest` -- `protocol_version`, `request_id`, `nonce`,
+`operation_kind: ResearchKaliOperationKind`, `operation_digest`, and a
+bounded `logical_inputs: tuple[tuple[str, str], ...]`; and the frozen
+`GuestAgentResponse` -- `protocol_version`, `request_id`, `status`,
+`detail`, a bounded `output_lines: tuple[str, ...]`, and `output_trust`
+forced to equal `KALI_OPERATION_OUTPUT_TRUST`), `src/research/GuestAgentProtocolSerialization.py`
+(pure canonical-JSON encode/decode for both message types; strict
+unknown-field and missing-required-field rejection; unrecognized protocol
+version/operation kind/response status all fail closed, never silently
+downgrade), and `src/tools/GuestAgentRequestSchemaValidation.py` (one pure
+function cross-checking a request's logical input field names against an
+already-built v0.3.455 `ProductCapabilityInputSchema` -- a mismatch
+detector, not a completeness oracle, and never authority). `request_id`
+and `nonce` are both required constructor arguments with no default and no
+auto-generation anywhere (construction never manufactures a secret). No
+field, type, or code identifier anywhere in the three new modules means
+shell/command/command_line/argv/executable/script/powershell/bash/exec/
+raw_command -- proven structurally via AST introspection of every
+dataclass field and every function/argument/name identifier, not by
+scanning prose. No existing file was modified; this milestone is a pure
+addition. Not wired into `Bootstrap`, `CognitiveEngine`,
+`ToolExecutionService`, `KaliToolGateway`, chat, or the desktop; zero
+production callers confirmed by grep across all of `src/`.
+
+77 tests (`tests/research/test_guest_agent_protocol.py`,
+`tests/tools/test_guest_agent_request_schema_validation.py`) cover: zero
+process/network/filesystem side effects at construction, parsing, and
+schema cross-validation (patching `subprocess`/`socket`/`open`, including
+over adversarial content); deep immutability of both message types and
+their nested tuples; the protocol version's closed/bounded nature and its
+fail-closed behavior on an unrecognized value at parse time (never a
+silent downgrade); strict validation of `request_id`/`nonce`/
+`operation_digest`/`operation_kind`/logical-input field names (duplicate
+names, oversized fields, control characters, a malformed digest, a
+non-enum capability value, and -- structurally, by disjoint enum types --
+the impossibility of expressing a local-only tool capability such as
+`CLOCK_READ` in this field at all); the complete absence of any
+shell/command/argv-shaped field or code identifier; zero execute/invoke/
+run/dispatch/authorize/grant/consume method on either message type;
+`operation_digest`/`request_id`/`nonce` each independently proven to
+create no authorization; the response's output-trust label forced to the
+existing `KALI_OPERATION_OUTPUT_TRUST` constant and rejected if overridden;
+a response whose status does not permit output correctly refusing to carry
+any; deterministic, stateless repeated construction and parsing;
+round-trip-deterministic canonical JSON serialization; strict unknown-
+field/missing-field/malformed-shape rejection on decode, including a
+regression proving the rejection message is a fixed sentence that never
+echoes the untrusted key or field name back (closing a real finding from
+independent QA, below); the complete absence of `pickle`/`eval`/`exec`/
+`__import__`/YAML-object-construction anywhere in the new modules, proven
+by AST inspection of imports and call targets; the one-way `tools` ->
+`research` dependency direction preserved (`research.GuestAgentProtocol`
+imports nothing from `tools`); and direct spot checks that the
+unmodified `ProductCapabilityCatalog`, `ProductCapabilitySchema`,
+`ProductCapabilityVersionAssessment`, and Kali authority-chain types
+(`ResearchKaliOperationAuthorization.for_preview`) still behave exactly as
+before. The existing, unmodified `tests/research` (3085 tests),
+`tests/tools` (612 tests), and `tests/cognition` Kali-pattern suites (824
+tests via full discover) continue to pass unchanged.
+
+Independent security review (hypatia-security, subagent): PASS on all
+fifteen traced properties -- no authority creation/consumption anywhere
+(confirmed by AST-level import check, not textual scan, since this
+module's own docstring correctly names `ResearchKaliOperationAuthorizationStore`/
+`KaliToolGateway` while explaining it imports neither); digest/request-id/
+nonce each independently proven non-authoritative; no mTLS/certificate
+code; response cannot grant authority, alter scope, register a capability,
+or redefine a schema; no arbitrary shell/argv field (live `dataclasses.fields()`
+introspection); no process/network path; no second Kali dispatch path; zero
+production callers (grep across all of `src/` outside the five new files,
+excluding compiled bytecode, found none); `output_trust` genuinely forced
+by `__post_init__` and reachable from the deserialization path, so a wire
+document claiming `"output_trust": "trusted"` is rejected, not silently
+accepted; no credential-shaped field; and the full deserialization call
+chain traced line by line with no `eval`/`exec`/dynamic attribute access
+anywhere. No CONFIRMED issues. One informational note: `GuestAgentResponse.detail`
+is bounded and control-character-free but not type-enforced as a member of
+a specific fixed set -- the "fixed sentence" discipline is a convention
+for whichever future caller constructs one, exactly as it already is for
+`tools.ToolResult.detail`, not something this milestone's type needs to
+newly enforce since it has no caller yet.
+
+Independent QA review (hypatia-qa, subagent): confirmed all gates green
+(74 focused tests at review time, full `tests/research`/`tests/tools`/
+`tests/cognition` suites, Black/Ruff/MyPy, `git diff --check`) and
+independently re-derived every design claim from the actual code rather
+than trusting the docstrings, but found two real defects, both closed
+before release. `GuestAgentProtocolSerialization.py`'s unknown-field and
+missing-field rejection messages interpolated the raw, unbounded,
+unsanitized top-level JSON key names directly into the raised
+`ResearchError` -- reproduced with a crafted key containing a newline, a
+NUL byte, and 5,000 padding characters, producing an over-2,000-character
+error message built entirely from attacker-supplied content, directly
+contradicting this module's own stated "fixed sentence" bar and the
+milestone's explicit "never built by interpolating untrusted field values"
+requirement. `GuestAgentRequestSchemaValidation.py`'s unknown-schema-field
+rejection similarly interpolated the (bounded, but still caller-chosen)
+logical-input field name into its message. Both were rewritten as fixed,
+code-owned sentences naming no specific field, matching
+`tools.ToolResult.detail`'s existing convention; two new regression tests
+(`test_unknown_field_error_message_never_echoes_the_untrusted_key_name`,
+`test_unknown_field_error_message_never_echoes_the_field_name`) prove the
+new messages are short and never contain the adversarial input. Re-verified
+passing (77/77) before the full suite re-run below.
+
+Full local gates re-run after the QA fixes: unittest discover 8397 tests,
+OK (258.5s); Black --check . clean (1104 files); Ruff check . clean; MyPy
+src clean (642 source files); git diff --check clean. `git status`
+confirms zero existing files modified -- five new files only.
+
+## Previous scope: v0.3.455 (release record before integration)
 
 | Field | Value |
 | --- | --- |

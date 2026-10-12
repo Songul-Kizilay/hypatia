@@ -2,10 +2,32 @@
 
 ## Runtime Version
 
-`v0.3.455 (Genesis)`
+`v0.3.456 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.456 starts the Hypatia Kali Guest-Agent direction (Windows
+Hypatia -> typed authenticated Guest-Agent protocol -> future Hypatia Kali
+Guest Agent -> strict allowlisted reviewed Kali capabilities) with the
+protocol foundation only: an immutable, in-memory, deterministic,
+transport-neutral message contract (`research.GuestAgentProtocol`,
+`research.GuestAgentProtocolSerialization`,
+`tools.GuestAgentRequestSchemaValidation`). `PROTOCOL REQUEST != EXECUTION
+AUTHORITY`, `REQUEST DIGEST != AUTHORIZATION`, `NONCE != AUTHORIZATION`,
+`REQUEST ID != AUTHORIZATION`, `AGENT RESPONSE != TRUSTED FACT`: nothing
+here opens a socket, starts a process, contacts VMware/Kali, uses SSH or
+WSL, or implements mTLS or replay persistence. Capability identity reuses
+the existing `ResearchKaliOperationKind` enum directly; `operation_digest`
+reuses the existing `is_kali_operation_digest` validator rather than
+inventing a second authority digest; wire encoding reuses the repository's
+existing canonical-JSON convention and fails closed on any unknown field or
+unrecognized protocol version. Zero production callers; not wired into
+Bootstrap, `CognitiveEngine`, `ToolExecutionService`, `KaliToolGateway`,
+chat, or the desktop. No real guest agent, no VMware transport, no SSH
+replacement, no mTLS, no replay protection -- all remain separate, future,
+unstarted milestones. Pure addition; zero existing files modified. v0.3.457
+is not started.
 
 Version v0.3.455 adds a descriptive typed input/output schema foundation: an
 immutable vocabulary (`tools.ProductCapabilitySchema`,
