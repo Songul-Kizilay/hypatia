@@ -972,7 +972,12 @@ Recorded priority order:
 2. **(delivered, v0.3.457)** Replay-protection semantics (a real one-time
    nonce store/consumption rule) over the protocol foundation's
    previously inert nonce field.
-3. mTLS / peer authentication for the transport.
+3. **(foundation delivered, v0.3.458 -- not all of step 3)** mTLS / peer
+   authentication for the transport. v0.3.458 delivered the offline
+   policy/configuration/identity-matching foundation only; provisioning
+   real certificates, performing a live handshake, and wiring this into
+   an actual transport remain separate, unstarted work still inside this
+   step.
 4. The actual transport (an RPC-style server/client) carrying the protocol
    between Windows Hypatia and a guest process.
 5. The guest-side agent itself: a process that receives one authenticated,
@@ -1011,8 +1016,29 @@ guarantee, which no store in this repository provides).
 `GuestAgentResponseStatus.REPLAY_REJECTED` is now a real, descriptive
 outcome. REPLAY PROTECTION != EXECUTION AUTHORITY: no execution, dispatch,
 network, or second Kali-authority path exists; zero production callers.
-Steps 3-7 remain separate, unstarted, future milestones, each requiring
-its own authorization.
+v0.3.458 delivered step 3's offline foundation only -- not all of step 3
+(`research.GuestAgentMtlsTrustConfiguration`,
+`research.GuestAgentPeerCertificateIdentity`,
+`research.GuestAgentMtlsContext`): two closed peer roles with a fixed,
+code-owned URI SAN identity each (never a DNS name or IP address, and
+never settable independently of the role); a trusted configuration
+holding only certificate/key paths, never key material; a pure parser
+and exact-match-only identity comparison over the real
+`ssl.SSLSocket.getpeercert()` shape; and two strict `ssl.SSLContext`
+builders (TLS 1.3 only, `CERT_REQUIRED` explicit on both sides, genuinely
+mutual, never the OS's global CA bundle). AUTHENTICATED PEER != EXECUTION
+AUTHORITY, TRUSTED CERTIFICATE != EXECUTION AUTHORITY: no certificate or
+private key was provisioned, no socket or handshake exists, and this
+milestone's own independent review found and fixed a real design
+defect -- `check_hostname` cannot validate a `URI` SAN, so identity
+checking is now symmetric and post-handshake on both sides via one pure
+function, never via that mechanism. No change to
+`GuestAgentRequest`/`GuestAgentResponse` or to replay semantics, which
+remain fully independent of mTLS. Zero production callers. The remaining
+work inside step 3 (real certificate provisioning strategy, an actual
+live handshake, wiring this foundation into a transport) and steps 4-7
+remain separate, unstarted, future milestones, each requiring its own
+authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,
