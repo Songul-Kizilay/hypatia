@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.456] - 2026-10-12
+
+### Added
+
+- The Hypatia Kali Guest-Agent protocol foundation
+  (`research.GuestAgentProtocol`, `research.GuestAgentProtocolSerialization`,
+  `tools.GuestAgentRequestSchemaValidation`) -- an immutable, in-memory,
+  deterministic, side-effect-free, transport-neutral typed message contract
+  for a future Windows-host-to-Kali-guest-agent channel
+  (`GuestAgentProtocolVersion`, `GuestAgentRequest`, `GuestAgentResponse`,
+  `GuestAgentResponseStatus`), plus deterministic canonical-JSON wire
+  encode/decode and one pure cross-check against a v0.3.455
+  `ProductCapabilityInputSchema`.
+- Capability identity reuses the existing `ResearchKaliOperationKind` enum
+  directly (not a new identity scheme, and not the transport-bound
+  `kali:<kind>:<transport>` catalog identity, since a guest-agent message
+  travels over a transport that does not exist yet); `operation_digest`
+  reuses the existing `is_kali_operation_digest` validator -- the one
+  authority digest this repository already has -- rather than inventing a
+  second; `output_lines`/`output_trust` reuse the existing
+  `MAX_KALI_OPERATION_OUTPUT_LINES`/`..._LINE_CHARACTERS`/
+  `KALI_OPERATION_OUTPUT_TRUST` bounds and label a real Kali process result
+  already carries; wire encoding reuses the one canonical-JSON convention
+  already established by `canonical_kali_operation_preview_bytes`.
+- `PROTOCOL REQUEST != EXECUTION AUTHORITY`, `REQUEST DIGEST !=
+  AUTHORIZATION`, `NONCE != AUTHORIZATION`, `REQUEST ID != AUTHORIZATION`,
+  `AGENT RESPONSE != TRUSTED FACT`: construction, parsing, and the schema
+  cross-check are all pure and side-effect-free; neither `request_id` nor
+  `nonce` is ever auto-generated; deserialization fails closed on any
+  unknown field, missing required field, or unrecognized protocol
+  version/operation kind/response status, with fixed, code-owned error
+  sentences that never echo untrusted field names or values back.
+
+### Scope
+
+- Protocol foundation only. No real guest agent, no socket, no HTTP/RPC
+  server or client, no mTLS/certificates/key generation, no replay
+  persistence or state, no VMware/SSH/WSL contact, no new Kali operation,
+  no new execution path, no change to `KaliToolGateway` or either existing
+  process adapter's behavior. Zero production callers; not wired into
+  Bootstrap, `CognitiveEngine`, `ToolExecutionService`, chat, or the
+  desktop. Pure addition; zero existing files modified. Target traffic
+  ZERO; SSH attempts ZERO; VMware/WSL/Kali guest execution ZERO; socket
+  listeners ZERO; network clients ZERO; credential changes ZERO;
+  certificate generation ZERO; VM power mutation ZERO. v0.3.457 is not
+  started.
+
 ## [0.3.455] - 2026-10-12
 
 ### Added
