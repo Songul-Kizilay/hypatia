@@ -10,7 +10,147 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.458 (implementation)
+## Current scope: v0.3.459 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent authenticated channel enforcement foundation -- closes the gap between "a future transport's TLS context is configured correctly" and "application code may treat this connection as the expected Guest-Agent peer." Still fully offline: no real socket, no live TLS handshake, no network, no VMware, no Kali, no SSH, no WSL, no execution. |
+| Base SHA | `040fad5ee5857dfa12905b53ca40b4962c5596d9` (verified remote main; standard merge of PR #439). |
+| Branch | `feature/guest-agent-channel-authentication-v0.3.459`, worktree `D:\hypatia-worktrees\guest-agent-channel-authentication` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | AUTHENTICATED PEER != EXECUTION AUTHORITY. AUTHENTICATED CHANNEL != EXECUTION AUTHORITY. AUTHENTICATED CHANNEL != OPERATION AUTHORIZATION. TLS CONTEXT CONFIGURED != PEER AUTHENTICATED. TLS HANDSHAKE SUCCESS != APPLICATION IDENTITY MATCH. CERTIFICATE CHAIN VALID != CORRECT APPLICATION PEER. Zero production callers; not wired into KaliToolGateway, ToolExecutionService, CognitiveEngine, chat, or the desktop. Target traffic ZERO; TLS handshakes ZERO; socket listeners ZERO; network clients ZERO; real certificate/private-key generation ZERO; credential changes ZERO. v0.3.460 not started. |
+
+Per the standing ledger convention, v0.3.458 delivery was re-verified
+before this milestone began: release `eef60860e1471a633d47ce9936b66c66ce9468c5`,
+PR #439 MERGED, standard merge `040fad5ee5857dfa12905b53ca40b4962c5596d9`
+with parents `e7137ae0c1f32a50ad2d567c6142904292bdf381` and the release
+SHA (confirmed by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor eef60860... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.458 is delivered.
+
+Repository-grounded audit before implementation covered
+`research.ResearchVMwareKaliGuestReadiness` (the bundled
+config+closed-state-enum+bounded-reason+always-`False`-sentinel-field
+pattern, judged optional rather than mandatory for the new types here,
+since structural "no such field exists" tests already prove non-
+authority), `core.CancellationSignal` and
+`research.ResearchPlanAuthorizationDecision` (neither is a true
+construction-privacy mechanism -- `CancellationSignal` is cooperative
+cancellation, and `ResearchPlanAuthorizationDecision`'s only
+"factory" is a `.refused(...)` convenience classmethod with the raw
+constructor left fully public), and a repository-wide grep for an
+existing private-construction/capability-token pattern, which found
+none. Confirmed this milestone needed a genuinely new mechanism rather
+than reusing an existing one, as the task explicitly anticipated.
+
+Delivered: `src/research/GuestAgentPeerAuthenticator.py`
+(`GuestAgentChannelAuthenticationStatus` -- a closed 3-member enum,
+`AUTHENTICATED`/`IDENTITY_MISMATCH`/`INVALID_CERTIFICATE_OBSERVATION`,
+with no `CONNECTED`/`READY_TO_EXECUTE`/`AUTHORIZED` member;
+`GuestAgentAuthenticatedPeer` -- immutable, carrying only `own_role` and
+`peer_identity` (with `peer_role` a derived property, never a stored
+field), its constructor requiring a module-private `object()` capability
+token checked by identity in `__post_init__`, so a caller lacking that
+token cannot construct one even though Python has no true private
+constructor; `GuestAgentChannelAuthenticationResult` -- status + fixed
+reason + optional authenticated peer, with `__post_init__` enforcing the
+peer is present if and only if the status is `AUTHENTICATED`;
+`authenticate_peer(observation, trust_configuration)` -- reuses
+v0.3.458's `peer_identity_matches` for the actual comparison, returns
+`INVALID_CERTIFICATE_OBSERVATION` rather than raising when `observation`
+is not a real parsed observation, and raises only for a structurally
+invalid `trust_configuration`, which is trusted code-owned input rather
+than wire data) and `src/research/GuestAgentAuthenticatedChannel.py`
+(`GuestAgentAuthenticatedHostChannel`/`GuestAgentAuthenticatedGuestChannel`
+-- pure in-memory wrappers reusing the existing
+`GuestAgentProtocolSerialization` codec, each constructible only from a
+correctly-rolled `GuestAgentAuthenticatedPeer`, each exposing only its
+own direction's methods so the opposite direction is a structural
+absence rather than a runtime-checked one). No existing file was
+modified; this milestone is a pure addition. Not wired into
+`KaliToolGateway`, `ToolExecutionService`, `CognitiveEngine`, chat, or
+the desktop; zero production callers confirmed by grep across all of
+`src/`.
+
+65 new tests across two new files
+(`test_guest_agent_peer_authenticator.py` -- 42,
+`test_guest_agent_authenticated_channel.py` -- 23) cover: the closed
+3-member status set with no broad/authority-shaped member; direct
+forgery attempts against `GuestAgentAuthenticatedPeer` with a wrong
+token object, `None`, `True`, a string, and an omitted token entirely,
+all rejected; both role directions (host authenticating a genuine guest
+identity, guest authenticating a genuine host identity) and both
+reflection/self-claim attacks (a host certificate against the host side,
+a guest certificate against the guest side) failing closed; expired and
+not-yet-valid certificates; fingerprint pinning match/mismatch/missing;
+malformed and wrong-type observations returning
+`INVALID_CERTIFICATE_OBSERVATION` rather than raising, while an invalid
+trust configuration raises; the full adversarial URI SAN list (`*`,
+`*.guest`, `ALLOW`, `authorized=true`, `trusted=true`, `verified=true`,
+`../../key.pem`, `file:///etc/passwd`, `127.0.0.1`, `localhost`,
+`system_instruction`, `exec`, `run`, `argv`, and more) never
+authenticating; `authenticate_peer`'s signature containing no
+`bool`-typed parameter; determinism across repeated calls; fixed,
+bounded, non-reflective reason strings; the channel wrappers refusing
+construction without a genuine, correctly-rolled authenticated peer
+(including a plain object and a bare protocol object impersonating one);
+wrong-direction methods structurally absent (`hasattr` false) rather
+than runtime-rejected; full in-memory encode/decode round trips in both
+directions; and zero forbidden network/socket/handshake imports or
+Kali-authority references anywhere in either new module, checked by real
+AST parsing (`Import`/`ImportFrom`/`Attribute`/`Name` nodes) rather than
+naive text search, specifically so a module's own docstring prose
+explaining an absence cannot accidentally trip the check. The existing,
+unmodified `tests/research` suite (3311 tests) continues to pass
+unchanged via full discover.
+
+Independent security review (hypatia-security, subagent): re-derived
+every claim from the code directly and wrote its own adversarial bypass
+script beyond the shipped tests (`dataclasses.replace`, subclassing,
+pickle round-trip, `object.__setattr__` on the frozen dataclass,
+`getattr`-ing the module-private sentinel directly). No CONFIRMED
+findings. One informational note: same-process code that already
+imports the private sentinel or bypasses the frozen-dataclass guarantee
+via `object.__setattr__` can produce an inconsistent peer -- judged not
+exploitable, since the documented threat model is wire/external data,
+not same-process introspection, and no code path in this milestone (or
+any plausible future caller) does this.
+
+Independent QA review (hypatia-qa, subagent): confirmed the diff is
+exactly scoped to the four new files, ran the new suite (65/65) and the
+eight-module prior-series regression suite (221/221) itself, confirmed
+zero live callers by grep, confirmed black/ruff/mypy clean on the new
+files, and ran its own extra bypass attempts (duck-typed fake
+observation, uppercase/whitespace-padded URI, subclassing
+`GuestAgentPeerCertificateIdentityObservation.currently_valid`). No
+CONFIRMED findings introduced by this milestone's diff. Two
+informational notes: (1) the same frozen-dataclass mutation limitation
+security review also found, judged the same way; (2) the
+subclassed-`currently_valid` bypass is inherited from the unmodified,
+already-shipped v0.3.458 `peer_identity_matches`, outside this
+milestone's own diff and already covered by that milestone's own review.
+
+During local gate verification, the full `tests` discover run surfaced
+three pre-existing repository-wide structural boundary tests
+(`tests.desktop.test_tool_console_isolation`,
+`tests.integration.test_authorized_execution_start`,
+`tests.tools.test_tool_layer_isolation`) failing because this
+milestone's own `GuestAgentAuthenticatedChannel.py` module docstring
+named the literal string `ToolExecutionService` in prose while
+explaining that the module is *not* wired into it -- exactly the
+textual-false-positive trap this series has hit before in its own tests,
+this time tripping an existing repository-wide gate instead. Fixed by
+rewording the docstring to describe the same fact without the literal
+identifier; re-verified those three test modules and the full suite pass
+afterward.
+
+Full local gates re-run after that fix: unittest discover 8621 tests, OK;
+Black --check . clean (1122 files); Ruff check . clean; MyPy src clean
+(651 source files); git diff --check clean. `git status` confirms zero
+existing files modified -- four new files only.
+
+## Previous scope: v0.3.458 (release record before integration)
 
 | Field | Value |
 | --- | --- |

@@ -2,6 +2,74 @@
 
 All notable project changes are recorded here.
 
+## [0.3.459] - 2026-10-12
+
+### Added
+
+- The Guest-Agent **channel authentication enforcement foundation**
+  (`research.GuestAgentPeerAuthenticator`,
+  `research.GuestAgentAuthenticatedChannel`), closing the gap between "a
+  future transport's TLS context is configured correctly" and
+  "application code may treat this connection as the expected Guest-Agent
+  peer." `GuestAgentChannelAuthenticationStatus` is a closed, honest
+  3-member set (`AUTHENTICATED`, `IDENTITY_MISMATCH`,
+  `INVALID_CERTIFICATE_OBSERVATION`) with no `CONNECTED`,
+  `READY_TO_EXECUTE`, or `AUTHORIZED` member, and no member named or
+  meaning "authorized to execute." `authenticate_peer(observation,
+  trust_configuration)` reuses v0.3.458's `peer_identity_matches` for the
+  actual URI SAN / validity / fingerprint comparison rather than
+  duplicating it.
+- `GuestAgentAuthenticatedPeer`, a value that cannot be forged by a public
+  caller: it is immutable, carries only a role and a matched identity (no
+  scope, no credential, no key material, no permission of any kind), and
+  its constructor requires a module-private capability token that only
+  `authenticate_peer` can supply, checked by identity in `__post_init__`
+  rather than by convention or docstring alone.
+- `GuestAgentAuthenticatedHostChannel`/`GuestAgentAuthenticatedGuestChannel`,
+  pure in-memory, role-direction-bound channel wrappers reusing the
+  existing wire codec. Each can only be constructed from a genuinely
+  authenticated, correctly-rolled peer, and each only ever exposes the
+  methods for its own direction -- a host-side channel has no
+  `decode_request`/`encode_response` method at all, and the guest side is
+  the mirror image, so a wrong-direction protocol object is a structural
+  impossibility rather than a runtime check that could be forgotten.
+  Neither wrapper opens a socket, performs a handshake, or is wired into
+  the Kali tool gateway, the tool execution layer, cognition, chat, or
+  the desktop.
+- `AUTHENTICATED PEER != EXECUTION AUTHORITY`, `AUTHENTICATED CHANNEL !=
+  EXECUTION AUTHORITY`, `AUTHENTICATED CHANNEL != OPERATION
+  AUTHORIZATION`, `TLS CONTEXT CONFIGURED != PEER AUTHENTICATED`, `TLS
+  HANDSHAKE SUCCESS != APPLICATION IDENTITY MATCH`, `CERTIFICATE CHAIN
+  VALID != CORRECT APPLICATION PEER`: a protocol message crossing this
+  authenticated-channel boundary never means an operation may execute.
+
+### Scope
+
+- **Strengthens another offline portion of roadmap step 3; step 3 is
+  still not complete and step 4 (the real RPC transport) does not exist.**
+  This milestone cannot itself prove a real TLS handshake or chain
+  verification occurred -- that remains entirely a future transport's
+  job; this layer only enforces application identity over certificate
+  facts a future strict transport must already have obtained that way.
+  No real certificates or private keys provisioned, no socket, no network
+  client, no TLS handshake performed, no SSH replaced. No change to
+  `GuestAgentRequest`/`GuestAgentResponse` (no certificate, fingerprint,
+  peer-identity, or credential field was added) and no change to
+  v0.3.457's replay-protection semantics or v0.3.458's mTLS types --
+  authentication and replay consumption remain two independently
+  required, uncoupled mechanisms. Independent QA and independent
+  security review each ran their own adversarial bypass attempts
+  (`dataclasses.replace`, `object.__setattr__`, pickle round-trips,
+  subclassing, module-private-sentinel introspection) against the new
+  construction-privacy mechanism and found no confirmed defect; both
+  reports include the same informational note that these are generic,
+  non-exploitable Python frozen-dataclass/module-privacy properties, not
+  something this milestone weakened. Zero production callers; not wired
+  into `KaliToolGateway`, `ToolExecutionService`, `CognitiveEngine`, chat,
+  or the desktop. Target traffic ZERO; TLS handshakes ZERO; socket
+  listeners ZERO; network clients ZERO; real certificate/private-key
+  generation ZERO; credential changes ZERO.
+
 ## [0.3.458] - 2026-10-12
 
 ### Added

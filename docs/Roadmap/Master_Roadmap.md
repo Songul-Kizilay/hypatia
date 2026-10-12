@@ -972,12 +972,15 @@ Recorded priority order:
 2. **(delivered, v0.3.457)** Replay-protection semantics (a real one-time
    nonce store/consumption rule) over the protocol foundation's
    previously inert nonce field.
-3. **(foundation delivered, v0.3.458 -- not all of step 3)** mTLS / peer
-   authentication for the transport. v0.3.458 delivered the offline
-   policy/configuration/identity-matching foundation only; provisioning
-   real certificates, performing a live handshake, and wiring this into
-   an actual transport remain separate, unstarted work still inside this
-   step.
+3. **(foundation delivered, v0.3.458-v0.3.459 -- not all of step 3)** mTLS /
+   peer authentication for the transport. v0.3.458 delivered the offline
+   policy/configuration/identity-matching foundation; v0.3.459 added the
+   offline channel authentication enforcement foundation on top of it
+   (closing the gap between "TLS context configured" and "application
+   code may treat this connection as the expected peer"). Provisioning
+   real certificates, performing a live handshake, and wiring either
+   foundation into an actual transport remain separate, unstarted work
+   still inside this step.
 4. The actual transport (an RPC-style server/client) carrying the protocol
    between Windows Hypatia and a guest process.
 5. The guest-side agent itself: a process that receives one authenticated,
@@ -1034,11 +1037,32 @@ defect -- `check_hostname` cannot validate a `URI` SAN, so identity
 checking is now symmetric and post-handshake on both sides via one pure
 function, never via that mechanism. No change to
 `GuestAgentRequest`/`GuestAgentResponse` or to replay semantics, which
-remain fully independent of mTLS. Zero production callers. The remaining
+remain fully independent of mTLS. Zero production callers. v0.3.459
+added the offline channel authentication enforcement foundation, still
+inside step 3 and still offline
+(`research.GuestAgentPeerAuthenticator`,
+`research.GuestAgentAuthenticatedChannel`): a closed, honest 3-member
+`GuestAgentChannelAuthenticationStatus` (`AUTHENTICATED`/
+`IDENTITY_MISMATCH`/`INVALID_CERTIFICATE_OBSERVATION`) with no status
+named or meaning "authorized to execute"; `authenticate_peer` reusing
+v0.3.458's `peer_identity_matches` rather than duplicating its
+comparison logic; a `GuestAgentAuthenticatedPeer` value that cannot be
+forged by a public caller (immutable, carrying only a role and matched
+identity, gated by a module-private capability token checked by
+identity rather than convention); and pure in-memory, role-direction-
+bound channel wrappers reusing the existing wire codec, each
+structurally lacking the opposite direction's methods. AUTHENTICATED
+PEER != EXECUTION AUTHORITY, AUTHENTICATED CHANNEL != EXECUTION
+AUTHORITY, AUTHENTICATED CHANNEL != OPERATION AUTHORIZATION: a protocol
+message crossing this boundary still never means an operation may
+execute. This layer still cannot itself prove a real TLS handshake or
+chain verification occurred -- that remains a future transport's job.
+No certificates/keys provisioned, no socket, no network client, no
+handshake, no SSH replaced. Zero production callers. The remaining
 work inside step 3 (real certificate provisioning strategy, an actual
-live handshake, wiring this foundation into a transport) and steps 4-7
-remain separate, unstarted, future milestones, each requiring its own
-authorization.
+live handshake, wiring either foundation into a transport) and steps
+4-7 remain separate, unstarted, future milestones, each requiring its
+own authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,
