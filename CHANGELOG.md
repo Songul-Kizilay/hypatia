@@ -2,7 +2,88 @@
 
 All notable project changes are recorded here.
 
-## [0.3.459] - 2026-10-12
+## [0.3.460] - 2026-10-12
+
+### Added
+
+- The first REAL local TLS 1.3 mutual handshake in the Guest-Agent series,
+  proven entirely over loopback (`127.0.0.1` only) in a new focused test
+  file, `tests/research/test_guest_agent_loopback_mtls_handshake.py`. No
+  new production source file was added: repository evidence showed
+  `research.GuestAgentPeerCertificateIdentity.parse_peer_certificate_identity`
+  already accepts exactly the `dict`/`bytes` shapes
+  `ssl.SSLSocket.getpeercert()`/`getpeercert(binary_form=True)` return, so
+  this milestone proves the real handshake flows correctly into the
+  existing, completely unmodified v0.3.458/459 authentication chain
+  (`build_host_client_tls_context`/`build_guest_server_tls_context` ->
+  real socket handshake -> `parse_peer_certificate_identity` ->
+  `peer_identity_matches` -> `authenticate_peer` ->
+  `GuestAgentAuthenticatedHostChannel`/`GuestAgentAuthenticatedGuestChannel`)
+  without adding or duplicating a single line of production logic.
+- Proves, with a real handshake rather than a synthetic observation: TLS
+  1.3 negotiated on both sides; genuinely mutual certificate presentation
+  (a certificate-less client is genuinely rejected by the server's
+  `CERT_REQUIRED` context); real peer certificate dict/DER extraction from
+  the live socket; real URI SAN parsing; host-side identity enforcement
+  accepting only the guest identity and guest-side enforcement accepting
+  only the host identity; **the critical CA-valid-wrong-role proof** --
+  a certificate that is genuinely signed by the trusted test CA but names
+  the wrong role's URI SAN lets the TLS handshake itself succeed, while
+  only the existing, unmodified `authenticate_peer`/`peer_identity_matches`
+  chain rejects it with `IDENTITY_MISMATCH`; expired and not-yet-valid
+  certificates failing closed; optional SHA-256 fingerprint pinning
+  derived from the real DER bytes the live socket returned, never from a
+  caller-supplied claim.
+- Ephemeral, test-only X.509 material (a dedicated test CA, a second,
+  deliberately untrusted CA, and HOST/GUEST leaf certificates, including
+  expired/not-yet-valid variants) generated once per test class via the
+  `openssl` CLI inside a `tempfile.TemporaryDirectory()`, always removed
+  afterward. Repository/CI-environment audit before implementation
+  confirmed `openssl` is present on both this project's actual Linux
+  (`ubuntu-24.04`) and Windows (`windows-2025`) GitHub-hosted CI runner
+  images (via each image's published software manifest), and confirmed
+  the `x509 -req` self-contained CA-signing mode's `-not_after`/
+  `-not_before` flags do not exist on OpenSSL 3.0.0 (the Linux runner's
+  exact major version) -- the older, more portable `openssl ca`
+  config-driven flow with explicit `-startdate`/`-enddate` is used instead
+  for the two certificates that need an explicit, non-"now" validity
+  window. No `cryptography` or other new dependency was added; this
+  project continues to declare zero runtime dependencies.
+- `TLS HANDSHAKE SUCCESS != EXECUTION AUTHORITY`, `PEER IDENTITY MATCH !=
+  EXECUTION AUTHORITY`, `AUTHENTICATED CHANNEL != EXECUTION AUTHORITY`,
+  `AUTHENTICATED CHANNEL != OPERATION AUTHORIZATION`: the only bytes ever
+  exchanged over the live socket are one fixed, bounded
+  handshake-completion acknowledgment byte each way -- added after this
+  milestone's own testing surfaced a real TLS 1.3 0.5-RTT race (a client
+  closing its socket before the server finished verifying the client's
+  certificate, surfaced on this platform as a spurious
+  `ConnectionAbortedError`) -- never a `GuestAgentRequest`/
+  `GuestAgentResponse`, length-prefixed frame, or any other
+  application-protocol byte. No RPC transport, request/response framing,
+  or reconnect logic exists; that remains entirely roadmap step 4,
+  unstarted.
+
+### Scope
+
+- **Strengthens roadmap step 3 with a real, verified loopback handshake;
+  step 3 is still not complete.** Real production certificate
+  provisioning, distribution, and rotation for an actual Windows Hypatia
+  <-> Kali Guest Agent deployment remain entirely undesigned and
+  untested -- this milestone used only ephemeral, test-only certificates,
+  generated and destroyed within a single test run, never written outside
+  a temporary directory and never committed. The real (non-loopback)
+  VMware Host-Only network path, the actual RPC transport, and the real
+  Kali Guest Agent process all remain separate, unstarted, future
+  milestones (step 4 and beyond) requiring their own authorization. No
+  production source file was modified or added; the diff is exactly one
+  new test file. Independent QA and independent security review each
+  independently reproduced the real handshake, the CA-valid-wrong-role
+  proof, and the race-condition fix themselves (not merely reading the
+  code) and found no CONFIRMED defect. Zero production callers; not wired
+  into `KaliToolGateway`, `ToolExecutionService`, `CognitiveEngine`, chat,
+  or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO;
+  non-loopback network activity ZERO; real certificate/private-key
+  generation ZERO; credential changes ZERO.
 
 ### Added
 

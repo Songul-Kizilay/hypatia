@@ -2,10 +2,52 @@
 
 ## Runtime Version
 
-`v0.3.459 (Genesis)`
+`v0.3.460 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.460 proves the first REAL local TLS 1.3 mutual handshake in
+the Guest-Agent series, entirely over loopback (`127.0.0.1` only), adding
+no new production source file: the real handshake is proven to flow
+correctly into the existing, completely unmodified v0.3.458/459
+authentication chain (`build_host_client_tls_context`/
+`build_guest_server_tls_context` -> real socket handshake ->
+`parse_peer_certificate_identity` -> `peer_identity_matches` ->
+`authenticate_peer` -> `GuestAgentAuthenticatedHostChannel`/
+`GuestAgentAuthenticatedGuestChannel`) in one new focused test file.
+`TLS HANDSHAKE SUCCESS != EXECUTION AUTHORITY`, `PEER IDENTITY MATCH !=
+EXECUTION AUTHORITY`, `AUTHENTICATED CHANNEL != EXECUTION AUTHORITY`,
+`AUTHENTICATED CHANNEL != OPERATION AUTHORIZATION`: proves real TLS 1.3
+negotiation, genuinely mutual certificate presentation (a
+certificate-less client is genuinely rejected), real peer certificate
+dict/DER extraction and URI SAN parsing from the live socket, host/guest
+identity enforcement accepting only the correct peer role, and the
+critical proof that a certificate genuinely signed by the trusted test CA
+but naming the wrong role's URI SAN lets the TLS handshake succeed while
+only the unmodified application-identity chain rejects it
+(`IDENTITY_MISMATCH`) -- `CERTIFICATE CHAIN VALID != CORRECT APPLICATION
+PEER`. Ephemeral test-only certificates (a dedicated test CA, a second
+deliberately untrusted CA, HOST/GUEST leaves, expired/not-yet-valid
+variants) are generated via the `openssl` CLI -- confirmed present on
+both this project's actual Linux (`ubuntu-24.04`) and Windows
+(`windows-2025`) CI runner images -- inside a temporary directory that is
+always removed; no `cryptography` or other new dependency was added. The
+only bytes ever exchanged over the live socket are one fixed,
+bounded handshake-completion acknowledgment byte each way (added to fix a
+real TLS 1.3 0.5-RTT race this milestone's own testing surfaced); no RPC
+transport, request/response framing, or reconnect logic exists -- that
+remains entirely roadmap step 4, unstarted. **Strengthens step 3 with a
+real, verified loopback handshake; step 3 is still not complete**: real
+production certificate provisioning/distribution for an actual Windows
+Hypatia <-> Kali Guest Agent deployment, and the real (non-loopback)
+VMware Host-Only network path, remain entirely undesigned and untested.
+Independent QA and independent security review each independently
+reproduced the real handshake, the wrong-role proof, and the
+race-condition fix themselves and found no confirmed defect. Zero
+production callers; not wired into `KaliToolGateway`,
+`ToolExecutionService`, `CognitiveEngine`, chat, or the desktop. v0.3.461
+is not started.
 
 Version v0.3.459 delivers the Guest-Agent **channel authentication
 enforcement foundation** (`research.GuestAgentPeerAuthenticator`,
