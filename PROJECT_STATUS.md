@@ -2,10 +2,46 @@
 
 ## Runtime Version
 
-`v0.3.458 (Genesis)`
+`v0.3.459 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.459 delivers the Guest-Agent **channel authentication
+enforcement foundation** (`research.GuestAgentPeerAuthenticator`,
+`research.GuestAgentAuthenticatedChannel`), strengthening another offline
+portion of roadmap step 3 -- step 3 is still not complete and step 4 (the
+real RPC transport) does not exist. `AUTHENTICATED PEER != EXECUTION
+AUTHORITY`, `AUTHENTICATED CHANNEL != EXECUTION AUTHORITY`, `AUTHENTICATED
+CHANNEL != OPERATION AUTHORIZATION`, `TLS CONTEXT CONFIGURED != PEER
+AUTHENTICATED`: `GuestAgentChannelAuthenticationStatus` is a closed,
+honest 3-member set (`AUTHENTICATED`, `IDENTITY_MISMATCH`,
+`INVALID_CERTIFICATE_OBSERVATION`) with no status named or meaning
+"authorized to execute." `authenticate_peer(observation,
+trust_configuration)` reuses v0.3.458's `peer_identity_matches` rather
+than duplicating its comparison logic. `GuestAgentAuthenticatedPeer`
+cannot be forged by a public caller: it is immutable, carries only a role
+and a matched identity (no scope, credential, key material, or
+permission), and its constructor requires a module-private capability
+token that only `authenticate_peer` can supply, checked by identity
+rather than by docstring convention alone.
+`GuestAgentAuthenticatedHostChannel`/`GuestAgentAuthenticatedGuestChannel`
+are pure in-memory, role-direction-bound wrappers reusing the existing
+wire codec -- each only exposes the methods for its own direction, so a
+wrong-direction protocol object is a structural impossibility, not a
+runtime check. Neither wrapper opens a socket, performs a handshake, or
+is wired into the Kali tool gateway, the tool execution layer, cognition,
+chat, or the desktop. This layer still cannot itself prove a real TLS
+handshake or chain verification occurred -- that remains entirely a
+future transport's job. No real certificates/private keys provisioned;
+no socket, network client, or TLS handshake performed; no SSH replaced;
+no change to `GuestAgentRequest`/`GuestAgentResponse` or to v0.3.457's
+replay semantics or v0.3.458's mTLS types, which remain independent.
+Independent QA and independent security review each ran their own
+adversarial bypass attempts and found no confirmed defect. Zero
+production callers; not wired into `KaliToolGateway`,
+`ToolExecutionService`, `CognitiveEngine`, chat, or the desktop. v0.3.460
+is not started.
 
 Version v0.3.458 delivers an offline mTLS / peer-authentication
 **foundation** for Guest-Agent roadmap step 3 -- not all of step 3, and
@@ -36,7 +72,7 @@ handshake, or network client exists; no change to
 semantics, which remain independent -- mTLS and replay protection are
 both required, neither substitutes for the other. Zero production
 callers; not wired into `KaliToolGateway`, `ToolExecutionService`,
-`CognitiveEngine`, chat, or the desktop. v0.3.459 is not started.
+`CognitiveEngine`, chat, or the desktop.
 
 Version v0.3.457 delivers Guest-Agent roadmap step 2, real replay-protection
 semantics over the already-existing inert `nonce` field
