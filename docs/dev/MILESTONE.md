@@ -10,7 +10,170 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.454 (release)
+## Current scope: v0.3.455 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Descriptive typed input/output schema foundation -- third descriptive Phase 9 slice. Describes the logical input/output shape of capabilities that already exist; adds no executable capability, no new Kali operation, no policy engine, no live availability/version-discovery check. |
+| Base SHA | `2a025761ba99708b07cb4e7dfb1161037d57ecc0` (verified remote main; standard merge of PR #435). |
+| Branch | `feature/capability-schema-foundation-v0.3.455`, worktree `D:\hypatia-worktrees\capability-schema-foundation` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | SCHEMA KNOWN != INPUT AUTHORIZED. SCHEMA VALID != EXECUTION AUTHORIZED. OUTPUT SHAPE KNOWN != OUTPUT TRUSTED. No process/network/VM/SSH/credential effect at construction or lookup. No existing execution path (`ToolExecutionService`, `KaliToolGateway`) depends on this module. No new Kali operation kind, no HTTPS-over-VMware, no policy ALLOW/DENY/REQUIRE_APPROVAL. Target traffic ZERO; VM power mutation ZERO; SSH attempts ZERO. v0.3.456 not started. |
+
+Per the standing ledger convention, v0.3.454 delivery was re-verified before
+this milestone began: release `5946aebc64cbe57ad1ff32accf30d2ac09db5585`,
+PR #435 MERGED, standard merge `2a025761ba99708b07cb4e7dfb1161037d57ecc0`
+with parents `4aaddd9fe00e594d240514a93564ca201b46bcea` and the release SHA
+(confirmed by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor 5946aebc... origin/main` succeeded; author/
+committer identity on the release commit is Songul Kizilay's existing
+GitHub noreply identity, unchanged. v0.3.454 is delivered.
+
+Repository-grounded audit before implementation covered `ToolInvocation`,
+`ToolResult`, `ToolDescriptor`, every registered concrete `Tool`
+implementation (`ClockReadTool`, `TextStatisticsTool`, `FilesystemListTool`,
+`FilesystemMetadataTool`, `FilesystemReadTool`), `FilesystemContentPayload`,
+`FilesystemEntryKind`, and the Kali preview/execution types
+(`ResearchKaliOperationPreview`, `ResearchKaliOperationExecution`). One
+load-bearing constraint discovered during the audit: an existing
+repository-wide isolation rule (`tests/tools/test_filesystem_read_tool.py`,
+`test_filesystem_content_payload.py`, `test_filesystem_content_result_contract.py`)
+restricts which files may even textually mention `FilesystemReadTool` or
+`FilesystemContentPayload` anywhere in `src/`. The new schema module
+respects that boundary rather than widening it: `FILESYSTEM_READ`'s three
+argument names are restated as local literals instead of imported, and its
+input/output schemas are marked `PARTIAL` rather than `COMPLETE` as a
+result -- never a second source of truth masquerading as a projection.
+
+Delivered: three new files under `src/tools/` -- `ProductCapabilitySchema.py`
+(the vocabulary: `ProductCapabilityFieldKind` (`FREE_TEXT`/
+`WHOLE_NUMBER_TEXT`/`BOOLEAN_TEXT`/`CLOSED_ENUM_TEXT`), `ProductCapabilityOutputChannel`
+(`LABELLED_VALUES`/`CONTENT_PAYLOAD`/`ORDERED_TEXT_LINES` -- the third
+added specifically because a reviewed Kali operation's `stdout_lines` is a
+plain, unlabelled, positionally-ordered tuple, never a `ToolResult` at
+all), `ProductCapabilitySchemaCompleteness` (`COMPLETE`/`PARTIAL`/
+`UNDECLARED`), the frozen `ProductCapabilityField` (name, kind, required,
+repeated, and bounded `max_length`/`max_numeric_value`/`max_repeat_count`/
+`enum_values`), and the frozen `ProductCapabilityInputSchema`/
+`ProductCapabilityOutputSchema`/`ProductCapabilitySchema`), `ProductCapabilitySchemaCatalog.py`
+(an immutable, identity-keyed index mirroring `ProductCapabilityCatalog`'s
+own shape exactly), and `ProductCapabilitySchemaDefaults.py` (projects
+schemas for `CLOCK_READ` (zero arguments, four fixed output values),
+`TEXT_STATISTICS` (one required `text` argument bounded by
+`MAX_ARGUMENT_LENGTH`; four `WHOLE_NUMBER_TEXT` counts each bounded by that
+same constant since no count can exceed the text it was counted from),
+`FILESYSTEM_LIST` (a required `path`, an optional `offset`, five fixed
+page-description values, and one repeated `entry` family bounded by
+`PAGE_SIZE` -- never fabricated fixed `entry_1`...`entry_N` fields),
+`FILESYSTEM_METADATA` (a required `path`; `kind` as a closed enum
+projected live from `FilesystemEntryKind`'s own members, excluding `LINK`
+since `FilesystemRoot.locate` refuses any link before this output is ever
+produced; `size_bytes` correctly optional, present only when `kind` is
+`"file"`), and `FILESYSTEM_READ` (three required arguments restated as
+literals per the isolation boundary above; result carried entirely by the
+separate `CONTENT_PAYLOAD` channel, declaring zero fields rather than a
+second, narrower restatement of a native-typed contract this module does
+not import) -- plus the three production-real Kali operation/transport
+combinations `ProductCapabilityCatalogDefaults._EXECUTABLE_KALI_OPERATIONS`
+already enumerates, reused directly rather than re-copied
+(`DNS_RECORD_LOOKUP` over both `WSL_KALI` and `VMWARE_KALI`;
+`HTTPS_HEADER_LOOKUP` over `WSL_KALI` only -- `HTTPS_HEADER_LOOKUP` over
+`VMWARE_KALI` stays correctly absent). Kali `hostname` carries no
+`max_length`: the real ceiling is enforced on the *normalized* hostname,
+not the raw argument text, so stating one would misdescribe a bound on a
+transformed value as a bound on the raw one -- both Kali input schemas are
+`PARTIAL` for exactly this reason. No existing file was modified; this
+milestone is a pure addition. Not wired into `ToolExecutionService`,
+`KaliToolGateway`, `Bootstrap`, `CognitiveEngine`, chat, or the desktop.
+
+74 tests (`tests/tools/test_product_capability_schema.py`) cover: zero
+process/network side effects at construction and lookup (including the
+full default catalog and the Kali-only catalog, patching
+`subprocess.run`/`subprocess.Popen`/`socket.getaddrinfo`); deep
+immutability of records, nested field tuples, and enum-value sets;
+duplicate capability identities and duplicate field names both failing
+deterministically; empty/control-character/overlong field names rejected;
+every `ProductCapabilityField` cross-field guard (repeated+required
+together, `max_numeric_value` requiring `WHOLE_NUMBER_TEXT`,
+`max_repeat_count` requiring `repeated`, `enum_values` requiring
+`CLOSED_ENUM_TEXT` in both directions, bool-as-int rejected on every
+integer bound, negative/zero bounds rejected, enum-set size/length
+boundaries pinned at exactly `MAX_ENUM_VALUES`/`MAX_ENUM_VALUE_LENGTH`);
+`CONTENT_PAYLOAD` forced to zero fields and never `COMPLETE`;
+`ORDERED_TEXT_LINES` forced to only repeated fields; field-by-field
+re-derivation of every local-tool schema against the real tool
+(`CLOCK_READ`'s exact four output keys and `"UTC"` enum; `TEXT_STATISTICS`'
+`text` argument and four counts; `FILESYSTEM_LIST`'s repeated `entry`
+family with no fabricated fixed entries, `entry_count`/`page_size` bounds
+pinned to `MAX_SCANNED_ENTRIES`/`PAGE_SIZE`; `FILESYSTEM_METADATA`'s
+grounded `kind` enum excluding `LINK`, optional `size_bytes`;
+`FILESYSTEM_READ` exercised through a real `ToolRuntime`-wired
+`FilesystemReadTool`, not only by direct call); the exact three executable
+Kali combinations and the continued absence of `HTTPS_HEADER_LOOKUP` over
+`VMWARE_KALI`; Kali schemas containing no shell command/argv template and
+no SSH/credential/VM configuration (checked by `repr()` substring
+search); a capability with no schema builder (`RESEARCH_STATE_SUMMARY`,
+`KNOWLEDGE_DOCUMENT_LIST` -- no concrete `Tool` implementation exists for
+either today) staying simply absent, never fabricated; adversarial
+enum-value strings (`ALLOW`, `REQUIRE_APPROVAL`, `admin`, ...) remaining
+ordinary data; neither new module importing `brain`/`cognition`/`llm`/
+`response`, or textually mentioning `FilesystemReadTool`/
+`FilesystemContentPayload`; schema presence never invoking
+`ToolExecutionService.execute_detailed` (patched and asserted uncalled
+across the full default catalog); and repeated lookup being pure and
+state-free. The existing, unmodified `tests/tools/test_filesystem_read_tool.py`,
+`test_filesystem_content_payload.py`, `test_filesystem_content_result_contract.py`,
+`test_product_capability_catalog.py`, and `test_product_capability_version_assessment.py`
+suites (598 tests across `tests/tools/` total, including this milestone's
+own file) continue to pass unchanged.
+
+Independent security review (hypatia-security, subagent): PASS on all ten
+traced properties -- no authority creation/consumption, no target-scope
+mutation, no dispatch/process/network path (grepped for `subprocess`,
+`socket.`, `ToolExecutionService`, `KaliToolGateway` -- zero matches), the
+catalog constructor is the only code-typed entry point, adversarial
+enum-value strings remain data, no credential/SSH/VM literal anywhere, no
+argv/shell-command template, no second Tool/Kali execution path wired in
+(grepped all of `src/` for importers of the three new modules -- none
+exist), schema presence cannot reach execution, and filesystem schemas
+leak no configured root path/root_id (verified against a real, randomly
+named `tempfile.TemporaryDirectory()`, not a predictable fixed string). No
+CONFIRMED issues.
+
+Independent QA review (hypatia-qa, subagent): confirmed all gates green
+and found no authority/security defect, but found three real
+descriptive-accuracy gaps, all closed before release. First:
+`_FILESYSTEM_METADATA_KIND_VALUES` was a hand-copied literal set with a
+docstring that falsely claimed it was "read directly from
+`FilesystemEntryKind`'s own values" -- now genuinely projected via
+`frozenset(kind.value for kind in FilesystemEntryKind if kind is not
+FilesystemEntryKind.LINK)`, so a future enum change is reflected
+automatically rather than silently going stale. Second: the Kali
+`hostname` input field claimed `max_length=MAX_KALI_OPERATION_HOSTNAME_CHARACTERS`,
+but that bound is enforced on `ResearchKaliOperationPreview`'s
+*normalized* hostname (post `.strip().lower().removesuffix(".")`), not the
+raw argument text -- arbitrary leading/trailing whitespace padding means
+the raw text has no such ceiling; `max_length` was removed from that field
+and both Kali input schemas downgraded from `COMPLETE` to `PARTIAL`. Third:
+the Kali output schema used the `LABELLED_VALUES` channel, but a Kali
+operation never produces a `ToolResult` -- its real `stdout_lines` is a
+plain, unlabelled, positionally-ordered tuple, not a family with
+synthesized `stdout_line_1`, `stdout_line_2`, ... keys; added the narrow
+`ORDERED_TEXT_LINES` channel (structurally restricted to repeated-only
+fields) and moved the Kali output schema onto it. QA also flagged a
+coverage gap -- `FILESYSTEM_READ` was only tested by direct function call,
+never through the real registry-driven presence/absence path -- closed by
+wiring a real `FilesystemReadTool` into `ToolRuntime` in the test. Six new
+tests added for the enum-size/length boundaries and the `ORDERED_TEXT_LINES`
+structural guard; re-verified passing (598/598) before the full suite
+re-run below.
+
+Full local gates re-run after the QA fixes: unittest discover 8320 tests,
+OK (155.4s); Black --check . clean (1099 files); Ruff check . clean; MyPy
+src clean (639 source files); git diff --check clean. `git status`
+confirms zero existing files modified -- four new files only.
+
+## Previous scope: v0.3.454 (release record before integration)
 
 | Field | Value |
 | --- | --- |

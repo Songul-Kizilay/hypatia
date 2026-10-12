@@ -762,12 +762,27 @@ built from the untrusted observation — proven against ten adversarial
 observed-version strings (shell metacharacters, a fake `--upgrade`
 option, literal `ALLOW`/`REQUIRE_APPROVAL` text, a fake system
 instruction) that all remain inert data. Not wired into `Bootstrap`,
-`ToolExecutionService`, `KaliToolGateway`, chat, or the desktop. The
-remaining Phase 9 items — a policy engine, input/output schemas, live
+`ToolExecutionService`, `KaliToolGateway`, chat, or the desktop. v0.3.455
+added the third descriptive slice — a typed input/output schema foundation
+(`tools.ProductCapabilitySchema`, `tools.ProductCapabilitySchemaCatalog`,
+`tools.ProductCapabilitySchemaDefaults`) describing the logical input/
+output shape of `CLOCK_READ`, `TEXT_STATISTICS`, `FILESYSTEM_LIST`,
+`FILESYSTEM_METADATA`, `FILESYSTEM_READ`, and the three production-real
+Kali operation/transport combinations, with an explicit
+`COMPLETE`/`PARTIAL`/`UNDECLARED` completeness concept so a schema never
+claims more precision than current code can prove (a capability's real
+shape that cannot be honestly represented — `FILESYSTEM_READ`'s native-
+typed content channel, a Kali operation's execution mechanics, a hostname
+bound enforced only after normalization — is marked `PARTIAL` rather than
+approximated). `SCHEMA KNOWN != INPUT AUTHORIZED`, `SCHEMA VALID !=
+EXECUTION AUTHORIZED`: no existing execution path depends on this module.
+This is still a foundation, not the platform — no policy engine exists yet
+to check a schema against, and nothing yet reads these schemas at
+execution time. The remaining Phase 9 items — a policy engine, live
 version *discovery* (actually running a tool to find its version, out of
-scope for both v0.3.453 and v0.3.454), a live availability *check* rather
-than a descriptive reference, cost estimation — remain separate,
-unstarted, future milestones.
+scope through v0.3.455), a live availability *check* rather than a
+descriptive reference, cost estimation — remain separate, unstarted,
+future milestones.
 
 - [x] v0.3.453 — typed tool/capability identity, human-readable name,
       category, network/credential/target-scope/destructive classification,
@@ -778,9 +793,13 @@ unstarted, future milestones.
       observation (`MATCH`/`DRIFT`/`UNKNOWN`/`NOT_APPLICABLE`), reusing the
       existing prefix-containment semantic; version compatibility !=
       execution authority (proven structurally); no live discovery
-- [ ] Input/output schemas, a policy engine any of this can be checked
-      against, live tool-version *discovery*, a live availability check,
-      cost estimate
+- [x] v0.3.455 — descriptive typed input/output schema foundation: a small
+      closed value-kind vocabulary, an explicit completeness concept, and
+      projected schemas for every registered local tool and every
+      production-real Kali operation/transport pair; schema != authority
+      (proven structurally, no existing execution path depends on it)
+- [ ] A policy engine any of this can be checked against, live
+      tool-version *discovery*, a live availability check, cost estimate
 - [ ] Filesystem/network restrictions, process allowlist, working-directory
       isolation, environment sanitization, resource limits, no shell
       interpolation by default, typed argv, WSL boundary controls,
