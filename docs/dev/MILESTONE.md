@@ -10,7 +10,139 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.459 (implementation)
+## Current scope: v0.3.460 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent loopback mTLS handshake integration -- the first REAL local TLS 1.3 mutual handshake in this series, proven entirely over loopback (127.0.0.1 only). No RPC transport, no VMware, no Kali, no SSH, no WSL, no non-loopback network activity. |
+| Base SHA | `e850fae5e708cb62e956c5a8453fda733a225b8c` (verified remote main; standard merge of PR #440). |
+| Branch | `feature/guest-agent-loopback-handshake-v0.3.460`, worktree `D:\hypatia-worktrees\guest-agent-loopback-handshake` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | TLS HANDSHAKE SUCCESS != EXECUTION AUTHORITY. PEER IDENTITY MATCH != EXECUTION AUTHORITY. AUTHENTICATED CHANNEL != EXECUTION AUTHORITY. AUTHENTICATED CHANNEL != OPERATION AUTHORIZATION. CERTIFICATE CHAIN VALID != CORRECT APPLICATION PEER. Zero production callers; not wired into KaliToolGateway, ToolExecutionService, CognitiveEngine, chat, or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; non-loopback network activity ZERO; real certificate/private-key generation ZERO; credential changes ZERO. v0.3.461 not started. |
+
+Per the standing ledger convention, v0.3.459 delivery was re-verified
+before this milestone began: release
+`b2ead48a0a79bc217eafbc87756f707e1ae23708`, PR #440 MERGED, standard
+merge `e850fae5e708cb62e956c5a8453fda733a225b8c` with parents
+`040fad5ee5857dfa12905b53ca40b4962c5596d9` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor b2ead48a... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged. v0.3.459 is delivered.
+
+Repository and CI-environment audit before implementation covered: all
+existing Guest-Agent modules and their tests (v0.3.456-459); confirmed
+`parse_peer_certificate_identity` already accepts exactly the `dict`/
+`bytes` shapes `ssl.SSLSocket.getpeercert()`/`getpeercert(binary_form=
+True)` return, meaning no new production source code was needed to prove
+a real handshake -- the entire proof lives in one new test file reusing
+the existing, unmodified authentication chain; confirmed via each
+GitHub-hosted runner image's own published software manifest that
+`openssl` is present on both this project's actual `ubuntu-24.04` (Linux
+CI) and `windows-2025` (Windows CI) runner images; confirmed, against the
+actual upstream OpenSSL 3.0.0 `x509` app's own man page, that its
+`-not_after`/`-not_before` flags (which would have been the simplest way
+to generate an expired/not-yet-valid test certificate) do not exist in
+that exact version -- the older, more portable `openssl ca`
+config-driven flow with explicit `-startdate`/`-enddate` is used instead,
+only for the two certificates that need a non-"now" validity window;
+confirmed no `cryptography` package or other new dependency exists or is
+needed, since this project continues to declare zero runtime
+dependencies.
+
+Delivered: `tests/research/test_guest_agent_loopback_mtls_handshake.py`
+-- real loopback TLS 1.3 mutual handshakes using the real,
+unmodified v0.3.458 `build_host_client_tls_context`/
+`build_guest_server_tls_context`; real peer certificate dict/DER
+extraction via `getpeercert()`/`getpeercert(binary_form=True)`; real URI
+SAN parsing and application-identity enforcement via the real,
+unmodified v0.3.458/459 `parse_peer_certificate_identity`/
+`peer_identity_matches`/`authenticate_peer`; real authenticated-channel
+construction via the real, unmodified v0.3.459
+`GuestAgentAuthenticatedHostChannel`/`GuestAgentAuthenticatedGuestChannel`.
+Ephemeral test-only certificate material (a dedicated test CA, a second
+deliberately untrusted CA, HOST/GUEST leaves including expired/
+not-yet-valid variants) generated via the `openssl` CLI inside a
+`tempfile.TemporaryDirectory()`, always removed afterward; nothing
+committed. No existing file was modified; this milestone is a pure
+test-only addition -- `git status`/`git diff --stat` against
+`origin/main` confirm the entire diff is exactly this one new file.
+
+26 new focused tests cover: a full positive handshake proving TLS 1.3,
+real mutual certificate presentation, real cert/DER extraction, real
+identity matching in both directions, and real authenticated-channel
+construction; the critical CA-valid-wrong-role proof (a certificate
+genuinely signed by the trusted test CA but naming the wrong role's URI
+SAN lets the handshake succeed while only the unmodified
+`authenticate_peer` chain rejects it); five real negative handshakes
+(untrusted server CA, untrusted client CA, missing client certificate,
+expired server certificate, not-yet-valid server certificate); real
+fingerprint pinning match/mismatch derived from the live socket's own DER
+bytes; loopback-only binding (checked both behaviorally and via an
+AST-based proof over every `.bind()` call site in the file); ephemeral
+OS-assigned ports; bounded timeouts throughout; sockets closing after
+both success and failure; temporary certificate material being removed
+after the test class; no private key text appearing in any captured
+error string; and AST-based structural proof (never a naive text search,
+which this exact file's own forbidden-token docstring prose would
+otherwise falsely trip) that the file imports no Kali/VMware/SSH/WSL
+execution-authority symbol, never couples to replay protection, adds no
+new production source file, and never reimplements `authenticate_peer`/
+`parse_peer_certificate_identity` locally. The existing, unmodified
+`tests/research` suite (3337 tests) and the Kali execution-authority
+chain tests (`tests.cognition.test_kali_tool_gateway`,
+`test_kali_tool_gateway_vmware_transport`) continue to pass unchanged.
+
+During implementation, a real TLS 1.3 0.5-RTT race was found and fixed:
+a client can consider its own handshake complete and close its socket
+before the server finishes verifying the client's certificate, which
+this platform surfaces as a spurious `ConnectionAbortedError` rather than
+the real outcome. Fixed by having both sides exchange exactly one fixed
+control byte confirming handshake completion before either closes --
+exactly the "minimum fixed test/control bytes required to prove both
+sides completed a real handshake" this milestone's own scope explicitly
+allows, never a Guest-Agent protocol byte. Re-verified across six
+consecutive full runs (156 tests) with zero flakiness after the fix,
+versus a reproducible 100% failure rate without it.
+
+Independent QA review (hypatia-qa, subagent): reproduced the real
+handshake, the CA-valid-wrong-role proof, and the race-condition fix
+itself (not merely reading the code) across six independent full runs;
+confirmed the AST-based structural checks are not fooled by this file's
+own forbidden-token prose; confirmed the regression suite (300 tests
+across ten named existing modules) passes unchanged. No CONFIRMED
+findings. Three informational notes, all addressed or accepted as
+correct-but-narrower-than-ideal: (1) `_perform_handshake`'s docstring
+inaccurately claimed its two result fields were mutually exclusive --
+fixed with an accurate docstring describing the real TLS 1.3 0.5-RTT
+case where both can be present at once, with no behavioral change; (2)
+the private-key-hygiene test's chosen negative-path scenario doesn't
+stress actual key-parsing error text, a coverage-strength observation
+rather than a defect; (3) the server's per-connection accepted socket
+isn't independently asserted closed by name, though QA independently
+instrumented the harness and confirmed it genuinely does close.
+
+Independent security review (hypatia-security, subagent): independently
+reproduced all fourteen traced properties, including reproducing the
+CA-valid-wrong-role scenario in a standalone script outside the test
+runner and confirming the rejection happens only at the unmodified
+application-identity layer. No CONFIRMED findings. Same informational
+note as QA regarding the `_perform_handshake` docstring, fixed the same
+way.
+
+Full local gates re-run after the docstring fix: unittest discover 8647
+tests, OK; Black --check . clean (1123 files); Ruff check . clean; MyPy
+src clean (651 source files); git diff --check clean. `git status`
+confirms zero existing files modified -- one new test file only.
+
+**Roadmap step 3 status**: strengthened with a real, verified loopback
+handshake; still not complete. Real production certificate
+provisioning/distribution for an actual Windows Hypatia <-> Kali Guest
+Agent deployment, and the real (non-loopback) VMware Host-Only network
+path, remain entirely undesigned and untested. Step 4 (the real RPC
+transport) remains unstarted.
+
+## Previous scope: v0.3.459 (release record before integration)
 
 | Field | Value |
 | --- | --- |

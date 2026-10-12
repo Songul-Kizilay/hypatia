@@ -972,15 +972,17 @@ Recorded priority order:
 2. **(delivered, v0.3.457)** Replay-protection semantics (a real one-time
    nonce store/consumption rule) over the protocol foundation's
    previously inert nonce field.
-3. **(foundation delivered, v0.3.458-v0.3.459 -- not all of step 3)** mTLS /
+3. **(foundation delivered, v0.3.458-v0.3.460 -- not all of step 3)** mTLS /
    peer authentication for the transport. v0.3.458 delivered the offline
    policy/configuration/identity-matching foundation; v0.3.459 added the
    offline channel authentication enforcement foundation on top of it
    (closing the gap between "TLS context configured" and "application
-   code may treat this connection as the expected peer"). Provisioning
-   real certificates, performing a live handshake, and wiring either
-   foundation into an actual transport remain separate, unstarted work
-   still inside this step.
+   code may treat this connection as the expected peer"); v0.3.460 proved
+   the first REAL local TLS 1.3 mutual handshake over loopback only,
+   flowing into that same unmodified foundation. Real production
+   certificate provisioning/distribution for an actual deployment, and
+   wiring either foundation into a real (non-loopback) transport, remain
+   separate, unstarted work still inside this step.
 4. The actual transport (an RPC-style server/client) carrying the protocol
    between Windows Hypatia and a guest process.
 5. The guest-side agent itself: a process that receives one authenticated,
@@ -1058,10 +1060,32 @@ message crossing this boundary still never means an operation may
 execute. This layer still cannot itself prove a real TLS handshake or
 chain verification occurred -- that remains a future transport's job.
 No certificates/keys provisioned, no socket, no network client, no
-handshake, no SSH replaced. Zero production callers. The remaining
-work inside step 3 (real certificate provisioning strategy, an actual
-live handshake, wiring either foundation into a transport) and steps
-4-7 remain separate, unstarted, future milestones, each requiring its
+handshake, no SSH replaced. Zero production callers. v0.3.460 proved
+the first REAL local TLS 1.3 mutual handshake in this series, entirely
+over loopback (`127.0.0.1` only), adding no new production source file:
+repository evidence showed `parse_peer_certificate_identity` already
+accepts exactly the shapes a real `ssl.SSLSocket` produces, so one new
+focused test file
+(`tests/research/test_guest_agent_loopback_mtls_handshake.py`) proves a
+genuine handshake flows correctly into the existing, completely
+unmodified v0.3.458/459 chain -- real TLS 1.3 negotiation, genuinely
+mutual certificate presentation, real peer certificate dict/DER
+extraction, real URI SAN parsing, and the critical proof that a
+certificate genuinely signed by the trusted test CA but naming the
+wrong role's identity lets the handshake succeed while only the
+unmodified application-identity layer rejects it
+(`IDENTITY_MISMATCH`) -- CERTIFICATE CHAIN VALID != CORRECT APPLICATION
+PEER, proved against a real certificate for the first time. Ephemeral
+test-only certificates only, generated and destroyed within each test
+run; no production certificate or private key was ever provisioned. The
+only bytes ever exchanged over the live socket are one fixed,
+bounded handshake-completion acknowledgment byte each way -- no RPC
+transport, request/response framing, or reconnect logic exists. Zero
+production callers. The remaining work inside step 3 (real production
+certificate provisioning/distribution strategy for an actual
+deployment, the real non-loopback VMware Host-Only network path, wiring
+either foundation into a real transport) and steps 4-7 remain separate,
+unstarted, future milestones, each requiring its
 own authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
