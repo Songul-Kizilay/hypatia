@@ -2,6 +2,89 @@
 
 All notable project changes are recorded here.
 
+## [0.3.461] - 2026-10-13
+
+### Added
+
+- The first bounded implementation of Guest-Agent roadmap step 4: a real,
+  authenticated, loopback-only (`127.0.0.1` only), one-request/one-response
+  RPC transport carrying an already-typed `GuestAgentRequest` from HOST to
+  GUEST and a `GuestAgentResponse` back, over the real mTLS TLS 1.3 loopback
+  channel v0.3.460 proved
+  (`research.GuestAgentRpcFraming`, `research.GuestAgentRpcTransport`).
+  `TRANSPORT DELIVERY != EXECUTION AUTHORITY`: the transport only answers
+  whether an already-typed message can be carried between the expected
+  authenticated peers, never whether the requested operation may execute.
+- A fixed, deterministic application framing format: a 4-byte big-endian
+  length prefix followed by exactly that many canonical-JSON body bytes.
+  `MAX_GUEST_AGENT_RPC_FRAME_SIZE = 524288` (512 KiB) is derived from, and
+  independently verified against, the real worst-case canonical-JSON size
+  of a maximal `GuestAgentRequest` (496,990 bytes) and
+  `GuestAgentResponse` (308,705 bytes) under the protocol's own existing
+  field bounds -- not an arbitrary ceiling. A zero or oversized declared
+  length is rejected before any body buffer is allocated or read; a
+  truncated prefix or body fails closed; fragmented reads are reassembled
+  by a bounded exact-read loop that never trusts a single `recv()` call to
+  return a complete message; a frame write is a single `sendall()` call.
+- Strict authentication-before-application-bytes ordering on both roles:
+  `GuestAgentRpcClient` (HOST) and `GuestAgentRpcServer` (GUEST) each
+  complete the real TLS 1.3 mutual handshake and the existing, unmodified
+  `authenticate_peer` check before any frame is read or decoded. A
+  CA-valid wrong-role peer and an untrusted-CA peer are both proven, by a
+  handler-call recorder observing zero invocations, to never reach the
+  protocol decoder or the injected handler.
+- A deliberately one-request/one-response session lifecycle:
+  `GuestAgentRpcServer` closes its listening socket immediately after
+  accepting its one connection (a second connection, or a second frame on
+  the already-accepted one, is structurally unreachable, not merely
+  untested) and reads/decodes exactly one request, invokes exactly one
+  injected handler, and writes exactly one response before closing.
+  `GuestAgentRpcClient.send_request` contains no retry loop anywhere --
+  a failed call simply raises.
+- Exact-equality `request_id` correlation on the client side (no
+  prefix/case-fold/normalization); a mismatch fails closed with a fixed,
+  code-owned `GuestAgentRpcTransportError`.
+- A narrow injected handler type,
+  `Callable[[GuestAgentRequest], GuestAgentResponse]` -- never a
+  capability dispatcher, never an argv/shell-shaped callback. A handler
+  exception is converted to one fixed failure sentence
+  (`GuestAgentRpcFailureKind.HANDLER_FAILED`); `str(exception)` is never
+  reflected to the peer, and no certificate content, private key path,
+  raw protocol payload, SAN value, nonce, or operation digest is ever
+  interpolated into a raised error string.
+- Proven, both structurally (AST) and behaviorally, that this transport
+  never imports or invokes `research.GuestAgentReplayProtector.consume_once`
+  (a nonce carried through a full real round trip remains unconsumed
+  afterward) and never references `ResearchKaliOperationAuthorization`,
+  `KaliToolGateway`, or the tool execution layer. The listener binds
+  `127.0.0.1` only via a module constant that is never exposed as a
+  configurable parameter, at an OS-assigned ephemeral port; every
+  `bind`/`connect` call site is AST-verified to target only that constant.
+- 65 new focused tests across
+  `tests/research/test_guest_agent_rpc_framing.py` (23, pure framing, no
+  real sockets) and `tests/research/test_guest_agent_rpc_transport.py` (42,
+  real loopback mTLS TLS 1.3, reusing the existing `openssl`-based
+  ephemeral-certificate fixture from
+  `tests/research/test_guest_agent_loopback_mtls_handshake.py` directly
+  rather than duplicating it). Independent QA (3 consecutive full runs of
+  the new transport suite, zero flakiness; independently reproduced the
+  frame-size arithmetic from the real bound constants) and independent
+  security review (traced every numbered invariant directly against
+  source) each returned PASS with zero confirmed findings. The full
+  existing `tests/research` suite and the Kali execution-authority chain
+  tests (`tests.cognition.test_kali_tool_gateway`,
+  `test_kali_tool_gateway_vmware_transport`) continue to pass unchanged.
+  No existing Guest-Agent module (protocol, codec, mTLS context, peer
+  authenticator, authenticated channel, replay protector) was modified.
+  Zero production callers; not wired into `KaliToolGateway`, the tool
+  execution layer, `Bootstrap`, `CognitiveEngine`, chat, or the desktop.
+  This is only step 4's first bounded implementation -- no real Kali
+  Guest Agent exists, no VMware Host-Only transport exists, no production
+  certificate was provisioned, no capability executes through this
+  transport, and SSH is not replaced. Step 3's own remaining gaps
+  (production certificate provisioning/distribution, the real
+  non-loopback VMware Host-Only network path) remain entirely unstarted.
+
 ## [0.3.460] - 2026-10-12
 
 ### Added

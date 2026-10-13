@@ -983,8 +983,14 @@ Recorded priority order:
    certificate provisioning/distribution for an actual deployment, and
    wiring either foundation into a real (non-loopback) transport, remain
    separate, unstarted work still inside this step.
-4. The actual transport (an RPC-style server/client) carrying the protocol
-   between Windows Hypatia and a guest process.
+4. **(first bounded implementation delivered, v0.3.461 -- not all of step
+   4)** The actual transport (an RPC-style server/client) carrying the
+   protocol between Windows Hypatia and a guest process. v0.3.461
+   delivered a real, authenticated, loopback-only, one-request/one-
+   response RPC transport over the step 3 mTLS channel; wiring it to a
+   real guest process, a real (non-loopback) deployment, and any
+   capability dispatch remain separate, unstarted work still inside this
+   step.
 5. The guest-side agent itself: a process that receives one authenticated,
    already-authorized request and dispatches it to the one allowlisted Kali
    implementation it names — never an arbitrary command.
@@ -1081,12 +1087,45 @@ run; no production certificate or private key was ever provisioned. The
 only bytes ever exchanged over the live socket are one fixed,
 bounded handshake-completion acknowledgment byte each way -- no RPC
 transport, request/response framing, or reconnect logic exists. Zero
-production callers. The remaining work inside step 3 (real production
-certificate provisioning/distribution strategy for an actual
-deployment, the real non-loopback VMware Host-Only network path, wiring
-either foundation into a real transport) and steps 4-7 remain separate,
-unstarted, future milestones, each requiring its
-own authorization.
+production callers. v0.3.461 delivered step 4's first bounded
+implementation -- not all of step 4 -- a real, authenticated,
+loopback-only, one-request/one-response RPC transport
+(`research.GuestAgentRpcFraming`, `research.GuestAgentRpcTransport`)
+carrying an already-typed `GuestAgentRequest` from HOST to GUEST and a
+`GuestAgentResponse` back over the real mTLS TLS 1.3 loopback channel
+v0.3.460 proved. TRANSPORT DELIVERY != EXECUTION AUTHORITY, RPC REQUEST
+RECEIVED != EXECUTION AUTHORITY, RPC RESPONSE SUCCESS != TRUSTED FACT:
+the transport only answers whether an already-typed message can be
+carried between the expected authenticated peers, never whether the
+requested operation may execute. Authentication (the real handshake plus
+the existing, unmodified `authenticate_peer`) strictly precedes any
+application-byte read on both roles -- a CA-valid wrong-role peer or an
+untrusted-CA peer is proven, by a handler-call recorder observing zero
+invocations, to never reach the protocol decoder or the injected
+handler. Framing is a fixed 4-byte length prefix plus exactly that many
+canonical-JSON bytes, with the declared length bound-checked before any
+body allocation/read; the session is deliberately one-request/one-
+response (the listening socket closes immediately after accepting its
+one connection, so a second connection or a second frame is structurally
+unreachable); `request_id` correlation is exact-equality only; there is
+no retry loop anywhere in the client send path; and the transport never
+imports or invokes `GuestAgentReplayProtector`/`consume_once` (proven
+both structurally and by a real round trip leaving a carried nonce
+unconsumed) and never references `ResearchKaliOperationAuthorization` or
+`KaliToolGateway`. The injected request handler is a narrow
+`Callable[[GuestAgentRequest], GuestAgentResponse]`, never a capability
+dispatcher; a handler exception is converted to one fixed failure
+sentence, never reflecting `str(exception)` to the peer. Zero production
+callers; not wired into `KaliToolGateway`, the tool execution layer,
+`Bootstrap`, `CognitiveEngine`, chat, or the desktop. No real Kali Guest
+Agent exists, no VMware Host-Only transport exists, no production
+certificate was provisioned, no capability executes through this
+transport, and SSH is not replaced. The remaining work inside step 3
+(real production certificate provisioning/distribution strategy for an
+actual deployment, the real non-loopback VMware Host-Only network path),
+the remainder of step 4 (wiring to a real guest process), and steps 5-7
+remain separate, unstarted, future milestones, each requiring its own
+authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,

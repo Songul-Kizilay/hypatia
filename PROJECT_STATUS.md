@@ -2,10 +2,64 @@
 
 ## Runtime Version
 
-`v0.3.460 (Genesis)`
+`v0.3.461 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.461 begins roadmap step 4: a real, authenticated, loopback-only,
+one-request/one-response RPC transport
+(`research.GuestAgentRpcFraming`, `research.GuestAgentRpcTransport`) that
+carries an already-typed `GuestAgentRequest` from HOST to GUEST and a
+`GuestAgentResponse` back over the real mTLS TLS 1.3 loopback channel
+v0.3.460 proved. `TRANSPORT DELIVERY != EXECUTION AUTHORITY`, `RPC REQUEST
+RECEIVED != EXECUTION AUTHORITY`, `RPC RESPONSE SUCCESS != TRUSTED FACT`:
+the transport answers only "can this already-typed message be carried
+between the expected authenticated peers," never "may the requested
+operation execute." Authentication strictly precedes any application-byte
+read on both the client (HOST) and server (GUEST) code paths -- a CA-valid
+wrong-role peer or an untrusted-CA peer is rejected before the protocol
+decoder or an injected handler is ever reached, proven by handler-call
+recorders that observe zero invocations. Framing is a fixed 4-byte
+big-endian length prefix plus exactly that many canonical-JSON body bytes
+(`MAX_GUEST_AGENT_RPC_FRAME_SIZE = 524288`, derived from -- and verified
+against -- the real worst-case encoded size of a maximal
+`GuestAgentRequest`/`GuestAgentResponse` under the protocol's own existing
+bounds, not an arbitrary ceiling); a zero or oversized declared length is
+rejected before any body allocation/read, truncated prefixes/bodies fail
+closed, and fragmented reads are reassembled by a bounded exact-read loop
+that never trusts one `recv()` call to return a full message. Sessions are
+deliberately one-request/one-response: the listening socket is closed
+immediately after accepting its one connection, so a second connection
+(and a second frame on the one already-accepted connection) is structurally
+unreachable, not merely untested. `request_id` correlation on the response
+is exact-equality only -- no prefix/case-fold/normalization -- and a
+mismatch fails closed. There is no retry loop anywhere in the client send
+path. The transport never imports or invokes
+`research.GuestAgentReplayProtector`/`consume_once` (proved both
+structurally via AST and behaviorally: a nonce carried through a full
+round trip is still unconsumed afterward) and never references
+`ResearchKaliOperationAuthorization`, `KaliToolGateway`, or the tool
+execution layer. The injected request handler is a narrow
+`Callable[[GuestAgentRequest], GuestAgentResponse]` -- never a capability
+dispatcher, never an argv/shell channel -- and a handler exception is
+converted to a fixed, code-owned failure sentence rather than reflecting
+`str(exception)` to the peer. The listener binds `127.0.0.1` only, via a
+module constant never exposed as a configurable parameter, at an
+OS-assigned ephemeral port. Independent QA and independent security
+review each independently verified the frame-size arithmetic, reproduced
+the full adversarial test suite (3 consecutive runs, no flakiness), and
+traced every numbered invariant above directly against source; both
+returned PASS with zero confirmed findings. Zero production callers; not
+wired into `KaliToolGateway`, the tool execution layer, `Bootstrap`,
+`CognitiveEngine`, chat, or the desktop. This is still only roadmap step
+4's first bounded implementation -- no Guest-Agent RPC framing was wired
+to a real guest process, no VMware Host-Only transport exists, no
+production certificate was provisioned, no capability executes through
+this transport, and SSH is not replaced. Step 3's own remaining gaps
+(production certificate provisioning/distribution, the real non-loopback
+VMware Host-Only network path) remain entirely unstarted. v0.3.462 is not
+started.
 
 Version v0.3.460 proves the first REAL local TLS 1.3 mutual handshake in
 the Guest-Agent series, entirely over loopback (`127.0.0.1` only), adding
