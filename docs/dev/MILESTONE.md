@@ -10,7 +10,157 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.460 (implementation)
+## Current scope: v0.3.461 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent authenticated RPC transport over loopback -- the first bounded implementation of roadmap step 4. A real, authenticated, loopback-only (127.0.0.1 only), one-request/one-response RPC transport carrying an already-typed `GuestAgentRequest` from HOST to GUEST and a `GuestAgentResponse` back, over the real mTLS TLS 1.3 loopback channel v0.3.460 proved. No Kali capability executed, no guest-side agent dispatcher, no replay auto-consumption, no `ResearchKaliOperationAuthorization`, no VMware, no SSH, no WSL, no non-loopback traffic. |
+| Base SHA | `2c2ad29d8ccdf1b6820e8ff03bcfd5bf36c6dac3` (verified remote main; standard merge of PR #441). |
+| Branch | `feature/guest-agent-rpc-loopback-v0.3.461`, worktree `D:\hypatia-v0.3.461` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | TRANSPORT DELIVERY != EXECUTION AUTHORITY. RPC REQUEST RECEIVED != EXECUTION AUTHORITY. RPC REQUEST VALID != EXECUTION AUTHORITY. RPC RESPONSE SUCCESS != TRUSTED FACT. REQUEST ID MATCH != AUTHORITY (correlation only). Zero production callers; not wired into KaliToolGateway, the tool execution layer, Bootstrap, CognitiveEngine, chat, or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; non-loopback network activity ZERO; real certificate/private-key generation ZERO; credential changes ZERO; replay nonce consumption by transport ZERO. v0.3.462 not started. |
+
+Per the standing ledger convention, v0.3.460 delivery was re-verified
+before this milestone began: release
+`a33efbfd752a66ca74dd0bbfc3464ba462626e47`, PR #441 MERGED, standard
+merge `2c2ad29d8ccdf1b6820e8ff03bcfd5bf36c6dac3` with parents
+`e850fae5e708cb62e956c5a8453fda733a225b8c` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor a33efbf... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged. v0.3.460 is delivered.
+
+Repository audit before implementation covered: all existing Guest-Agent
+modules and their tests (v0.3.456-460) -- `GuestAgentProtocol`,
+`GuestAgentProtocolSerialization`, `GuestAgentMtlsTrustConfiguration`,
+`GuestAgentMtlsContext`, `GuestAgentPeerCertificateIdentity`,
+`GuestAgentPeerAuthenticator`, `GuestAgentAuthenticatedChannel`,
+`GuestAgentReplayProtector`, and the real loopback handshake test harness
+in `tests/research/test_guest_agent_loopback_mtls_handshake.py`; confirmed
+(by grep across `src/`) that no length-prefixed framing, bounded-read, or
+generic RPC transport abstraction already existed anywhere in the
+repository, so the smallest honest new framing layer was required rather
+than reusable. Every mTLS/identity/channel/codec primitive is reused
+completely unmodified; no existing Guest-Agent file was changed.
+
+Delivered: two new production files --
+`research.GuestAgentRpcFraming` (a pure, network-oblivious 4-byte
+big-endian length-prefixed framing layer; `MAX_GUEST_AGENT_RPC_FRAME_SIZE
+= 524288` derived from, and independently re-verified by both QA and
+security against, the real worst-case canonical-JSON encoding of a
+maximal `GuestAgentRequest` (496,990 bytes) and `GuestAgentResponse`
+(308,705 bytes) under the protocol's own existing field bounds) and
+`research.GuestAgentRpcTransport` (`GuestAgentRpcClient`/
+`GuestAgentRpcServer`, a one-request/one-response session built entirely
+on the reused v0.3.456-460 primitives, never duplicating TLS context
+construction, identity matching, or wire codec logic). Two new test
+files -- `tests/research/test_guest_agent_rpc_framing.py` (23 tests, no
+real sockets) and `tests/research/test_guest_agent_rpc_transport.py` (42
+tests, real loopback mTLS TLS 1.3, directly reusing `_LoopbackMtlsFixture`
+from the existing v0.3.460 handshake test file rather than duplicating its
+~150 lines of `openssl`-based ephemeral certificate generation).
+
+65 new focused tests cover: real HOST->GUEST `GuestAgentRequest` and
+real GUEST->HOST `GuestAgentResponse` crossing the authenticated TLS 1.3
+loopback channel with byte-exact round trips; authentication (full
+handshake + `authenticate_peer`) strictly preceding any application-byte
+read on both roles, proven by handler-call recorders observing zero
+invocations when a CA-valid wrong-role or untrusted-CA peer connects;
+deterministic framing with the length-prefix bound checked before any
+body allocation/read (zero length, `max+1`, `0xffffffff`, truncated
+prefix/body all rejected before an oversized/attacker-controlled `recv`);
+1-byte-at-a-time fragmented prefix/body correctly reassembled by a
+bounded exact-read loop; a valid frame followed by junk bytes, and two
+concatenated request frames, with only the first ever consumed; malformed
+UTF-8/JSON, unknown fields, an unsupported protocol version, and a
+wrong-direction message all rejected by the existing, unmodified codec;
+exact-equality `request_id` correlation (match succeeds, mismatch fails
+closed); the one-shot session structurally unable to process a second
+connection or a second frame (the listening socket is closed immediately
+after accepting its one connection); no retry loop in the client send
+path (AST-proven absence of any `for`/`while` in `send_request`, plus a
+real single-connect-attempt count); replay-independence proven both
+structurally (AST: zero reference to `GuestAgentReplayProtector`/
+`consume_once`/nonce-store symbols in the two new production files) and
+behaviorally (a nonce carried through a full real round trip remains
+unconsumed afterward); zero reference to `ResearchKaliOperationAuthorization`,
+`KaliToolGateway`, the tool execution layer, process adapters, or any
+VMware/SSH/WSL token; loopback-only binding (AST-verified every
+`bind`/`connect` call site targets `127.0.0.1`/the module's
+`GUEST_AGENT_RPC_LOOPBACK_HOST` constant, which is never exposed as a
+function parameter) at an OS-assigned ephemeral port; bounded timeouts
+throughout; handler-exception text never reflected to the peer (a unique
+marker string never appears in either side's observed error text) and no
+certificate content/private-key path/raw payload/SAN/nonce/operation
+digest ever interpolated into a raised error string; sockets closing on
+every exit path (success, protocol failure, handler failure); temporary
+certificate material removed after the test class; no private-key text
+in any captured error string. The existing, unmodified `tests/research`
+suite and the Kali execution-authority chain tests
+(`tests.cognition.test_kali_tool_gateway`,
+`test_kali_tool_gateway_vmware_transport`) continue to pass unchanged.
+
+One genuine implementation-time fix, caught by the Lead's own full-suite
+gate run (not by the implementer or either independent reviewer): the new
+module's own docstring literally named `ToolExecutionService` as a
+negative claim ("nothing here is wired into ... `ToolExecutionService`
+..."), which tripped three existing naive text-scan architecture-boundary
+tests (`tests.desktop.test_tool_console_isolation`,
+`tests.integration.test_authorized_execution_start`,
+`tests.tools.test_tool_layer_isolation`) that forbid that literal token
+anywhere under `src/research`/`src/cognition`, regardless of context --
+exactly the convention every other existing Guest-Agent docstring already
+follows by paraphrasing it as "the tool execution layer" instead. Fixed
+by the same paraphrase, a docstring-only wording change with zero
+behavioral effect; all three previously-failing tests pass afterward, and
+the full suite was re-run clean end to end.
+
+Independent QA review (hypatia-qa, subagent): independently re-ran the
+new transport suite three consecutive times (42/42 each run, no
+flakiness observed), independently reproduced the full `tests/research`
+discovery (3401/3401) and the Kali authority-chain tests (23/23),
+independently wrote and ran a throwaway script reproducing the
+`MAX_GUEST_AGENT_RPC_FRAME_SIZE` worst-case arithmetic against the real
+bound constants (confirmed exact match: 496,990/308,705 bytes), and
+independently re-ran Black/Ruff/MyPy on all four new files (all clean).
+Traced the auth-before-bytes ordering, the oversized-length-rejected-
+before-read property, the one-shot session enforcement, and the
+replay-independence proof directly against source rather than accepting
+docstring claims. No CONFIRMED findings.
+
+Independent security review (hypatia-security, subagent, read-only):
+traced all 21 of the milestone's required security properties directly
+against source and confirmed each with file/line evidence -- auth-before-
+bytes ordering on both roles, CA-valid-wrong-role and untrusted-CA
+rejection before the decoder/handler, mandatory mTLS/TLS-1.3-only
+exclusively through the existing unmodified context builders,
+bounded-before-allocation framing, exact `request_id` correlation, no
+retry, no replay consumption, no `ResearchKaliOperationAuthorization`/
+scope reference, no shell/argv/VM/SSH/WSL channel, no `KaliToolGateway`
+reachability, loopback-only structurally-one-shot listener, and no
+private-key/raw-data leakage into error text. One informational
+(non-blocking) note: a local-only availability consideration about the
+window between `bind()` and `accept()` during which another local
+process could in principle attempt the one-shot connection slot, which
+cannot succeed past authentication without valid HOST-role mTLS
+credentials and is, at worst, a local availability race rather than an
+authority escalation -- noted as a forward-looking hardening idea, not a
+defect in this milestone's scope. No CONFIRMED findings.
+
+Full local gates re-run by the Lead on the integrated tree after the
+docstring fix: unittest discover 8711 tests, OK; Black --check . clean
+(1127 files); Ruff check . clean; MyPy src clean (653 source files); git
+diff --check clean. `git status` confirms exactly four new files, nothing
+else modified.
+
+**Roadmap step 4 status**: first bounded implementation delivered -- not
+complete. No real Kali Guest Agent exists, no VMware Host-Only transport
+exists, no production certificate was provisioned, no capability executes
+through this transport, and SSH is not replaced. Step 3's own remaining
+gaps (production certificate provisioning/distribution, the real
+non-loopback VMware Host-Only network path) remain entirely unstarted.
+
+## Previous scope: v0.3.460 (release record before integration)
 
 | Field | Value |
 | --- | --- |
