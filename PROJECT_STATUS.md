@@ -2,10 +2,60 @@
 
 ## Runtime Version
 
-`v0.3.463 (Genesis)`
+`v0.3.464 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.464 delivers the Guest-Agent signed dispatch authorization
+proof foundation, closing the specific gap v0.3.463's own module
+docstring named honestly: a plain serialized `GuestAgentRequest` cannot
+prove that host authorization was consumed. `research.GuestAgentDispatchProof`
+defines the pure, typed proof contract; `research.GuestAgentDispatchSigning
+.create_signed_dispatch_envelope` signs it HOST-side from an already-
+consumed, one-shot `GuestAgentHostDispatchGrant` only (never an arbitrary
+request, never a caller-chosen issuer/audience/expiry/operation fact);
+`research.GuestAgentDispatchVerification.verify_signed_dispatch_envelope`
+independently verifies it GUEST-side using only a public key. This is
+Hypatia's first runtime dependency: real Ed25519 signatures via the
+`cryptography` package (PyCA), `cryptography==50.0.2`, confirmed as
+prebuilt wheels (no source build) for this project's exact Python 3.14 on
+both target CI platforms before adding, independently re-confirmed by QA,
+and proven live on exact-SHA CI as part of this release -- no HMAC/
+shared-secret scheme, no home-grown elliptic-curve arithmetic, no OpenSSL
+CLI subprocess.
+The signed proof binds, via one Ed25519 signature over one canonical
+document: a dispatch-proof-specific version (deliberately separate from
+`GuestAgentProtocolVersion`), the SHA-256 of the exact canonical request
+bytes (reusing the existing unmodified canonicalizer, so it transitively
+binds every request field), fixed code-owned HOST issuer / GUEST audience
+identities (reusing only the existing Guest-Agent peer-identity URI
+*strings*, never mTLS key material -- TLS IDENTITY KEY != DISPATCH
+AUTHORIZATION SIGNING KEY), and a bounded, never-caller-choosable 60-
+second validity window. `GuestAgentRequest` itself gains no signature
+field. The verifier independently recomputes every binding fact rather
+than trusting the envelope's pairing, needs no HOST private key, and
+returns an unforgeable `GuestAgentVerifiedDispatch` exposing only the
+verified request -- VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY, !=
+REPLAY ACCEPTANCE, != CAPABILITY ADMISSION, != RUNTIME READINESS.
+116 new tests prove independent mutation of every request field and
+every proof metadata field (plus the signature) invalidates verification,
+a two-keypair wrong-key matrix, exact validity-window boundaries, crypto-
+adversarial signatures (all-zero/all-ff/bit-flip/truncated/oversized/
+wrong-encoding), replay independence, and that `GuestAgentCore` still
+returns only its existing non-`SUCCESS` outcome. Independent QA (wrote
+and ran its own additional mutation test, wrong-key test, and private-
+key-leak scenario beyond the existing suite; zero confirmed findings) and
+independent security review (30 required properties, all PASS) both
+returned PASS. `GuestAgentCore`, `GuestAgentRpcTransport`,
+`GuestAgentRpcFraming`, and `GuestAgentHostAuthorizationHandoff` are all
+byte-for-byte unmodified. Not wired into RPC, `Bootstrap`,
+`CognitiveEngine`, chat, or the desktop -- no signed envelope is sent over
+RPC in production, and successful verification does not consume replay,
+admit a capability, or execute anything. No production signing key is
+provisioned, generated, or stored by this milestone; safe production
+key-at-rest custody remains explicitly out of scope. v0.3.465 is not
+started.
 
 Version v0.3.463 delivers the host authorization handoff foundation for
 future Guest-Agent dispatch

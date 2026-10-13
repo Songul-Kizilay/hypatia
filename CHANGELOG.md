@@ -2,6 +2,101 @@
 
 All notable project changes are recorded here.
 
+## [0.3.464] - 2026-10-13
+
+### Added
+
+- Guest-Agent signed dispatch authorization proof foundation, closing the
+  v0.3.463 gap named honestly in its own module docstring: a plain
+  serialized `GuestAgentRequest` cannot prove host authorization was
+  consumed. `research.GuestAgentDispatchProof` defines the typed, pure
+  proof contract (`GuestAgentDispatchProofMetadata`,
+  `GuestAgentDispatchAuthorizationProof`, `GuestAgentSignedDispatchEnvelope`);
+  `research.GuestAgentDispatchSigning.create_signed_dispatch_envelope`
+  signs it HOST-side; `research.GuestAgentDispatchVerification
+  .verify_signed_dispatch_envelope` independently verifies it GUEST-side.
+- Real asymmetric cryptography: Ed25519 via the `cryptography` package
+  (PyCA) -- this project's first runtime dependency
+  (`cryptography==50.0.2`, added to `requirements-desktop-build.txt`).
+  Confirmed prebuilt wheels (no C-compiler-requiring source build) for
+  this project's exact Python 3.14 on both `win_amd64` and
+  `manylinux2014_x86_64` before adding, independently re-confirmed by QA,
+  and proven live on exact-SHA Linux/Windows CI as part of this release.
+  No HMAC/shared-secret scheme, no home-grown elliptic-curve arithmetic,
+  no OpenSSL CLI subprocess -- the library calls directly into its own
+  compiled backend in-process.
+- `create_signed_dispatch_envelope` accepts only an already-consumed,
+  one-shot `research.GuestAgentHostAuthorizationHandoff
+  .GuestAgentHostDispatchGrant` -- never an arbitrary `GuestAgentRequest`
+  and never a caller-chosen `operation_kind`/`operation_digest`/
+  `logical_inputs`/`hostname`/`dns_record_type`/`resolved_address`/
+  issuer/audience/expiry (confirmed by the function's own closed
+  parameter list: `grant, request_id, nonce, signing_key, now`).
+  Materializing the grant inside signing is itself the one-shot
+  consumption event, lock-guarded, so one grant yields at most one signed
+  envelope even under real concurrent signing attempts.
+- The signed proof binds, via one Ed25519 signature over one canonical
+  JSON document: `proof_version` (a separate, fixed
+  `GuestAgentDispatchProofVersion.V1 ==
+  "hypatia-kali-guest-agent/dispatch-proof/1"`, deliberately never
+  conflated with `GuestAgentProtocolVersion`), `request_sha256`
+  (`SHA-256(canonical_guest_agent_request_bytes(request))`, reusing the
+  existing unmodified canonicalizer so the hash transitively binds
+  `protocol_version`/`request_id`/`nonce`/`operation_kind`/
+  `operation_digest`/`logical_inputs`), fixed code-owned `issuer_identity`/
+  `audience_identity` (reusing only the existing Guest-Agent peer-identity
+  URI *strings*, never mTLS key material: TLS IDENTITY KEY != DISPATCH
+  AUTHORIZATION SIGNING KEY), and a bounded `issued_at`/`expires_at`
+  window (`MAX_DISPATCH_PROOF_VALIDITY_SECONDS = 60`, never caller-
+  choosable, structurally enforced). `GuestAgentRequest` itself is never
+  modified and gains no signature field: TYPED REQUEST PROTOCOL !=
+  AUTHORIZATION PROOF LAYER.
+- `verify_signed_dispatch_envelope` independently recomputes every
+  binding fact rather than trusting the envelope's own pairing --
+  request digest, issuer, audience, validity window, then the real
+  Ed25519 signature -- against only a public `Ed25519PublicKey`; the
+  verifier never needs, loads, or references any HOST private key.
+  Returns `GuestAgentVerifiedDispatch` (not publicly constructible,
+  module-private capability-token pattern) exposing only the verified
+  `request` -- VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY, != REPLAY
+  ACCEPTANCE, != CAPABILITY ADMISSION, != RUNTIME READINESS.
+- 116 new focused tests across three files covering: construction/
+  validation/deterministic canonical encoding of the pure proof types;
+  the signing flow's grant-binding, one-shot preservation under 16-thread
+  concurrency, and key-domain-separation from mTLS (AST-verified); and
+  verification's independent mutation of every request field
+  (`protocol_version` family, `request_id`, `nonce`, `operation_kind`,
+  `operation_digest`, logical-input name/value/ordering, and a
+  proof-for-request-A-presented-with-request-B swap) and every proof
+  metadata field plus the signature itself, each proven to invalidate
+  verification; a two-independent-keypair wrong-key matrix; exact
+  validity-window boundaries (accepted at `issued_at`, one microsecond
+  before `expires_at`; rejected one microsecond before `issued_at`, at
+  `expires_at`, and for a future-issued proof); crypto-adversarial
+  signatures (all-zero, all-ff, one-bit-flip, truncated, oversized,
+  wrong-encoding, uppercase); replay independence (AST-proven zero
+  reference to `GuestAgentReplayProtector`, plus a real verified request's
+  nonce surviving a full round trip unconsumed); and that
+  `research.GuestAgentCore.admit_guest_agent_request` still returns only
+  its existing inert, non-`SUCCESS` outcome for a request extracted from a
+  successfully verified envelope. Independent QA (wrote and ran its own
+  additional mutation test, independent wrong-key test, and a private-
+  key-leak adversarial scenario beyond the existing suite; independently
+  re-confirmed cross-platform wheel availability; zero confirmed
+  findings) and independent security review (30 required properties, all
+  PASS) both returned PASS. The full existing test suite, including every
+  v0.3.456-463 Guest-Agent and Kali-authority suite, continues to pass
+  unchanged; `research.GuestAgentCore`, `GuestAgentRpcTransport`,
+  `GuestAgentRpcFraming`, and `GuestAgentHostAuthorizationHandoff` are all
+  byte-for-byte untouched by this milestone.
+- Not wired into `GuestAgentRpcClient`/`GuestAgentRpcServer`, `Bootstrap`,
+  `CognitiveEngine`, chat, or the desktop -- no signed envelope is sent
+  over RPC in production, and successful verification does not consume
+  replay, admit a capability, or execute anything. No production signing
+  key is provisioned, generated, or stored anywhere by this milestone;
+  safe production key-at-rest custody remains explicitly out of scope,
+  not pretended to be solved.
+
 ## [0.3.463] - 2026-10-13
 
 ### Added

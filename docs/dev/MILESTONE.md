@@ -10,7 +10,194 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.463 (implementation)
+## Current scope: v0.3.464 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent signed dispatch authorization proof foundation -- closes the v0.3.463 gap (a plain serialized `GuestAgentRequest` cannot prove host authorization was consumed) with real Ed25519 signatures. `research.GuestAgentDispatchProof`/`GuestAgentDispatchSigning`/`GuestAgentDispatchVerification`: an already-consumed one-shot `GuestAgentHostDispatchGrant` produces exactly one signed envelope (typed request + cryptographic proof bound to it, fixed HOST/GUEST identities, bounded 60s validity); a GUEST-side verifier independently checks it with only a public key. First runtime dependency: `cryptography==50.0.2` (Ed25519). No RPC wiring, no execution, no replay consumption, no production key provisioning. |
+| Base SHA | `8bffa8d991e50aaf7f7012de94077b0694c2e46a` (verified remote main; standard merge of PR #444). |
+| Branch | `feature/guest-agent-dispatch-proof-v0.3.464`, worktree `D:\hypatia-v0.3.464` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | HOST DISPATCH GRANT != GUEST-SIDE AUTHORIZATION PROOF (closed by real crypto this milestone -- but execution authority is NOT). VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY. VERIFIED DISPATCH PROOF != REPLAY ACCEPTANCE. VERIFIED DISPATCH PROOF != CAPABILITY ADMISSION. VERIFIED DISPATCH PROOF != RUNTIME READINESS. TLS IDENTITY KEY != DISPATCH AUTHORIZATION SIGNING KEY. DISPATCH SIGNING KEY != GENERAL SIGNING ORACLE. Zero production callers; not wired into GuestAgentRpcClient/Server, Bootstrap, CognitiveEngine, chat, or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; new RPC traffic ZERO; replay consumption ZERO; production signing key provisioning ZERO; dispatch proof signing/verification TEST-ONLY/LOCAL CPU. v0.3.465 not started. |
+
+Per the standing ledger convention, v0.3.463 delivery was re-verified
+before this milestone began: release
+`b315fbcf410f678a7339303a1166acada8dec4ec`, PR #444 MERGED, standard
+merge `8bffa8d991e50aaf7f7012de94077b0694c2e46a` with parents
+`21c27fa99ef1f71a8c0f1f9bc414b07f46e8c6a1` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor b315fbcf... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged. v0.3.463 is delivered.
+
+Crypto/dependency audit before implementation covered: `pyproject.toml`'s
+dependency policy (zero runtime dependencies declared); `requirements-
+desktop-build.txt` (only `pyinstaller==6.22.2`, the one file both
+`linux-desktop.yml`/`windows-desktop.yml` CI workflows install from for
+testing AND building); both workflows' exact Python version (3.14, on
+`ubuntu-24.04`/`windows-2025`). Confirmed via `pip install --dry-run`/
+`pip download --no-deps --only-binary=:all: --platform <tag>
+--python-version 314 --implementation cp` (both `win_amd64` and
+`manylinux2014_x86_64`, the tag compatible with `ubuntu-24.04`'s glibc)
+that `cryptography==50.0.2` (a `cp311-abi3` wheel, forward-compatible
+with 3.14) and its own dependency `cffi>=2.0.0` (which does carry a
+real `cp314`-specific wheel on both platforms, confirmed by checking
+PyPI's full file listing after an initial `manylinux_2_28` tag mismatch
+false negative) both install from prebuilt wheels with no C-compiler-
+requiring source build. `cffi`'s own dependency `pycparser` is a
+universal pure-Python wheel. License: `cryptography` is Apache-2.0/
+BSD-3-Clause dual-licensed, compatible with this repository's MIT
+license (`LICENSE`). Locally verified the real Ed25519 API
+(`cryptography.hazmat.primitives.asymmetric.ed25519`: 64-byte signatures,
+32-byte raw keys, real `InvalidSignature` on a tampered message) and
+confirmed `Ed25519PrivateKey`'s own `repr()`/`str()` never expose key
+material (an opaque Rust-backed object). Locally ran the existing
+`tools/build_desktop.ps1`-equivalent PyInstaller pipeline
+(`--windowed --onedir`) against this worktree with `cryptography`
+installed in the shared venv: analysis/build/collect all completed
+successfully. Because this milestone deliberately keeps zero production
+callers for the new crypto modules, PyInstaller's static import-graph
+analysis does not currently pull `cryptography` into the bundled
+executable at all -- noted honestly as a fact to re-verify whenever a
+future milestone actually wires these modules into a production entry
+point, not claimed as proven for that future case here. Repository audit
+also covered `research.GuestAgentHostAuthorizationHandoff`
+(the grant this milestone signs), `GuestAgentProtocol`/
+`GuestAgentProtocolSerialization` (the request type and its canonical
+encoder, reused unmodified for hashing), `GuestAgentMtlsTrustConfiguration`
+(confirmed only the peer-identity URI *strings* are reusable without
+conflating TLS key material), and `GuestAgentPeerAuthenticator` (the
+existing module-private capability-token construction idiom, mirrored
+for both new capability-gated types).
+
+Delivered: `research.GuestAgentDispatchProof` (pure types:
+`GuestAgentDispatchProofVersion`, `GuestAgentDispatchProofMetadata`,
+`GuestAgentDispatchAuthorizationProof`, `GuestAgentSignedDispatchEnvelope`,
+fixed `DISPATCH_PROOF_HOST_ISSUER_IDENTITY`/`DISPATCH_PROOF_GUEST_AUDIENCE_IDENTITY`
+reusing only `GuestAgentPeerIdentity.for_role(...).uri`, canonical
+metadata encoding reusing this repository's one existing canonical-JSON
+convention); `research.GuestAgentDispatchSigning`
+(`create_signed_dispatch_envelope` -- the one production entry point,
+taking only `grant, request_id, nonce, signing_key, now`, no arbitrary-
+request or caller-chosen-issuer/audience/expiry parameter exists);
+`research.GuestAgentDispatchVerification`
+(`verify_signed_dispatch_envelope`, `GuestAgentVerifiedDispatch`). No
+existing file was modified except `requirements-desktop-build.txt`
+(the one new dependency line, documented inline).
+
+116 new focused tests across three files (32 pure-type construction/
+canonicalization; 35 signing-flow grant-binding/one-shot/key-domain-
+separation, including a 16-thread concurrency proof; 49 verification
+mutation/wrong-key/validity-window/crypto-adversarial/replay-independence/
+GuestAgentCore-still-inert proofs) cover: a signed envelope cannot be
+created without a real grant, and the high-level signer has no parameter
+for an arbitrary request; the grant's existing one-shot enforcement
+(v0.3.463, unmodified) survives through signing, including under real
+concurrency; the request is derived only from the exact validated
+preview; `request_sha256` reuses the existing canonical encoder exactly;
+issuer/audience are fixed and non-overridable; the validity window is
+bounded and non-overridable by a caller; independent mutation of every
+request field (`protocol_version`-adjacent, `request_id`, `nonce`,
+`operation_kind`, `operation_digest`, logical-input name/value/ordering,
+and a proof-for-request-A-presented-with-request-B swap) and every proof
+metadata field plus the signature itself each independently invalidate
+verification (never one combined test); a two-independent-keypair
+wrong-key matrix; exact validity-window boundaries (accepted exactly at
+`issued_at` and one microsecond before `expires_at`; rejected one
+microsecond before `issued_at`, exactly at `expires_at`, and for a
+proof issued in the future relative to the verifier's clock); crypto-
+adversarial signatures (all-zero, all-ff, one-bit-flip, truncated,
+oversized, wrong/base64 encoding, uppercase hex); malformed/RSA-typed
+signing and verification keys fail closed; private key bytes never
+appear in the envelope, in errors, or in `repr()`/log output; replay
+independence (AST-proven zero reference to replay symbols in both new
+runtime modules, plus a real verified request's nonce surviving a full
+round trip still unconsumed by a fresh `GuestAgentReplayProtector`); and
+`research.GuestAgentCore.admit_guest_agent_request` still returns only
+its existing inert, non-`SUCCESS` outcome for a request extracted from a
+successfully verified envelope. AST-based structural tests (mirroring
+the established pattern, never a naive substring scan) prove neither new
+runtime module references `GuestAgentMtlsContext`/
+`own_private_key_path`/`KaliToolGateway`/any process adapter/HMAC/
+subprocess/OpenSSL, and that the signing module defines exactly one
+public function. The existing, unmodified `tests/research` suite and
+the Kali execution-authority chain tests continue to pass unchanged;
+`GuestAgentCore.py`, `GuestAgentRpcTransport.py`, `GuestAgentRpcFraming.py`,
+and `GuestAgentHostAuthorizationHandoff.py` are all confirmed byte-for-
+byte unmodified by `git diff` against `origin/main`.
+
+During implementation, the Lead independently mutation-tested the single
+most safety-critical check (removing the request-digest recomputation
+entirely) and confirmed all 9 request-mutation tests, including the
+cross-request-swap proof, correctly fail when that check is missing --
+proving the test suite is not vacuous on the property that actually
+matters most: a proof signed for one request cannot be silently accepted
+for a different one merely because the signature over the (unchanged)
+metadata still verifies.
+
+Independent QA review (hypatia-qa, subagent): independently re-ran all
+116 new tests, the full `tests/research` discovery (3626 tests) and the
+full `tests/` discovery (8936 tests); independently re-ran the 16-thread
+concurrency test three times and wrote and ran its own 75-thread,
+5-trial concurrency stress test (exactly one success every trial);
+independently wrote and ran an additional mutation test beyond the
+existing suite (empty `logical_inputs`, correctly rejected);
+independently wrote and ran its own wrong-key test from scratch (not
+reusing the implementer's harness) and its own private-key-leak
+adversarial scenario (a hostile fake key object whose `repr()` embeds a
+marker, confirmed never leaked into any error, and confirmed the grant
+stays unconsumed when the type check fails before materialization);
+independently re-confirmed the cross-platform wheel-availability claim
+via the same `pip download` technique on both platform tags;
+independently confirmed `GuestAgentCore.py`/`GuestAgentRpcTransport.py`/
+`GuestAgentRpcFraming.py` are byte-for-byte unmodified. No CONFIRMED
+findings; one informational, non-blocking note (a forward reference in
+`requirements-desktop-build.txt`'s new comment to this milestone's own
+not-yet-written ledger entry, expected at that point in the lifecycle
+since Release had not yet run) acknowledged, not a defect.
+
+Independent security review (hypatia-security, subagent, read-only):
+traced all 30 of the milestone's required security properties directly
+against source with file/line evidence -- the HOST private key is
+required to produce a valid signature with no alternate path; the GUEST
+verifier never imports `Ed25519PrivateKey` at all; the only mTLS reuse
+is the peer-identity URI string, never key material; the request-digest
+recomputation (independently re-traced as the single most safety-
+critical check) runs before every other stage and is itself protected by
+the fact that forging a matching digest would itself invalidate the
+signature; every one of the six signed metadata fields participates in
+the canonicalized document; the one-shot grant-to-signature flow has no
+TOCTOU window (the check-construct-mark sequence is wholly inside the
+grant's own existing lock); a mismatched-parts envelope assembled
+directly from the plain dataclasses (bypassing the high-level signer) is
+still reliably caught by independent recomputation of every field;
+`GuestAgentCore.py` is confirmed byte-for-byte unmodified; and the
+module-private capability-token idiom on the new types is the same
+accepted, pre-existing pattern `GuestAgentPeerAuthenticator` already
+uses, not a new or weaker variant. No CONFIRMED findings.
+
+Full local gates re-run by the Lead on the integrated tree: unittest
+discover 8936 tests, OK (414.2s); Black --check . clean (1139 files);
+Ruff check . clean; MyPy src clean (659 source files); git diff --check
+clean. `git status` confirms exactly one modified file
+(`requirements-desktop-build.txt`) and six new files, nothing else. A
+local PyInstaller build/collect smoke run (separate from, and in
+addition to, the exact-SHA CI build/smoke step) confirmed the new
+dependency does not break the existing packaging pipeline.
+
+**Roadmap status**: the Guest-Agent signed dispatch authorization proof
+foundation is delivered; it is not wired to RPC, does not enforce replay
+at dispatch, does not execute any Guest-Agent capability, and does not
+provision a production signing key. No real Kali Guest Agent process
+exists. The remaining gaps inside steps 3-5 (production certificate/key
+provisioning and custody, the real non-loopback VMware Host-Only network
+path, wiring the RPC transport and this signed-envelope layer together,
+a real guest process/daemon, and an actual capability-dispatch boundary
+that composes verification -> replay consumption -> capability admission
+-> runtime readiness -> dispatch in the correct order) remain entirely
+unstarted, future, separately-authorized milestones.
+
+## Previous scope: v0.3.463 (release record before integration)
 
 | Field | Value |
 | --- | --- |

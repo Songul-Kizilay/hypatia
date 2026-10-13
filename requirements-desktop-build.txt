@@ -1,2 +1,11 @@
 # Desktop packaging tool; install only for a local Windows or Linux release build.
 pyinstaller==6.22.2
+# Hypatia's first runtime dependency: real Ed25519 asymmetric signatures for
+# the Guest-Agent dispatch-authorization proof (research.GuestAgentDispatchSigning/
+# GuestAgentDispatchVerification, v0.3.464). Mature, PyCA-maintained, pure
+# in-process library calls (no OpenSSL CLI subprocess); confirmed prebuilt
+# wheels for this project's exact Python 3.14 on both win_amd64 and
+# manylinux2014_x86_64 (ubuntu-24.04-compatible) before adding here -- see
+# docs/dev/MILESTONE.md's v0.3.464 entry for the audit. Apache-2.0/BSD-3-Clause
+# dual license, compatible with this project's MIT license.
+cryptography==50.0.2
