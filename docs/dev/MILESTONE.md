@@ -10,7 +10,165 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.461 (implementation)
+## Current scope: v0.3.462 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent core admission + closed capability allowlist foundation -- the first bounded foundation of roadmap step 5. A pure, inert guest-side application core (`research.GuestAgentCore.admit_guest_agent_request`) that admits, never executes: a fixed, deny-by-default allowlist of the two reviewed operations, exact required-logical-input-field-set admission, narrow reused syntactic validation, and only `UNSUPPORTED_CAPABILITY`/`INVALID_REQUEST`/`DECLINED` outcomes -- `SUCCESS` is structurally unreachable. No capability executes, no process spawns, no replay is consumed, no host authorization is created/consumed/mutated. |
+| Base SHA | `1e8576a5aa7066ef3eaf6ba57593c0c7c2d42990` (verified remote main; standard merge of PR #442). |
+| Branch | `feature/guest-agent-core-admission-v0.3.462`, worktree `D:\hypatia-v0.3.462` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | AUTHENTICATED REQUEST != AUTHORIZED REQUEST. OPERATION DIGEST != AUTHORIZATION. CAPABILITY ALLOWLIST MATCH != EXECUTION AUTHORITY. INPUT SCHEMA VALID != EXECUTION AUTHORITY. GUEST ADMISSION SUCCESS != EXECUTION AUTHORITY. Zero production callers; not wired into KaliToolGateway, the tool execution layer, Bootstrap, CognitiveEngine, chat, or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP operations ZERO; non-loopback network activity ZERO; replay consumption ZERO; host authorization consumption ZERO; credential changes ZERO. v0.3.463 not started. |
+
+Per the standing ledger convention, v0.3.461 delivery was re-verified
+before this milestone began: release
+`0d3efc21f7ba555d6d442c484ed12f654254c85b`, PR #442 MERGED, standard
+merge `1e8576a5aa7066ef3eaf6ba57593c0c7c2d42990` with parents
+`2c2ad29d8ccdf1b6820e8ff03bcfd5bf36c6dac3` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor 0d3efc21... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged. v0.3.461 is delivered.
+
+Repository audit before implementation covered: all existing Guest-Agent
+modules (`GuestAgentProtocol`, `GuestAgentProtocolSerialization`,
+`GuestAgentReplayProtector`, `GuestAgentAuthenticatedChannel`,
+`GuestAgentRpcFraming`, `GuestAgentRpcTransport`); existing Kali authority
+(`cognition.KaliToolGateway` and its application services,
+`ResearchKaliOperationAuthorization`(`Store`),
+`ResearchKaliOperationPreview`, `ResearchKaliOperationExecution`); and
+the capability/schema layer (`tools.GuestAgentRequestSchemaValidation`,
+`tools.ProductCapabilitySchema`, `tools.ProductCapabilitySchemaDefaults`,
+`tools.ProductCapabilityCatalogDefaults`). Confirmed by direct grep that
+`research` imports nothing from `tools` anywhere in the repository today,
+while four `tools` modules already import from `research` -- so the new
+core, living in `research` alongside its Guest-Agent siblings, must not
+import `tools.ProductCapabilitySchema`/`GuestAgentRequestSchemaValidation`
+without inverting that existing layering; it does not. Confirmed
+`ResearchKaliOperationPreview.ResearchKaliOperationKind` (exactly
+`DNS_RECORD_LOOKUP`/`HTTPS_HEADER_LOOKUP` today) and
+`ResearchDnsRecordType` (`A`/`AAAA`/`CNAME`) as the authoritative closed
+enums to reuse directly; confirmed `MAX_KALI_OPERATION_HOSTNAME_CHARACTERS`
+as the one authoritative length bound to reuse; confirmed
+`ResearchKaliOperationPreview`'s own hostname case-folding/trailing-dot
+normalization exists only inline in that module (not exposed as a
+standalone function), so reusing it exactly would require either editing
+that existing file or duplicating its logic -- neither acceptable for this
+milestone -- and chose instead the smaller, honestly-narrower claim: a
+`hostname` logical input need only be non-empty and within the existing
+reviewed length bound, documented explicitly as not proving DNS-name
+syntax or case/trailing-dot equivalence to any host-side preview.
+
+Delivered: one new production file, `research.GuestAgentCore`
+(`admit_guest_agent_request(request: GuestAgentRequest) ->
+GuestAgentResponse`), and one new test file,
+`tests/research/test_guest_agent_core.py`. No existing file was modified.
+The allowlist is a dict literal keyed by explicit
+`ResearchKaliOperationKind.<NAME>` attribute references (never built by
+iterating the enum class), mapping each reviewed operation to its exact
+required logical-input field-set; a request whose field names do not
+exactly match that set -- missing, extra, duplicate (already structurally
+impossible at the protocol layer), or a sibling operation's field --
+returns `INVALID_REQUEST`. `dns_record_type` is validated by constructing
+the real `ResearchDnsRecordType` enum; `resolved_address` by the stdlib
+`ipaddress.ip_address` parser -- both are enforcement by reuse, not a
+second implementation of either rule. An operation outside the allowlist
+returns `UNSUPPORTED_CAPABILITY`. Every other admitted request returns a
+fixed `DECLINED` detail. `operation_digest` and `nonce` are never read by
+the function at all; `request_id` is only copied through for the RPC
+client's own correlation requirement.
+
+48 new focused tests cover: allowlist membership for both reviewed
+operations and an AST-based structural proof (independently
+mutation-tested by the Lead -- rewriting the allowlist as
+`{kind: frozenset({"hostname"}) for kind in ResearchKaliOperationKind}`
+reliably fails the suite) that a hypothetical future enum member cannot
+become admitted without a deliberate code edit; exact required-field-set
+admission in both directions for each operation, including each
+operation rejecting the other's field; narrow value validation (closed
+DNS-record-type enum membership, stdlib IP-literal parsing, the existing
+hostname length bound) with both valid and malformed cases; empty
+required values rejected; an unknown logical field rejected; the existing
+protocol-layer duplicate-field guarantee reconfirmed as a regression;
+hostile logical-input values never appearing in any response detail;
+`SUCCESS` and `REPLAY_REJECTED` proven unreachable across every sampled
+request shape; `output_lines` always empty; exact `request_id`
+round-trip; `operation_digest`/`nonce` proven not to influence the
+outcome; a defensive non-`GuestAgentRequest` input raising; AST-based
+structural proofs (mirroring the existing `test_guest_agent_rpc_transport
+.StructuralSecurityTests` technique exactly, never a naive substring
+scan) that the module references no Kali execution authority, no replay
+protection, no subprocess/shell/socket/ssl, no VMware/SSH/WSL token, and
+defines no second generic callable execution extension point; and real
+loopback mTLS TLS 1.3 RPC composition tests proving the function can be
+registered directly as `GuestAgentRpcServer`'s handler with no adapter,
+that a real DNS and a real HTTPS-shaped request each return an inert
+`DECLINED` response over the authenticated channel, that a CA-valid
+wrong-role peer and an untrusted-CA peer each still never reach the
+handler (zero-invocation call-counters against a genuine failed TLS
+attempt), and that a nonce carried through a full successful round trip
+to this handler remains unconsumed by a fresh `GuestAgentReplayProtector`
+afterward. The existing, unmodified `tests/research` suite and the Kali
+execution-authority chain tests continue to pass unchanged.
+
+Independent QA review (hypatia-qa, subagent): independently re-ran the
+new suite, the full `tests/research` discovery, and the full `tests/`
+discovery; independently reproduced the Lead's deny-by-default mutation
+test (confirming a materially larger failure blast radius than the
+Lead's own narrower claim, but confirming the same structural AST tests
+do catch it); independently re-verified the `research`/`tools` layering
+claim by grep; confirmed zero production callers. Found and fixed two
+real, test-only gaps with no production-semantics change: (1) the
+`UNSUPPORTED_CAPABILITY` branch was entirely untested by the original 47
+tests (today's two-member enum made it unreachable through any sample
+request, so a regression there would have passed unnoticed) -- fixed by
+adding a test that temporarily removes one real allowlist entry via
+`mock.patch.dict` and restores it afterward; (2) two genuine MyPy
+type-narrowing/annotation issues in the new test file (not covered by the
+canonical `mypy src` gate, but real) -- fixed with an explicit
+`isinstance` re-narrowing guard and corrected return-type annotations. No
+CONFIRMED production findings.
+
+Independent security review (hypatia-security, subagent, read-only):
+traced all 25 of the milestone's required security properties directly
+against source with file/line evidence -- confirmed `operation_digest`
+and `nonce` are never read by the module at all; confirmed every
+response-construction call site's literal status argument, proving
+`SUCCESS` is never reachable; confirmed the allowlist's dict-literal keys
+are explicit enum-member attributes, never enum-iteration-derived;
+re-verified (independent of the v0.3.461 review) that
+`GuestAgentRpcTransport.serve_one_request`'s authentication step
+precedes the handler call, and that this file remains byte-for-byte
+unmodified since v0.3.461; confirmed the real-RPC wrong-role/untrusted-CA
+composition tests use genuine certificates and a genuine failed
+handshake, not a stub; confirmed no raw hostile text is ever interpolated
+into a response detail; confirmed `git diff --stat origin/main` shows
+zero modification to `KaliToolGateway`, any
+`ResearchKaliOperationAuthorization*` file, or any process adapter. No
+CONFIRMED findings.
+
+Full local gates re-run by the Lead on the integrated tree after QA's
+test-only fixes: unittest discover 8759 tests, OK (524.4s); Black --check
+. clean (1129 files); Ruff check . clean; MyPy src clean (654 source
+files); git diff --check clean. `git status` confirms exactly two new
+files, nothing else modified. (Running MyPy directly against the new test
+file, rather than through the canonical `mypy src` gate, surfaces 23
+pre-existing errors in the unmodified v0.3.461 file
+`test_guest_agent_rpc_transport.py` via transitive import-following --
+confirmed unrelated to this milestone's changes via `git diff` showing
+that file byte-for-byte unchanged, and out of this bounded milestone's
+scope to fix.)
+
+**Roadmap step 5 status**: first bounded foundation delivered -- not
+complete. No real Kali Guest Agent process exists, no persistent guest
+daemon/service was created, no capability executes through the
+Guest-Agent, authorization does not cross the transport, and replay is
+not enforced at dispatch. Step 3's and step 4's own remaining gaps
+(production certificate provisioning/distribution, the real non-loopback
+VMware Host-Only network path, wiring the RPC transport to a real guest
+process) remain entirely unstarted.
+
+## Previous scope: v0.3.461 (release record before integration)
 
 | Field | Value |
 | --- | --- |
