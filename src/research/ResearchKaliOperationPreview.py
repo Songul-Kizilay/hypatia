@@ -50,10 +50,28 @@ class ResearchKaliCommandTransport(StrEnum):
     transport can never be replayed against another: changing the transport
     changes the digest, and the gateway's authorization check already
     requires an exact digest match.
+
+    `GUEST_AGENT` names the future Hypatia Kali Guest-Agent RPC route
+    (`research.GuestAgentRpcTransport`) -- added so a preview/authorization
+    bound to that route produces a different digest than the otherwise-
+    identical `WSL_KALI`/`VMWARE_KALI` preview for the same operation, which
+    is what lets `research.GuestAgentHostAuthorizationHandoff` refuse to
+    accept a WSL- or VMware-authorized record as if it authorized a
+    Guest-Agent dispatch. Adding this member grants nothing by itself: no
+    process adapter (`research.WslKaliOperationProcessAdapter`,
+    `research.VmwareKaliOperationProcessAdapter`) accepts a command plan
+    carrying it (each checks its own transport by exact identity and
+    rejects any other), no runtime probe reports it ready, and
+    `tools.ProductCapabilityCatalogDefaults._EXECUTABLE_KALI_OPERATIONS` is
+    a fixed, explicit literal tuple that does not enumerate this enum to
+    build itself -- so this member does not newly appear in any executable
+    capability catalog, dispatchable transport selection, or runtime
+    readiness claim merely by existing.
     """
 
     WSL_KALI = "wsl_kali"
     VMWARE_KALI = "vmware_kali"
+    GUEST_AGENT = "guest_agent"
 
 
 @dataclass(frozen=True, slots=True)

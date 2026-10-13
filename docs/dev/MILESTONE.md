@@ -10,7 +10,165 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.462 (implementation)
+## Current scope: v0.3.463 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent host authorization handoff foundation -- the first safe HOST-SIDE bridge between Hypatia's existing Kali execution-authority chain (`cognition.KaliToolGateway`) and a future Guest-Agent dispatch. Given an exact existing `ResearchKaliOperationAuthorization` and the exact `ResearchKaliOperationPreview` it approved, validates and durably consumes that authorization (reusing the gateway's own exact-binding checks via a new shared primitive) and returns exactly one narrowly-bound, in-process `GuestAgentHostDispatchGrant`. No RPC sent, no guest execution, no process spawned, no target network, no replay nonce consumed, no capability returns SUCCESS. Does not solve guest-side independent cryptographic proof of host authorization -- documented as an open gap. |
+| Base SHA | `21c27fa99ef1f71a8c0f1f9bc414b07f46e8c6a1` (verified remote main; standard merge of PR #443). |
+| Branch | `feature/guest-agent-host-authorization-handoff-v0.3.463`, worktree `D:\hypatia-v0.3.463` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | AUTHORIZATION RECORD PRESENT != AUTHORIZATION CONSUMED. AUTHORIZATION CONSUMED != EXECUTION SUCCESS. HOST DISPATCH GRANT != GUEST-SIDE AUTHORIZATION PROOF. HOST DISPATCH GRANT != AUTHORITY TO EXECUTE BY ITSELF. TRANSPORT MATCH != EXECUTION AUTHORITY. Zero production callers; not wired into GuestAgentRpcClient.send_request, Bootstrap, CognitiveEngine, chat, or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP operations ZERO; non-loopback network activity ZERO; new RPC traffic ZERO; replay consumption ZERO; host authorization consumption TEST-ONLY/TEMPORARY STORES ONLY. v0.3.464 not started. |
+
+Per the standing ledger convention, v0.3.462 delivery was re-verified
+before this milestone began: release
+`a90ba46abb44380e8e003fc7e3e198b386209750`, PR #443 MERGED, standard
+merge `21c27fa99ef1f71a8c0f1f9bc414b07f46e8c6a1` with parents
+`1e8576a5aa7066ef3eaf6ba57593c0c7c2d42990` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor a90ba46a... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged. v0.3.462 is delivered.
+
+Repository audit before implementation covered the host authority chain
+(`cognition.KaliToolGateway` -- traced its exact nine-step flow: operator
+opt-in, preview recomputation, expected-digest equality, authorization
+lookup, expiration, program/scope/policy binding, runtime readiness,
+authorization-store removal, dispatch -- `KaliOperationPreviewApplicationService`,
+`ResearchKaliOperationAuthorization`(`Store`),
+`JsonFileResearchKaliOperationAuthorizationStore`,
+`ResearchKaliOperationPreview`, `ResearchKaliOperationExecution`,
+`ResearchKaliRuntimeEnvironment`); the Guest-Agent family
+(`GuestAgentProtocol`, `GuestAgentReplayProtector`, `GuestAgentCore`,
+`GuestAgentRpcTransport`, `GuestAgentAuthenticatedChannel`); and transport/
+profile facts (`ResearchKaliCommandTransport`,
+`ProductCapabilityCatalogDefaults`, `ProductCapabilitySchemaDefaults`,
+`WslKaliOperationProcessAdapter`, `VmwareKaliOperationProcessAdapter`,
+`VmwareKaliRuntimeProbe`). Confirmed `operation_digest` genuinely embeds
+`transport` (via `command_plan.transport.value` inside the digested
+document), so a Guest-Agent-bound preview's digest provably differs from
+an otherwise-identical WSL/VMware one; confirmed `_EXECUTABLE_KALI_OPERATIONS`
+and the schema-defaults list are fixed literal tuples never derived by
+enumerating the transport enum; confirmed both process adapters and the
+VMware runtime probe already guard on exact transport identity and reject
+anything else immediately, with zero real work performed first; confirmed
+no secure random-ID generation convention exists anywhere in `src/`, so
+`request_id`/`nonce` are accepted as caller-supplied at the final handoff
+boundary rather than inventing a new generation convention.
+
+Delivered: `research.ResearchKaliOperationAuthorizationConsumption`
+(`find_exact_kali_operation_authorization`, `authorizations_excluding`),
+extracted from `KaliToolGateway`'s own inline `AUTHORIZATION`-stage logic
+byte/semantics-identical (same raised messages, same comparisons, same
+order), so the gateway and the new handoff share exactly one definition
+of exact authorization matching; `research.GuestAgentHostAuthorizationHandoff`
+(`GuestAgentHostDispatchGrant`, `consume_authorization_for_guest_agent_dispatch`,
+a `KaliToolGatewayFailure`-style stage/failure model). `cognition.KaliToolGateway`
+refactored to call the two shared functions instead of its own inline
+block -- same stage transitions, same messages, same ordering relative to
+the unchanged runtime-readiness check; all 23 existing gateway tests pass
+unmodified. `research.ResearchKaliOperationPreview` gained one additive
+enum member, `ResearchKaliCommandTransport.GUEST_AGENT`. `research.GuestAgentCore`
+had three module-private field-name constants renamed public
+(`FIELD_HOSTNAME`/`FIELD_DNS_RECORD_TYPE`/`FIELD_RESOLVED_ADDRESS`) so the
+new handoff's logical-input projection imports the same vocabulary rather
+than duplicating string literals -- zero behavior change, its own 48-test
+suite passes unmodified.
+
+61 new focused tests cover: the shared primitive in isolation (exact
+match, missing/duplicate/expired authorization, each of the four binding
+mismatches, exact-not-prefix ID matching, exclusion correctness); the
+handoff end to end (GUEST_AGENT-transport digest differing from WSL/
+VMware, a WSL or VMware authorization failing closed at the
+TRANSPORT_BINDING stage before the store is ever touched, every fail-
+closed scenario leaving the store and grant-existence unchanged, store
+read/save failure handling, exact-once removal with unrelated records
+untouched); grant forgery resistance (no `_capability_token` -> `TypeError`;
+wrong token -> `ResearchError`); preview-to-logical-input projection
+(DNS/HTTPS field sets exactly, no caller override possible -- proven by
+inspecting the handoff function's own closed parameter list); request_id/
+nonce as correlation/replay identity only, with a malformed value leaving
+the grant retriable rather than burned; the constructed request's exact
+shape (`V1`, exact digest, exact field sets, no command/shell/argv field);
+one-shot enforcement under real concurrency (75 threads x 5 trials in
+independent QA review, zero double-success); replay independence
+(AST-proven zero reference to replay symbols, plus a real nonce surviving
+a full handoff unconsumed); `GuestAgentCore` still returning its existing
+non-`SUCCESS` outcome for both DNS and HTTPS requests built from a valid
+grant; no automatic adapter/probe/catalog/schema acceptance of the new
+transport member; and AST-based structural proofs (mirroring the
+established pattern, never a naive substring scan) that the two new files
+reference no Kali execution authority, no replay protection, no
+subprocess/socket/network, no VMware/SSH/WSL token, and no arbitrary
+command-channel vocabulary.
+
+During independent QA review, a real test-coverage gap was found and
+closed: the original proof that "a failed store save leaves no usable
+dispatch grant" relied, for one test, on walking a caught exception's
+`__traceback__`/`__cause__` frames after the test's `assertRaises` block
+had already exited -- which the Lead's own follow-up investigation
+confirmed is unreliable, because CPython clears a frame's fast-local
+slots once that frame is no longer live on the call stack (to break
+traceback reference cycles), so `frame.f_locals` can report a local
+variable as absent even though it demonstrably existed at the moment the
+exception was raised, independent of anything this module does. Replaced
+with a deterministic AST-based structural test proving textually that the
+only call to `GuestAgentHostDispatchGrant(` in the handoff function's body
+is a statement after its `try`/`except`, never inside the `try` block --
+confirmed, by the Lead's own mutation testing (constructing the grant
+locally before the `save()` call while keeping the exception re-raised),
+to catch exactly the reorder scenario QA identified, where the prior
+runtime-traceback approach did not.
+
+Independent QA review (hypatia-qa, subagent): independently re-ran the
+new suites, the full `tests/research` discovery (3509 tests) and the full
+suite (8819 tests at review time); independently reproduced the ordering
+mutation test (swallowing the save exception: 2 failures) and the
+transport-binding mutation test (neutering the guard: 2 failures);
+independently stress-tested the one-shot lock at 75 threads x 5 trials
+with zero double-success; independently confirmed the `GuestAgentCore.py`
+diff is a pure rename and the `KaliToolGateway.py` refactor preserves
+every existing stage/behavior assertion. Found and reported the
+traceback-reliability gap described above (closed by the Lead as
+described). No other confirmed findings.
+
+Independent security review (hypatia-security, subagent, read-only):
+traced all 25 of the milestone's required security properties directly
+against source with file/line evidence -- the exact human authorization
+chain remains the sole authority source, every binding comparison is
+exact-equality only, authorization removal is proven to persist strictly
+before the grant is ever constructed (no intervening statement could
+construct a grant-shaped object earlier), a save failure always
+re-raises with no fallthrough, the grant cannot rewrite or retransport
+operation facts, transport binding is independently re-derived from the
+real digest-computation code path (not merely trusted from the
+docstring), the one-shot lock's check-construct-mark sequence is fully
+inside one critical section, `request_id`/`nonce` never influence control
+flow, replay/process/network/shell/SSH/VMware/WSL channels are all
+absent, `GuestAgentProtocol.py` is confirmed byte-for-byte unmodified
+(no new authority-shaped field), and the intentionally-open wire-level
+guest-verification gap is honestly documented rather than papered over
+with an insecure wire assertion. No CONFIRMED findings.
+
+Full local gates re-run by the Lead on the integrated tree after closing
+QA's finding: unittest discover 8820 tests, OK (217.4s); Black --check .
+clean (1133 files); Ruff check . clean; MyPy src clean (656 source
+files); git diff --check clean. `git status` confirms exactly 3 modified
+files (`KaliToolGateway.py`, `GuestAgentCore.py`,
+`ResearchKaliOperationPreview.py`) and 4 new files, nothing else.
+
+**Roadmap step 5 status**: the host-side authorization handoff foundation
+is delivered; step 5 remains incomplete. No real Kali Guest Agent process
+or persistent guest daemon/service exists; no capability dispatch exists;
+no capability executes through the Guest-Agent; the wire-level guest
+still cannot independently verify host authorization from request bytes
+alone -- that gap is explicitly unsolved and left for a future,
+separately-authorized milestone. Steps 3's and 4's own remaining gaps
+(production certificate provisioning/distribution, the real non-loopback
+VMware Host-Only network path, wiring the RPC transport to a real guest
+process) remain entirely unstarted.
+
+## Previous scope: v0.3.462 (release record before integration)
 
 | Field | Value |
 | --- | --- |

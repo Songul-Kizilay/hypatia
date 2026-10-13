@@ -2,6 +2,103 @@
 
 All notable project changes are recorded here.
 
+## [0.3.463] - 2026-10-13
+
+### Added
+
+- Host authorization handoff foundation for future Guest-Agent dispatch
+  (`research.GuestAgentHostAuthorizationHandoff`): the first safe bridge
+  between Hypatia's existing Kali execution-authority chain
+  (`cognition.KaliToolGateway`) and the Guest-Agent RPC/admission layers
+  (v0.3.461/462). Given an exact existing `ResearchKaliOperationAuthorization`
+  and the exact `ResearchKaliOperationPreview` it approved,
+  `consume_authorization_for_guest_agent_dispatch` validates and durably
+  consumes that authorization using the same exact-binding checks
+  `KaliToolGateway` already applies -- reused via a new shared primitive,
+  `research.ResearchKaliOperationAuthorizationConsumption`, never a second,
+  independently-evolving copy of "does this authorization exactly match
+  this preview" -- and returns exactly one narrowly-bound, in-process
+  `GuestAgentHostDispatchGrant`.
+- Ordering is load-bearing and tested both behaviorally and via a
+  deterministic AST-based structural proof: authorization removal is
+  persisted (`authorization_store.save(...)`) strictly before the grant is
+  ever constructed, and a store read/save failure or any exact-binding
+  mismatch (missing/duplicate authorization, expiry, operation digest,
+  program ID, scope revision ID/digest, execution policy digest) raises
+  and leaves no grant in existence. `AUTHORIZATION RECORD PRESENT !=
+  AUTHORIZATION CONSUMED`, `AUTHORIZATION CONSUMED != EXECUTION SUCCESS`,
+  `HOST DISPATCH GRANT != GUEST-SIDE AUTHORIZATION PROOF`, `HOST DISPATCH
+  GRANT != AUTHORITY TO EXECUTE BY ITSELF`.
+- A new, additive `ResearchKaliCommandTransport.GUEST_AGENT` transport
+  member so a Guest-Agent-bound preview's `operation_digest` differs from
+  the otherwise-identical `WSL_KALI`/`VMWARE_KALI` digest for the same
+  operation (transport is part of the digested document). A WSL- or
+  VMware-authorized record can therefore never satisfy a Guest-Agent
+  handoff, even with every other binding fact matching exactly. Confirmed
+  the new member grants nothing automatically: `tools
+  .ProductCapabilityCatalogDefaults`'s executable-operation list and
+  `tools.ProductCapabilitySchemaDefaults`'s schema list are both fixed
+  literals unaffected by the new enum member, `WslKaliOperationProcessAdapter`
+  /`VmwareKaliOperationProcessAdapter` both still reject a
+  `GUEST_AGENT`-transport command plan before any subprocess/SSH touches
+  anything, and `VmwareKaliRuntimeProbe` still refuses it with zero
+  host/guest probing.
+- `GuestAgentHostDispatchGrant` is not publicly constructible (a
+  module-private capability-token pattern, mirroring the existing
+  `GuestAgentAuthenticatedPeer` convention) and is one-shot:
+  `materialize_request(request_id=..., nonce=...)` yields at most one real
+  `GuestAgentRequest` under a lock guarding the full check-construct-mark
+  sequence, so concurrent callers can never both succeed. Its bound facts
+  (`operation_kind`, `operation_digest`, logical inputs) derive only from
+  the exact validated preview -- `consume_authorization_for_guest_agent_dispatch`
+  has no parameter through which a caller could independently supply
+  hostname/DNS-record-type/resolved-address/operation_kind/operation_digest.
+  `request_id`/`nonce` are supplied only at this final boundary (`REQUEST
+  ID != AUTHORIZATION`, `NONCE != AUTHORIZATION`) and validated solely by
+  `GuestAgentRequest`'s own existing bounds; an invalid value leaves the
+  grant unconsumed and retriable with a corrected value.
+- `cognition.KaliToolGateway` is refactored, byte/semantics-equivalent, to
+  call the new shared matching primitive instead of its own inline
+  `AUTHORIZATION`-stage block; its exact-SHA test suites
+  (`tests/cognition/test_kali_tool_gateway.py`,
+  `test_kali_tool_gateway_vmware_transport.py`) pass unmodified, with the
+  same stage/behavior assertions as before. `research.GuestAgentCore`
+  gains three public field-name constants (renamed from module-private)
+  so the new handoff's preview-to-logical-input projection imports the
+  same field-name vocabulary rather than duplicating string literals --
+  zero behavior change, confirmed by its own unmodified 48-test suite.
+- Proven, both structurally and behaviorally, that this milestone never
+  calls `research.GuestAgentReplayProtector.consume_once` (a nonce carried
+  through a full handoff remains unconsumed afterward), never spawns a
+  process or touches a network, never performs a runtime-readiness check
+  (none is needed -- nothing here dispatches), and that
+  `research.GuestAgentCore.admit_guest_agent_request` still only ever
+  returns its existing inert, non-`SUCCESS` outcome for a request built
+  from a valid grant. **This milestone does not solve guest-side
+  independent cryptographic proof of host authorization, and documents
+  that gap explicitly rather than hiding it**: a `GuestAgentRequest` built
+  from a valid grant is, once serialized, still only the same typed
+  protocol object `research.GuestAgentProtocol` already describes, with no
+  new field (no `authorized`/`approved`/`trusted`/`human_approved`/
+  `execution_allowed`) that would let a receiving guest independently
+  verify from those bytes alone that a host authorization was ever
+  consumed. Solving that gap is left for a future, separately-authorized
+  milestone. This handoff is not wired into `GuestAgentRpcClient.send_request`,
+  `Bootstrap`, `CognitiveEngine`, chat, or the desktop; no RPC request is
+  sent by it in production.
+- 61 new focused tests (`tests/research/test_guest_agent_host_authorization_handoff.py`,
+  48; `tests/research/test_research_kali_operation_authorization_consumption.py`,
+  13). Independent QA (found and closed one real test-coverage gap --
+  the original save-failure-leaves-no-grant proof relied on a runtime
+  traceback walk later found unreliable due to CPython's own frame-
+  clearing-after-unwind behavior; replaced with a deterministic AST-based
+  structural proof, confirmed by mutation testing to catch the exact
+  reorder scenario QA identified) and independent security review (25
+  required properties, all PASS) both returned PASS with zero confirmed
+  production findings. The full existing test suite, including the Kali
+  authority-chain and all v0.3.456-462 Guest-Agent suites, continues to
+  pass unchanged.
+
 ## [0.3.462] - 2026-10-13
 
 ### Added

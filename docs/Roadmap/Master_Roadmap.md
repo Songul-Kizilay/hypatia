@@ -991,16 +991,26 @@ Recorded priority order:
    real guest process, a real (non-loopback) deployment, and any
    capability dispatch remain separate, unstarted work still inside this
    step.
-5. **(first bounded foundation delivered, v0.3.462 -- not all of step 5)**
-   The guest-side agent itself: a process that receives one authenticated,
-   already-authorized request and dispatches it to the one allowlisted Kali
-   implementation it names — never an arbitrary command. v0.3.462 delivered
-   only the inert application core (`research.GuestAgentCore`): a fixed,
-   deny-by-default allowlist of the two reviewed operations and exact
-   logical-input admission, with every outcome capped at `DECLINED` --
-   never execution. No real guest process, daemon, or service exists yet;
-   no capability dispatch exists; authorization still does not cross the
-   transport.
+5. **(first bounded foundation delivered, v0.3.462-v0.3.463 -- not all of
+   step 5)** The guest-side agent itself: a process that receives one
+   authenticated, already-authorized request and dispatches it to the one
+   allowlisted Kali implementation it names — never an arbitrary command.
+   v0.3.462 delivered the inert application core (`research.GuestAgentCore`):
+   a fixed, deny-by-default allowlist of the two reviewed operations and
+   exact logical-input admission, with every outcome capped at `DECLINED`
+   -- never execution. v0.3.463 delivered the host-side authorization
+   handoff foundation (`research.GuestAgentHostAuthorizationHandoff`): the
+   bridge between the existing host authority chain (steps 1-3) and a
+   future Guest-Agent dispatch, producing an in-process, one-shot
+   `GuestAgentHostDispatchGrant` only after an exact human authorization
+   is validated and durably consumed, bound to a new, additive
+   `GUEST_AGENT` transport identity so it can never be satisfied by a
+   WSL- or VMware-authorized record. v0.3.463 deliberately does not solve
+   guest-side independent cryptographic proof of host authorization --
+   documented as an open gap, not hidden. No real guest process, daemon,
+   or service exists yet; no capability dispatch exists; no RPC request
+   is sent by the new handoff in production; authorization still does not
+   cross the transport in any way the guest can independently verify.
 6. Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
@@ -1173,14 +1183,52 @@ not wired into `KaliToolGateway`, the tool execution layer, `Bootstrap`,
 `CognitiveEngine`, chat, or the desktop. No real Kali Guest Agent
 process, daemon, or service exists; no capability dispatch exists; no
 real capability executes through the Guest-Agent; authorization does not
-cross the transport; replay is not enforced at dispatch. The remaining
-work inside step 3 (real production certificate provisioning/
-distribution strategy for an actual deployment, the real non-loopback
-VMware Host-Only network path), the remainder of step 4 (wiring to a
-real guest process), the remainder of step 5 (a real guest process/
-daemon and an actual capability-dispatch boundary), and steps 6-7 remain
-separate, unstarted, future milestones, each requiring its own
-authorization.
+cross the transport; replay is not enforced at dispatch. v0.3.463
+delivered the host-side authorization handoff foundation,
+`research.GuestAgentHostAuthorizationHandoff
+.consume_authorization_for_guest_agent_dispatch`: given an exact existing
+`ResearchKaliOperationAuthorization` and the exact
+`ResearchKaliOperationPreview` it approved, validates and durably
+consumes that authorization -- reusing the existing gateway's own
+exact-binding checks via a new shared primitive,
+`research.ResearchKaliOperationAuthorizationConsumption`, never a second
+copy of that logic -- and returns exactly one narrowly-bound, one-shot,
+not-publicly-constructible `GuestAgentHostDispatchGrant`.
+`AUTHORIZATION RECORD PRESENT != AUTHORIZATION CONSUMED`, `AUTHORIZATION
+CONSUMED != EXECUTION SUCCESS`, `HOST DISPATCH GRANT != GUEST-SIDE
+AUTHORIZATION PROOF`, `HOST DISPATCH GRANT != AUTHORITY TO EXECUTE BY
+ITSELF`: authorization removal is persisted strictly before the grant
+ever exists, proven both behaviorally and by a deterministic AST-based
+structural test. A new, additive `ResearchKaliCommandTransport.GUEST_AGENT`
+transport member makes a Guest-Agent-bound preview's digest differ from
+the otherwise-identical WSL/VMware digest for the same operation (confirmed
+by tracing the real digest-computation code path), so a WSL- or
+VMware-authorized record can never satisfy a Guest-Agent handoff; the new
+member grants nothing automatically anywhere (fixed-literal capability
+catalog/schema, both process adapters and the VMware runtime probe still
+reject it immediately). This handoff never calls
+`research.GuestAgentReplayProtector.consume_once`, never spawns a process
+or touches a network, performs no runtime-readiness check (nothing here
+dispatches), and is not wired into `GuestAgentRpcClient.send_request`,
+`Bootstrap`, `CognitiveEngine`, chat, or the desktop -- no RPC request is
+sent by it in production.
+**v0.3.463 explicitly does not solve guest-side independent cryptographic
+proof of host authorization**: a `GuestAgentRequest` built from a valid
+grant is, once serialized, still only the same typed protocol object
+`research.GuestAgentProtocol` already describes (byte-for-byte
+unmodified by this milestone), with no new field that would let a
+receiving guest independently verify from those bytes alone that a host
+authorization was ever consumed -- `research.GuestAgentCore
+.admit_guest_agent_request` still only ever returns its existing inert,
+non-`SUCCESS` outcome for such a request. Solving that gap is left for a
+future, separately-authorized milestone. The remaining work inside step 3
+(real production certificate provisioning/distribution strategy for an
+actual deployment, the real non-loopback VMware Host-Only network path),
+the remainder of step 4 (wiring to a real guest process), the remainder
+of step 5 (a real guest process/daemon, an actual capability-dispatch
+boundary, and the still-open wire-level host-authorization-proof gap),
+and steps 6-7 remain separate, unstarted, future milestones, each
+requiring its own authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,
