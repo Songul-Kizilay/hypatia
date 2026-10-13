@@ -991,7 +991,7 @@ Recorded priority order:
    real guest process, a real (non-loopback) deployment, and any
    capability dispatch remain separate, unstarted work still inside this
    step.
-5. **(first bounded foundation delivered, v0.3.462-v0.3.463 -- not all of
+5. **(first bounded foundation delivered, v0.3.462-v0.3.464 -- not all of
    step 5)** The guest-side agent itself: a process that receives one
    authenticated, already-authorized request and dispatches it to the one
    allowlisted Kali implementation it names — never an arbitrary command.
@@ -1005,12 +1005,19 @@ Recorded priority order:
    `GuestAgentHostDispatchGrant` only after an exact human authorization
    is validated and durably consumed, bound to a new, additive
    `GUEST_AGENT` transport identity so it can never be satisfied by a
-   WSL- or VMware-authorized record. v0.3.463 deliberately does not solve
-   guest-side independent cryptographic proof of host authorization --
-   documented as an open gap, not hidden. No real guest process, daemon,
-   or service exists yet; no capability dispatch exists; no RPC request
-   is sent by the new handoff in production; authorization still does not
-   cross the transport in any way the guest can independently verify.
+   WSL- or VMware-authorized record. v0.3.464 closed v0.3.463's own named
+   gap with real Ed25519 signatures (`research.GuestAgentDispatchProof`/
+   `GuestAgentDispatchSigning`/`GuestAgentDispatchVerification`, Hypatia's
+   first runtime dependency, `cryptography==50.0.2`): a consumed grant now
+   produces exactly one signed envelope a GUEST can independently verify
+   with only a public key, binding the exact request, a fixed HOST issuer/
+   GUEST audience, and a bounded 60-second validity window -- but
+   verification still never implies execution, replay consumption,
+   capability admission, or runtime readiness, and no signed envelope is
+   wired into the RPC transport in production. No real guest process,
+   daemon, or service exists yet; no capability dispatch exists; no RPC
+   request carrying a signed envelope is sent in production; replay is
+   not enforced at dispatch; no production signing key is provisioned.
 6. Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
@@ -1212,23 +1219,47 @@ or touches a network, performs no runtime-readiness check (nothing here
 dispatches), and is not wired into `GuestAgentRpcClient.send_request`,
 `Bootstrap`, `CognitiveEngine`, chat, or the desktop -- no RPC request is
 sent by it in production.
-**v0.3.463 explicitly does not solve guest-side independent cryptographic
-proof of host authorization**: a `GuestAgentRequest` built from a valid
-grant is, once serialized, still only the same typed protocol object
-`research.GuestAgentProtocol` already describes (byte-for-byte
-unmodified by this milestone), with no new field that would let a
-receiving guest independently verify from those bytes alone that a host
-authorization was ever consumed -- `research.GuestAgentCore
-.admit_guest_agent_request` still only ever returns its existing inert,
-non-`SUCCESS` outcome for such a request. Solving that gap is left for a
-future, separately-authorized milestone. The remaining work inside step 3
+v0.3.463 explicitly did not solve guest-side independent cryptographic
+proof of host authorization. **v0.3.464 closed exactly that gap** with
+real Ed25519 signatures (`research.GuestAgentDispatchProof`/
+`GuestAgentDispatchSigning`/`GuestAgentDispatchVerification`; Hypatia's
+first runtime dependency, `cryptography==50.0.2` from PyCA, confirmed
+prebuilt-wheel-portable on both target CI platforms for this project's
+Python 3.14 before adding, and proven live on exact-SHA CI): an already-
+consumed, one-shot `GuestAgentHostDispatchGrant` can now produce exactly
+one signed dispatch envelope (`create_signed_dispatch_envelope` --
+accepting only the grant, `request_id`, `nonce`, a HOST private signing
+key, and the current time; no arbitrary request and no caller-chosen
+issuer/audience/expiry is possible), and a GUEST holding only the
+corresponding public key can independently verify it
+(`verify_signed_dispatch_envelope`) -- recomputing the exact request
+digest, the fixed HOST issuer/GUEST audience identities, and the bounded
+validity window, then checking the real Ed25519 signature -- with zero
+network access and zero HOST private material. TLS IDENTITY KEY !=
+DISPATCH AUTHORIZATION SIGNING KEY: the proof reuses only the existing
+Guest-Agent peer-identity URI *strings*, never the mTLS key, confirmed by
+AST-based structural tests that neither new module references
+`GuestAgentMtlsContext` or the mTLS private-key-path field. A successful
+verification still means nothing beyond "the trusted HOST dispatch-
+signing key validly signed this exact request" --
+`GuestAgentVerifiedDispatch` != EXECUTION AUTHORITY, != REPLAY
+ACCEPTANCE, != CAPABILITY ADMISSION, != RUNTIME READINESS, and
+`research.GuestAgentCore.admit_guest_agent_request` still only ever
+returns its existing inert, non-`SUCCESS` outcome for a request extracted
+from a verified envelope. No signed envelope is wired into the RPC
+transport in production; no replay is consumed at verification; no
+production signing key is provisioned, generated, or stored anywhere by
+this milestone -- safe production key-at-rest custody remains explicitly
+out of scope, not pretended to be solved. The remaining work inside step 3
 (real production certificate provisioning/distribution strategy for an
 actual deployment, the real non-loopback VMware Host-Only network path),
 the remainder of step 4 (wiring to a real guest process), the remainder
-of step 5 (a real guest process/daemon, an actual capability-dispatch
-boundary, and the still-open wire-level host-authorization-proof gap),
-and steps 6-7 remain separate, unstarted, future milestones, each
-requiring its own authorization.
+of step 5 (a real guest process/daemon, production signing-key custody,
+and an actual capability-dispatch boundary that composes verification ->
+replay consumption -> capability admission -> runtime readiness ->
+dispatch in the correct order, over the RPC transport), and steps 6-7
+remain separate, unstarted, future milestones, each requiring its own
+authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,
