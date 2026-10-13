@@ -2,10 +2,66 @@
 
 ## Runtime Version
 
-`v0.3.461 (Genesis)`
+`v0.3.462 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.462 begins the bounded Guest-Agent application/core foundation
+of roadmap step 5: `research.GuestAgentCore.admit_guest_agent_request`, one
+pure, deterministic function that receives an already-decoded
+`GuestAgentRequest` and makes ONLY an inert admission decision --
+`AUTHENTICATED REQUEST != AUTHORIZED REQUEST`, `OPERATION DIGEST !=
+AUTHORIZATION`, `CAPABILITY ALLOWLIST MATCH != EXECUTION AUTHORITY`, `GUEST
+ADMISSION SUCCESS != EXECUTION AUTHORITY`. `GuestAgentResponseStatus.SUCCESS`
+is a structurally unreachable outcome: a structurally valid, admitted
+request still only reaches `DECLINED`, because no capability implementation
+exists yet. The capability allowlist is a fixed, code-owned dict literal
+covering exactly the two existing reviewed operations
+(`ResearchKaliOperationKind.DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`),
+keyed by explicit enum-member attribute references rather than derived by
+iterating the enum class -- proven by an AST-based structural test and
+independently mutation-tested by both the Lead and QA (rewriting the
+allowlist as an enum-derived comprehension reliably fails the suite), so a
+hypothetical future operation kind denies by default until a deliberate
+code edit registers it. Admission requires an exact required-logical-
+input-field-set match per operation and narrow per-field syntactic
+validation reusing only facts this repository already treats as
+authoritative -- the closed `ResearchDnsRecordType` enum, the stdlib
+`ipaddress.ip_address` parser, and the existing
+`MAX_KALI_OPERATION_HOSTNAME_CHARACTERS` bound -- deliberately never
+reusing or reinventing `ResearchKaliOperationPreview`'s own hostname
+case-folding/trailing-dot normalization (documented as an honest, narrower
+gap). Every response detail is a fixed, code-owned sentence;
+`output_lines` is always empty; `response.request_id` always equals
+`request.request_id` exactly; no hostile logical-input value, certificate
+data, nonce, or operation digest is ever interpolated into a detail
+string. Proven, both structurally (AST) and behaviorally over a real
+loopback mTLS TLS 1.3 round trip, that this function never calls
+`research.GuestAgentReplayProtector.consume_once` and never references
+`ResearchKaliOperationAuthorization`(`Store`), `KaliToolGateway`, or the
+tool execution layer; confirmed by inspection that `research` does not
+import from `tools` anywhere (the existing, unmodified direction is the
+reverse), so the existing `tools.ProductCapabilitySchema`/
+`GuestAgentRequestSchemaValidation` layer was deliberately not reused here.
+The function's signature already matches the existing, unmodified
+`GuestAgentRpcTransport.GuestAgentRpcRequestHandler` shape and was proven,
+over a real loopback mTLS TLS 1.3 round trip, to be reachable only after
+transport-layer authentication succeeds -- a CA-valid wrong-role peer and
+an untrusted-CA peer both still never reach this handler, verified by a
+zero-invocation call-counter against a genuine TLS handshake attempt.
+Independent QA (found and fixed one real test gap -- the
+`UNSUPPORTED_CAPABILITY` branch was previously untested -- plus two
+pre-existing MyPy narrowing issues in the new test file, both test-only,
+no production change) and independent security review (25 required
+properties, all PASS) both returned PASS with zero confirmed production
+findings. Zero production callers; not wired into `KaliToolGateway`, the
+tool execution layer, `Bootstrap`, `CognitiveEngine`, chat, or the
+desktop. No real Kali Guest Agent process exists, no guest execution
+occurs, authorization does not cross the transport, replay is not
+enforced at dispatch, and neither `DNS_RECORD_LOOKUP` nor
+`HTTPS_HEADER_LOOKUP` executes through the Guest-Agent -- roadmap step 5
+remains only partially implemented. v0.3.463 is not started.
 
 Version v0.3.461 begins roadmap step 4: a real, authenticated, loopback-only,
 one-request/one-response RPC transport

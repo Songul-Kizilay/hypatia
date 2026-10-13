@@ -991,9 +991,16 @@ Recorded priority order:
    real guest process, a real (non-loopback) deployment, and any
    capability dispatch remain separate, unstarted work still inside this
    step.
-5. The guest-side agent itself: a process that receives one authenticated,
+5. **(first bounded foundation delivered, v0.3.462 -- not all of step 5)**
+   The guest-side agent itself: a process that receives one authenticated,
    already-authorized request and dispatches it to the one allowlisted Kali
-   implementation it names — never an arbitrary command.
+   implementation it names — never an arbitrary command. v0.3.462 delivered
+   only the inert application core (`research.GuestAgentCore`): a fixed,
+   deny-by-default allowlist of the two reviewed operations and exact
+   logical-input admission, with every outcome capped at `DECLINED` --
+   never execution. No real guest process, daemon, or service exists yet;
+   no capability dispatch exists; authorization still does not cross the
+   transport.
 6. Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
@@ -1120,11 +1127,59 @@ callers; not wired into `KaliToolGateway`, the tool execution layer,
 `Bootstrap`, `CognitiveEngine`, chat, or the desktop. No real Kali Guest
 Agent exists, no VMware Host-Only transport exists, no production
 certificate was provisioned, no capability executes through this
-transport, and SSH is not replaced. The remaining work inside step 3
-(real production certificate provisioning/distribution strategy for an
-actual deployment, the real non-loopback VMware Host-Only network path),
-the remainder of step 4 (wiring to a real guest process), and steps 5-7
-remain separate, unstarted, future milestones, each requiring its own
+transport, and SSH is not replaced. v0.3.462 delivered step 5's first
+bounded foundation -- not all of step 5 -- the inert guest-side
+application core, `research.GuestAgentCore.admit_guest_agent_request`:
+one pure, deterministic function receiving an already-decoded
+`GuestAgentRequest` and making ONLY an admission decision.
+`AUTHENTICATED REQUEST != AUTHORIZED REQUEST`, `OPERATION DIGEST !=
+AUTHORIZATION`, `CAPABILITY ALLOWLIST MATCH != EXECUTION AUTHORITY`,
+`GUEST ADMISSION SUCCESS != EXECUTION AUTHORITY`:
+`GuestAgentResponseStatus.SUCCESS` is a structurally unreachable outcome
+of this function, proven by tracing every response-construction call
+site. The capability allowlist is a fixed dict literal keyed by explicit
+`ResearchKaliOperationKind.<NAME>` attribute references covering exactly
+the two existing reviewed operations (`DNS_RECORD_LOOKUP`,
+`HTTPS_HEADER_LOOKUP`) -- never built by iterating the enum class, proven
+by an AST-based structural test and independently mutation-tested
+(rewriting it as an enum-derived comprehension reliably fails the suite),
+so a hypothetical future operation kind denies by default until a
+deliberate code edit registers it. Admission requires an exact
+required-logical-input-field-set match per operation and narrow
+per-field validation reusing only facts already authoritative elsewhere
+in this repository -- the closed `ResearchDnsRecordType` enum, the
+stdlib `ipaddress.ip_address` parser, and the existing
+`MAX_KALI_OPERATION_HOSTNAME_CHARACTERS` bound -- deliberately never
+reusing or reinventing `ResearchKaliOperationPreview`'s own hostname
+case-folding/trailing-dot normalization, which exists only inline in
+that module; this is documented as an honest, narrower validation claim
+rather than silently duplicated or overclaimed. `operation_digest` and
+`nonce` are never read by the function at all. The function never calls
+`research.GuestAgentReplayProtector.consume_once` (proven both
+structurally and by a real loopback-mTLS round trip leaving a carried
+nonce unconsumed afterward) and never references
+`ResearchKaliOperationAuthorization`(`Store`), `KaliToolGateway`, or the
+tool execution layer; confirmed by inspection that `research` imports
+nothing from `tools` anywhere in the repository today (the existing
+direction is the reverse), so the existing `tools.ProductCapabilitySchema`/
+`GuestAgentRequestSchemaValidation` layer was deliberately not reused
+here rather than inverting that layering. The function's signature
+already matches the existing, unmodified
+`GuestAgentRpcTransport.GuestAgentRpcRequestHandler` shape and was proven,
+over a real loopback mTLS TLS 1.3 round trip, reachable only after
+transport-layer authentication succeeds -- a CA-valid wrong-role peer and
+an untrusted-CA peer both still never reach it. Zero production callers;
+not wired into `KaliToolGateway`, the tool execution layer, `Bootstrap`,
+`CognitiveEngine`, chat, or the desktop. No real Kali Guest Agent
+process, daemon, or service exists; no capability dispatch exists; no
+real capability executes through the Guest-Agent; authorization does not
+cross the transport; replay is not enforced at dispatch. The remaining
+work inside step 3 (real production certificate provisioning/
+distribution strategy for an actual deployment, the real non-loopback
+VMware Host-Only network path), the remainder of step 4 (wiring to a
+real guest process), the remainder of step 5 (a real guest process/
+daemon and an actual capability-dispatch boundary), and steps 6-7 remain
+separate, unstarted, future milestones, each requiring its own
 authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
