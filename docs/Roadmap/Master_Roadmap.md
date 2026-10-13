@@ -991,7 +991,7 @@ Recorded priority order:
    real guest process, a real (non-loopback) deployment, and any
    capability dispatch remain separate, unstarted work still inside this
    step.
-5. **(first bounded foundation delivered, v0.3.462-v0.3.464 -- not all of
+5. **(first bounded foundation delivered, v0.3.462-v0.3.465 -- not all of
    step 5)** The guest-side agent itself: a process that receives one
    authenticated, already-authorized request and dispatches it to the one
    allowlisted Kali implementation it names — never an arbitrary command.
@@ -1014,10 +1014,21 @@ Recorded priority order:
    GUEST audience, and a bounded 60-second validity window -- but
    verification still never implies execution, replay consumption,
    capability admission, or runtime readiness, and no signed envelope is
-   wired into the RPC transport in production. No real guest process,
-   daemon, or service exists yet; no capability dispatch exists; no RPC
-   request carrying a signed envelope is sent in production; replay is
-   not enforced at dispatch; no production signing key is provisioned.
+   wired into the RPC transport in production. v0.3.465 composed exactly
+   that remaining gap: one real `GuestAgentSignedDispatchEnvelope` now
+   crosses the existing real loopback mTLS RPC channel
+   (`research.GuestAgentSignedDispatchRpcTransport`), and the GUEST side
+   runs the full chain in the correct, structurally-enforced order --
+   authenticate -> decode -> verify -> admit -> replay-consume -> respond
+   -- never consuming a replay identity before verification succeeds, and
+   never for an admission outcome the guest would not have admitted
+   anyway. A first-seen, valid, admitted dispatch is still only
+   `DECLINED` on the wire, because no capability executor exists. No real
+   guest process, daemon, or service exists yet; no capability dispatch
+   exists; this new composed transport has zero production callers of
+   its own (not wired into `Bootstrap`, `CognitiveEngine`, chat, or the
+   desktop), so no RPC request carrying a signed envelope is sent in
+   production today; no production signing key is provisioned.
 6. Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
@@ -1246,20 +1257,47 @@ signing key validly signed this exact request" --
 ACCEPTANCE, != CAPABILITY ADMISSION, != RUNTIME READINESS, and
 `research.GuestAgentCore.admit_guest_agent_request` still only ever
 returns its existing inert, non-`SUCCESS` outcome for a request extracted
-from a verified envelope. No signed envelope is wired into the RPC
-transport in production; no replay is consumed at verification; no
-production signing key is provisioned, generated, or stored anywhere by
-this milestone -- safe production key-at-rest custody remains explicitly
-out of scope, not pretended to be solved. The remaining work inside step 3
+from a verified envelope. No signed envelope was wired into the RPC
+transport in production by that milestone; no replay was consumed at
+verification; no production signing key is provisioned, generated, or
+stored anywhere by it -- safe production key-at-rest custody remains
+explicitly out of scope, not pretended to be solved.
+v0.3.464 explicitly did not compose verification with the RPC transport,
+admission, or replay consumption. **v0.3.465 composed exactly that**
+(`research.GuestAgentSignedDispatchSerialization`/
+`GuestAgentAuthenticatedSignedDispatchChannel`/
+`GuestAgentSignedDispatchRpcTransport`): one real signed envelope now
+crosses the existing, unmodified loopback mTLS RPC channel, and the
+GUEST side runs authenticate -> decode -> verify -> admit ->
+replay-consume -> respond in that literal, structurally-enforced source
+order -- proven, not merely documented, by an AST-based source-order
+test and by a deliberate mutation (bypassing verification before
+admission/replay) that six tests correctly caught. Replay consumption is
+unreachable unless verification already succeeded for that exact
+connection, and is skipped entirely for an `UNSUPPORTED_CAPABILITY`/
+`INVALID_REQUEST` admission outcome, so a request this guest would not
+have admitted anyway never spends a real replay identity. A first-seen,
+valid, admitted dispatch is still only `DECLINED` on the wire -- SIGNED
+RPC SUCCESS != CAPABILITY SUCCESS, because no capability executor exists
+anywhere this composed transport reaches. Every failure before a final
+response is constructed (handshake, peer authentication, frame, decode,
+verification, or a replay-store failure) aborts the connection with zero
+wire response bytes, measured directly, not assumed. `GuestAgentRpcTransport`,
+`GuestAgentCore`, `GuestAgentReplayProtector`, `GuestAgentDispatchVerification`,
+and `GuestAgentAuthenticatedChannel` are all byte-for-byte unmodified; the
+new server reuses the existing tested `_authenticate_tls_peer` helper
+directly rather than duplicating it. This new composed transport still
+has zero production callers of its own -- not wired into `Bootstrap`,
+`CognitiveEngine`, chat, or the desktop -- so no RPC request carrying a
+signed envelope is sent in production today; no production signing key
+is provisioned. The remaining work inside step 3
 (real production certificate provisioning/distribution strategy for an
 actual deployment, the real non-loopback VMware Host-Only network path),
 the remainder of step 4 (wiring to a real guest process), the remainder
 of step 5 (a real guest process/daemon, production signing-key custody,
-and an actual capability-dispatch boundary that composes verification ->
-replay consumption -> capability admission -> runtime readiness ->
-dispatch in the correct order, over the RPC transport), and steps 6-7
-remain separate, unstarted, future milestones, each requiring its own
-authorization.
+and wiring this composed transport to an actual production entry point),
+and steps 6-7 remain separate, unstarted, future milestones, each
+requiring its own authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,

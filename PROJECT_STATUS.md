@@ -2,10 +2,48 @@
 
 ## Runtime Version
 
-`v0.3.464 (Genesis)`
+`v0.3.465 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.465 delivers the Guest-Agent authenticated signed-dispatch
+RPC + verify -> admit -> replay-consume composition foundation: one real
+`GuestAgentSignedDispatchEnvelope` (v0.3.464) now crosses the existing
+real loopback mTLS TLS 1.3 RPC channel (v0.3.461), and the GUEST side
+composes, strictly in this order, real TLS handshake -> authenticated
+peer identity (reusing `research.GuestAgentRpcTransport`'s own private
+`_authenticate_tls_peer` directly, never duplicated or modified) ->
+bounded frame read -> strict signed-envelope decode (new
+`research.GuestAgentSignedDispatchSerialization`) -> Ed25519 dispatch-
+proof verification (`verify_signed_dispatch_envelope`, unmodified) ->
+inert `admit_guest_agent_request` admission (unmodified) ->
+`GuestAgentReplayProtector.consume_once` (unmodified) -> one fixed,
+inert `GuestAgentResponse`. A first-seen, valid, admitted signed
+dispatch is always `DECLINED` on the wire (never `SUCCESS` -- no
+capability executor exists); the identical dispatch replayed later
+against the same replay store is `REPLAY_REJECTED`. Replay consumption
+is structurally unreachable before verification succeeds and is skipped
+entirely for `UNSUPPORTED_CAPABILITY`/`INVALID_REQUEST` admission
+outcomes; every earlier failure aborts the connection with zero wire
+response bytes sent. The new `GuestAgentSignedDispatchRpcServer` takes
+no injectable handler -- the chain is hardcoded -- and uses its own
+fully separate error model rather than extending the existing, tested
+`GuestAgentRpcFailureKind`. The real worst-case envelope was measured at
+244,250 bytes, comfortably under the existing, unchanged 524,288-byte
+frame bound. 89 new tests include a real authenticated TLS 1.3 round
+trip, an explicit mocked ordering proof, five adversarial verification-
+failure scenarios each proven to produce zero wire response and zero
+replay consumption, and an AST-based source-order proof of the
+verify -> admit -> replay-consume call sequence; a deliberate mutation
+bypassing verification was confirmed to break six tests, then reverted.
+Independent QA and independent security review both returned PASS with
+zero confirmed findings. `GuestAgentRpcTransport`, `GuestAgentCore`,
+`GuestAgentReplayProtector`, `GuestAgentDispatchVerification`, and
+`GuestAgentAuthenticatedChannel` are all byte-for-byte unmodified. Not
+wired into Bootstrap, `CognitiveEngine`, chat, or the desktop. No
+production signing key or credential is provisioned; zero non-loopback
+network activity. v0.3.466 is not started.
 
 Version v0.3.464 delivers the Guest-Agent signed dispatch authorization
 proof foundation, closing the specific gap v0.3.463's own module
@@ -54,8 +92,7 @@ byte-for-byte unmodified. Not wired into RPC, `Bootstrap`,
 RPC in production, and successful verification does not consume replay,
 admit a capability, or execute anything. No production signing key is
 provisioned, generated, or stored by this milestone; safe production
-key-at-rest custody remains explicitly out of scope. v0.3.465 is not
-started.
+key-at-rest custody remains explicitly out of scope.
 
 Version v0.3.463 delivers the host authorization handoff foundation for
 future Guest-Agent dispatch

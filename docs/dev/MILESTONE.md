@@ -10,25 +10,154 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.464 (implementation)
+## Current scope: v0.3.465 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent authenticated signed-dispatch RPC + verify -> admit -> replay-consume composition foundation. Carries one real `GuestAgentSignedDispatchEnvelope` (v0.3.464) across the existing real loopback mTLS TLS 1.3 RPC channel (v0.3.461), and composes, strictly on the GUEST side and strictly in this order: TLS handshake -> authenticated peer identity (reusing `GuestAgentRpcTransport._authenticate_tls_peer`, imported directly, never duplicated) -> bounded frame read -> strict signed-envelope decode (new `GuestAgentSignedDispatchSerialization`) -> `verify_signed_dispatch_envelope` (unmodified) -> `admit_guest_agent_request` (unmodified) -> `GuestAgentReplayProtector.consume_once` (unmodified) -> one fixed, inert `GuestAgentResponse`. No capability executor; no RPC wiring into Bootstrap/CognitiveEngine/chat/desktop; no production key provisioning. |
+| Base SHA | `7ab2d370ee7f69fea3b88a6da432759c0c0bb4bd` (verified remote main; standard merge of PR #445). |
+| Branch | `feature/guest-agent-signed-dispatch-rpc-v0.3.465`, worktree `D:\hypatia-v0.3.465` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | REPLAY CONSUMPTION MUST NEVER OCCUR BEFORE SIGNATURE VERIFICATION. VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY, != REPLAY ACCEPTANCE. REPLAY ACCEPTED != EXECUTION AUTHORITY. GUEST ADMISSION SUCCESS != EXECUTION AUTHORITY. SIGNED RPC SUCCESS != CAPABILITY SUCCESS. A first-seen, valid, admitted dispatch is always `DECLINED` on the wire (never `SUCCESS` -- no capability executor exists). `GuestAgentRpcTransport`/`GuestAgentCore`/`GuestAgentReplayProtector`/`GuestAgentDispatchVerification`/`GuestAgentAuthenticatedChannel` all byte-for-byte unmodified. No generic byte-transport API; no injectable server handler; no capability executor of any kind. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP operations ZERO; non-loopback network activity ZERO; production signing-key/credential provisioning ZERO. v0.3.466 not started. |
+
+Per the standing ledger convention, v0.3.464 delivery was re-verified
+before this milestone began: release
+`d6e20979a6242fd9ca800bc1da162250daf2fd68`, PR #445 MERGED, standard
+merge `7ab2d370ee7f69fea3b88a6da432759c0c0bb4bd` with parents
+`8bffa8d991e50aaf7f7012de94077b0694c2e46a` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor d6e20979... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged. v0.3.464 is delivered.
+
+Repository audit before implementation covered: `research.GuestAgentRpcTransport`
+(the existing v0.3.461 RPC transport to reuse/compose with -- in
+particular its one shared private `_authenticate_tls_peer` helper, the
+only gate before any application frame read on either side, and its
+one-shot `bind`/`serve_one_request` discipline); `research
+.GuestAgentProtocolSerialization` (the exact canonical-JSON precedent
+pattern mirrored for the new envelope codec); `research
+.GuestAgentDispatchProof`/`GuestAgentDispatchVerification` (the v0.3.464
+proof/envelope types and the unmodified GUEST-side verifier);
+`research.GuestAgentCore` (the inert, non-`SUCCESS` admission function);
+`research.GuestAgentReplayProtector` (unmodified `consume_once`
+semantics and its `(protocol_version, operation_digest, nonce)` replay
+identity, preserved unchanged); and `JsonFileResearchKaliOperation
+AuthorizationStore._timestamp` (the tz-aware ISO-timestamp parsing
+convention mirrored for the new metadata codec). The real worst-case
+signed-envelope size was measured, not assumed, before deciding whether
+`MAX_GUEST_AGENT_RPC_FRAME_SIZE` needed to change: 244,250 bytes,
+comfortably under the existing, unchanged 524,288-byte bound -- no frame
+enlargement was needed or made.
+
+Delivered: `research.GuestAgentSignedDispatchSerialization` (closed-
+field, fail-closed wire codec for the envelope, reusing
+`GuestAgentProtocolSerialization.guest_agent_request_document`/
+`guest_agent_request_from_document` and `GuestAgentDispatchProof
+.guest_agent_dispatch_proof_metadata_document` directly rather than
+duplicating either); `research.GuestAgentAuthenticatedSignedDispatchChannel`
+(`GuestAgentAuthenticatedSignedDispatchHostChannel`/
+`GuestAgentAuthenticatedSignedDispatchGuestChannel`, a sibling,
+role-direction-bound channel pair alongside the existing
+`GuestAgentAuthenticatedChannel` rather than widening it);
+`research.GuestAgentSignedDispatchRpcTransport`
+(`GuestAgentSignedDispatchRpcClient`/`GuestAgentSignedDispatchRpcServer`,
+a new module -- `GuestAgentRpcTransport.py` itself is not edited; the
+new server imports and reuses its existing private
+`_authenticate_tls_peer` function directly, confirmed by identity check
+(`is`) in a dedicated test, following the one existing repository
+precedent for cross-module private-name reuse
+(`TkinterDesktopWindow._clean_text`) rather than duplicating or modifying
+the tested peer-authentication sequence). No existing file was modified.
+
+89 new focused tests across three files (33 serialization round-trip/
+fail-closed-shape; 17 channel-wrapper construction/direction/round-trip;
+39 RPC-transport real-round-trip/ordering/adversarial-verification/
+construction-validation/one-shot/structural) cover: a real authenticated
+TLS 1.3 loopback round trip in which a first-seen signed dispatch is
+`DECLINED` and the identical dispatch replayed against the same replay
+store is `REPLAY_REJECTED`; an explicit ordering proof (mocking
+`verify_signed_dispatch_envelope` to fail confirms `admit_guest_agent_request`
+and `consume_once` are never called; mocking a non-`DECLINED` admission
+outcome confirms `consume_once` is never called); five independent
+adversarial verification failures (tampered signature, tampered request
+field, wrong verification key, expired proof, not-yet-valid proof) each
+proven to abort the connection with zero wire response bytes and zero
+replay-store writes; a replay-store-failure test (store `save` raising)
+proven to abort without a response; full constructor-validation coverage
+for both client and server (wrong-role trust configuration, non-
+`ssl.SSLContext`, non-`Ed25519PublicKey`, non-`GuestAgentReplayProtector`,
+invalid port/timeouts); one-shot/no-retry structural proofs (`bind`
+twice, `serve` before `bind`, `serve` twice, no `for`/`while` in either
+`send_signed_dispatch` or `serve_one_signed_dispatch`); an AST-based
+source-order proof that `verify_signed_dispatch_envelope` precedes
+`admit_guest_agent_request` precedes the sole `consume_once` call site;
+and a measured worst-case frame-size test. The Lead independently
+mutation-tested the single most safety-critical property (bypassing
+`verify_signed_dispatch_envelope`'s result and calling
+`admit_guest_agent_request`/`consume_once` on the raw, unverified
+envelope request) and confirmed six tests correctly fail, then reverted
+-- proving the suite is non-vacuous on exactly the property the ordering
+boundary above exists to protect.
+
+Independent QA review (hypatia-qa, subagent): independently re-ran all
+89 new tests and the full `tests/research` Guest-Agent discovery (652
+tests); independently wrote and ran its own mutation test (a scratch
+copy with `consume_once` called immediately after envelope decode,
+before verification) and confirmed 9 of its own targeted assertions
+correctly fail against it and pass against the real file; independently
+re-measured the worst-case envelope at 244,250 bytes against the
+524,288-byte bound; independently reproduced the envelope-decode-failure
+scenario with a raw socket and confirmed `recv()` returns no bytes.
+Two low-severity, non-blocking test-coverage gaps were found and closed
+before release: a missing explicit zero-bytes assertion in the envelope-
+decode-failure test, and missing constructor-guard tests for a non-TLS-
+context/invalid-timeouts client and server. No functional defects found.
+
+Independent security review (hypatia-security, subagent, read-only):
+traced all 10 of the milestone's required security properties directly
+against source with file/line evidence -- the sole `consume_once` call
+site is reachable only from inside the `DECLINED` branch of admission,
+itself reachable only after `verify_signed_dispatch_envelope` already
+returned successfully; exactly one `write_guest_agent_rpc_frame` call
+site on the server path, reached only after a final response is fully
+constructed; every fixed failure message and detail sentence in all
+three new modules is code-owned, never built from untrusted content;
+zero references to any capability-executor/process-adapter/subprocess
+name; no generic byte-transport method, no injectable handler; loopback-
+only bind/connect; `verification_key` type-checked to a real
+`Ed25519PublicKey`, never an `Ed25519PrivateKey` or an mTLS key; the
+replay identity tuple is unchanged and passed through unmodified; the
+frame-size claim is proven by a measured test, not prose; and the full
+diff contains zero non-loopback network activity, zero Kali/VMware/SSH/
+WSL execution, and zero production credential or signing-key
+provisioning. No CONFIRMED findings.
+
+Full local gates re-run by the Lead on the integrated tree: unittest
+discover 9025 tests, OK (463.2s); Black --check . clean (1145 files);
+Ruff check . clean; MyPy src clean (662 source files); git diff --check
+clean. `git status` confirms exactly six new files, nothing else
+modified.
+
+**Roadmap status**: the signed-dispatch RPC composition foundation is
+delivered; it is not wired into Bootstrap, CognitiveEngine, chat, or the
+desktop, provisions no production signing key or certificate, and
+dispatches no real Kali capability -- `admit_guest_agent_request` still
+never returns `SUCCESS`, by design. The remaining gaps inside roadmap
+steps 3-5 (production certificate/key provisioning and custody, the real
+non-loopback VMware Host-Only network path, a real guest process/daemon,
+and an actual capability-dispatch boundary beyond inert admission) remain
+entirely unstarted, future, separately-authorized milestones.
+
+## Previous scope: v0.3.464 (release record before integration)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Guest-Agent signed dispatch authorization proof foundation -- closes the v0.3.463 gap (a plain serialized `GuestAgentRequest` cannot prove host authorization was consumed) with real Ed25519 signatures. `research.GuestAgentDispatchProof`/`GuestAgentDispatchSigning`/`GuestAgentDispatchVerification`: an already-consumed one-shot `GuestAgentHostDispatchGrant` produces exactly one signed envelope (typed request + cryptographic proof bound to it, fixed HOST/GUEST identities, bounded 60s validity); a GUEST-side verifier independently checks it with only a public key. First runtime dependency: `cryptography==50.0.2` (Ed25519). No RPC wiring, no execution, no replay consumption, no production key provisioning. |
 | Base SHA | `8bffa8d991e50aaf7f7012de94077b0694c2e46a` (verified remote main; standard merge of PR #444). |
 | Branch | `feature/guest-agent-dispatch-proof-v0.3.464`, worktree `D:\hypatia-v0.3.464` |
-| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
-| Boundaries | HOST DISPATCH GRANT != GUEST-SIDE AUTHORIZATION PROOF (closed by real crypto this milestone -- but execution authority is NOT). VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY. VERIFIED DISPATCH PROOF != REPLAY ACCEPTANCE. VERIFIED DISPATCH PROOF != CAPABILITY ADMISSION. VERIFIED DISPATCH PROOF != RUNTIME READINESS. TLS IDENTITY KEY != DISPATCH AUTHORIZATION SIGNING KEY. DISPATCH SIGNING KEY != GENERAL SIGNING ORACLE. Zero production callers; not wired into GuestAgentRpcClient/Server, Bootstrap, CognitiveEngine, chat, or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; new RPC traffic ZERO; replay consumption ZERO; production signing key provisioning ZERO; dispatch proof signing/verification TEST-ONLY/LOCAL CPU. v0.3.465 not started. |
-
-Per the standing ledger convention, v0.3.463 delivery was re-verified
-before this milestone began: release
-`b315fbcf410f678a7339303a1166acada8dec4ec`, PR #444 MERGED, standard
-merge `8bffa8d991e50aaf7f7012de94077b0694c2e46a` with parents
-`21c27fa99ef1f71a8c0f1f9bc414b07f46e8c6a1` and the release SHA (confirmed
-by `git log -1 --format="%H %P"` on the merge commit).
-`git merge-base --is-ancestor b315fbcf... origin/main` succeeded;
-author/committer identity on the release commit is Songul Kizilay's
-existing GitHub noreply identity, unchanged. v0.3.463 is delivered.
+| Status | delivered -- release `d6e20979a6242fd9ca800bc1da162250daf2fd68`, PR #445 MERGED, standard merge `7ab2d370ee7f69fea3b88a6da432759c0c0bb4bd`. |
+| Boundaries | HOST DISPATCH GRANT != GUEST-SIDE AUTHORIZATION PROOF (closed by real crypto this milestone -- but execution authority is NOT). VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY. VERIFIED DISPATCH PROOF != REPLAY ACCEPTANCE. VERIFIED DISPATCH PROOF != CAPABILITY ADMISSION. VERIFIED DISPATCH PROOF != RUNTIME READINESS. TLS IDENTITY KEY != DISPATCH AUTHORIZATION SIGNING KEY. DISPATCH SIGNING KEY != GENERAL SIGNING ORACLE. Zero production callers; not wired into GuestAgentRpcClient/Server, Bootstrap, CognitiveEngine, chat, or the desktop. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; new RPC traffic ZERO; replay consumption ZERO; production signing key provisioning ZERO; dispatch proof signing/verification TEST-ONLY/LOCAL CPU. |
 
 Crypto/dependency audit before implementation covered: `pyproject.toml`'s
 dependency policy (zero runtime dependencies declared); `requirements-

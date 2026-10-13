@@ -2,6 +2,97 @@
 
 All notable project changes are recorded here.
 
+## [0.3.465] - 2026-10-13
+
+### Added
+
+- Guest-Agent authenticated signed-dispatch RPC + verify -> admit ->
+  replay-consume composition foundation. Carries one real
+  `research.GuestAgentDispatchProof.GuestAgentSignedDispatchEnvelope`
+  (v0.3.464) across the existing real loopback mTLS TLS 1.3 RPC channel
+  (v0.3.461) and composes, strictly on the GUEST side and strictly in
+  this order: real TLS 1.3 mTLS handshake -> authenticated peer identity
+  (reusing `research.GuestAgentRpcTransport`'s own private
+  `_authenticate_tls_peer`, imported directly, never duplicated or
+  modified) -> bounded application frame read -> strict signed-envelope
+  decode (new `research.GuestAgentSignedDispatchSerialization`) ->
+  Ed25519 dispatch-proof verification
+  (`research.GuestAgentDispatchVerification.verify_signed_dispatch_envelope`,
+  unmodified) -> inert `research.GuestAgentCore.admit_guest_agent_request`
+  admission (unmodified) -> `research.GuestAgentReplayProtector
+  .GuestAgentReplayProtector.consume_once` (unmodified) -> one fixed,
+  inert `GuestAgentResponse`.
+- New production modules:
+  `research.GuestAgentSignedDispatchSerialization` (closed-field,
+  fail-closed wire codec for the envelope, mirroring
+  `GuestAgentProtocolSerialization`'s exact pattern and reusing its
+  request codec plus `GuestAgentDispatchProof`'s metadata codec
+  directly); `research.GuestAgentAuthenticatedSignedDispatchChannel`
+  (a sibling, role-direction-bound HOST/GUEST channel wrapper for the
+  envelope/response pair, alongside the existing
+  `GuestAgentAuthenticatedChannel` rather than widening it);
+  `research.GuestAgentSignedDispatchRpcTransport`
+  (`GuestAgentSignedDispatchRpcClient`/`GuestAgentSignedDispatchRpcServer`
+  -- a new module, not an edit to the existing, tested
+  `research.GuestAgentRpcTransport`).
+- For a first-seen, valid, admitted signed dispatch the wire response is
+  always `DECLINED` -- never `SUCCESS`, since no capability executor
+  exists anywhere this module reaches. The exact same signed dispatch
+  replayed later against the same replay store produces
+  `REPLAY_REJECTED` instead. Replay consumption is structurally
+  unreachable before verification succeeds: `GuestAgentSignedDispatchRpcServer
+  .serve_one_signed_dispatch` calls `verify_signed_dispatch_envelope` and
+  `admit_guest_agent_request` in that literal source order, strictly
+  before its one `replay_protector.consume_once` call site, and
+  `UNSUPPORTED_CAPABILITY`/`INVALID_REQUEST` admission outcomes skip
+  replay consumption entirely. On every failure before that point
+  (handshake, peer authentication, frame, envelope decode, dispatch
+  verification, or a replay-store failure) the connection aborts with
+  zero wire response bytes sent.
+- `GuestAgentSignedDispatchRpcServer` takes no injectable `handler`
+  (unlike the existing plain `GuestAgentRpcServer`): the verify -> admit
+  -> replay-consume chain is hardcoded, non-overridable, and uses its own
+  fully separate error model (`GuestAgentSignedDispatchRpcFailureKind`/
+  `GuestAgentSignedDispatchRpcTransportError`) rather than extending the
+  existing, tested `GuestAgentRpcFailureKind`. No generic
+  `send_bytes`/`send_payload`/`serve_bytes`/`dispatch_raw`/`handle_blob`
+  API, no serializer registry, no dynamic message-type dispatch, and no
+  capability executor of any kind.
+- The real worst-case signed-envelope size (maximum-length request ID,
+  nonce, and ten maximum-length logical inputs using astral/surrogate-
+  pair characters) was measured, not assumed: 244,250 bytes, comfortably
+  under the existing, unchanged
+  `research.GuestAgentRpcFraming.MAX_GUEST_AGENT_RPC_FRAME_SIZE =
+  524288` bound (over 280 KB of headroom) -- proven by a dedicated test,
+  not prose.
+- 89 new focused tests across three new test files: round-trip and
+  fail-closed shape tests for the new wire codec; role-direction and
+  structural tests for the new channel wrapper; and, for the new RPC
+  transport, a real authenticated TLS 1.3 round trip (first-seen
+  `DECLINED`, replayed `REPLAY_REJECTED`), an explicit ordering proof
+  (mocked verification failure leaves admission and replay untouched;
+  mocked non-`DECLINED` admission outcomes skip replay), adversarial
+  verification failures (tampered signature, tampered request field,
+  wrong verification key, expired proof, not-yet-valid proof) each
+  proven to abort the connection with zero wire response and zero replay
+  consumption, a replay-store failure test, full constructor-validation
+  coverage, one-shot/no-retry structural proofs, and an AST-based source-
+  order proof that `verify_signed_dispatch_envelope` precedes
+  `admit_guest_agent_request` precedes the sole `consume_once` call site.
+  A deliberate mutation (bypassing verification before admission) was
+  confirmed to break six of these tests, then reverted, proving the
+  suite is non-vacuous on this property.
+- Independent QA and independent security review both returned PASS with
+  zero confirmed findings (QA noted two low-severity test-coverage gaps,
+  both closed before release). Full local gates: 9025 tests OK,
+  Black/Ruff/MyPy clean, `git diff --check` clean.
+  `research.GuestAgentRpcTransport`, `GuestAgentCore`,
+  `GuestAgentReplayProtector`, `GuestAgentDispatchVerification`, and
+  `GuestAgentAuthenticatedChannel` are all byte-for-byte untouched. Not
+  wired into Bootstrap, CognitiveEngine, chat, or the desktop. No
+  production signing key or credential is provisioned; zero non-loopback
+  network activity.
+
 ## [0.3.464] - 2026-10-13
 
 ### Added
