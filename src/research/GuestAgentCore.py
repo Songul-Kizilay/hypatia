@@ -93,10 +93,13 @@ from research.ResearchKaliOperationPreview import (
 
 #: Logical-input field names this module recognizes. Plain data-field
 #: names, never executable identity -- see the module docstring's "no
-#: arbitrary command channel" guarantee.
-_FIELD_HOSTNAME: Final[str] = "hostname"
-_FIELD_DNS_RECORD_TYPE: Final[str] = "dns_record_type"
-_FIELD_RESOLVED_ADDRESS: Final[str] = "resolved_address"
+#: arbitrary command channel" guarantee. Public (not module-private) so
+#: `research.GuestAgentHostAuthorizationHandoff`'s preview-to-logical-
+#: input projection can import these exact same names rather than
+#: maintaining an independently-typed second copy of this vocabulary.
+FIELD_HOSTNAME: Final[str] = "hostname"
+FIELD_DNS_RECORD_TYPE: Final[str] = "dns_record_type"
+FIELD_RESOLVED_ADDRESS: Final[str] = "resolved_address"
 
 #: The one fixed, code-owned admission allowlist. A hypothetical future
 #: `ResearchKaliOperationKind` member is denied by default -- it simply has
@@ -109,10 +112,10 @@ _OPERATION_REQUIRED_LOGICAL_INPUT_FIELDS: Final[
     Mapping[ResearchKaliOperationKind, frozenset[str]]
 ] = {
     ResearchKaliOperationKind.DNS_RECORD_LOOKUP: frozenset(
-        {_FIELD_HOSTNAME, _FIELD_DNS_RECORD_TYPE}
+        {FIELD_HOSTNAME, FIELD_DNS_RECORD_TYPE}
     ),
     ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP: frozenset(
-        {_FIELD_HOSTNAME, _FIELD_RESOLVED_ADDRESS}
+        {FIELD_HOSTNAME, FIELD_RESOLVED_ADDRESS}
     ),
 }
 
@@ -190,7 +193,7 @@ def admit_guest_agent_request(request: GuestAgentRequest) -> GuestAgentResponse:
 
     values = dict(request.logical_inputs)
 
-    if not _is_valid_hostname(values[_FIELD_HOSTNAME]):
+    if not _is_valid_hostname(values[FIELD_HOSTNAME]):
         return _response(
             request,
             GuestAgentResponseStatus.INVALID_REQUEST,
@@ -198,14 +201,14 @@ def admit_guest_agent_request(request: GuestAgentRequest) -> GuestAgentResponse:
         )
 
     if request.operation_kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
-        if not _is_valid_dns_record_type(values[_FIELD_DNS_RECORD_TYPE]):
+        if not _is_valid_dns_record_type(values[FIELD_DNS_RECORD_TYPE]):
             return _response(
                 request,
                 GuestAgentResponseStatus.INVALID_REQUEST,
                 _DETAIL_INVALID_DNS_RECORD_TYPE,
             )
     elif request.operation_kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
-        if not _is_valid_resolved_address(values[_FIELD_RESOLVED_ADDRESS]):
+        if not _is_valid_resolved_address(values[FIELD_RESOLVED_ADDRESS]):
             return _response(
                 request,
                 GuestAgentResponseStatus.INVALID_REQUEST,

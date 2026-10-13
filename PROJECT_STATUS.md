@@ -2,10 +2,68 @@
 
 ## Runtime Version
 
-`v0.3.462 (Genesis)`
+`v0.3.463 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.463 delivers the host authorization handoff foundation for
+future Guest-Agent dispatch
+(`research.GuestAgentHostAuthorizationHandoff`): the first safe bridge
+between Hypatia's existing Kali execution-authority chain
+(`cognition.KaliToolGateway`) and the Guest-Agent RPC/admission layers.
+Given an exact existing `ResearchKaliOperationAuthorization` and the exact
+`ResearchKaliOperationPreview` it approved,
+`consume_authorization_for_guest_agent_dispatch` validates and durably
+consumes that authorization using the same exact-binding checks
+`KaliToolGateway` already applies -- reused via a new shared primitive,
+`research.ResearchKaliOperationAuthorizationConsumption`, never a second,
+independently-evolving copy of "does this authorization exactly match
+this preview" -- and returns exactly one narrowly-bound, in-process
+`GuestAgentHostDispatchGrant`. `AUTHORIZATION RECORD PRESENT !=
+AUTHORIZATION CONSUMED`, `AUTHORIZATION CONSUMED != EXECUTION SUCCESS`,
+`HOST DISPATCH GRANT != GUEST-SIDE AUTHORIZATION PROOF`, `HOST DISPATCH
+GRANT != AUTHORITY TO EXECUTE BY ITSELF`: ordering is load-bearing and
+proven both behaviorally and via a deterministic AST-based structural
+test -- authorization removal is persisted before the grant is ever
+constructed, and any store failure or exact-binding mismatch (missing/
+duplicate authorization, expiry, digest, program/scope/policy) raises and
+leaves no grant in existence. A new, additive
+`ResearchKaliCommandTransport.GUEST_AGENT` transport member makes a
+Guest-Agent-bound preview's digest differ from the otherwise-identical
+WSL/VMware digest for the same operation, so a WSL- or VMware-authorized
+record can never satisfy a Guest-Agent handoff; confirmed the new member
+grants nothing automatically anywhere (fixed-literal capability catalog/
+schema, both process adapters still reject it before any subprocess/SSH,
+the VMware runtime probe still refuses it with zero host/guest probing).
+`GuestAgentHostDispatchGrant` is not publicly constructible and is
+one-shot under a lock; its bound facts derive only from the exact
+validated preview, never from an independently caller-supplied value, and
+`request_id`/`nonce` are supplied only at the final `materialize_request`
+boundary (`REQUEST ID != AUTHORIZATION`, `NONCE != AUTHORIZATION`). This
+milestone never calls `research.GuestAgentReplayProtector.consume_once`,
+never spawns a process or touches a network, and
+`research.GuestAgentCore.admit_guest_agent_request` still only ever
+returns its existing inert, non-`SUCCESS` outcome for a request built from
+a valid grant. **This milestone does not solve guest-side independent
+cryptographic proof of host authorization, and documents that gap
+explicitly**: a `GuestAgentRequest` built from a valid grant is, once
+serialized, still only the same typed protocol object
+`research.GuestAgentProtocol` already describes, with no new field that
+would let a receiving guest independently verify from those bytes alone
+that a host authorization was ever consumed -- solving that gap is left
+for a future, separately-authorized milestone. Not wired into
+`GuestAgentRpcClient.send_request`, `Bootstrap`, `CognitiveEngine`, chat,
+or the desktop; no RPC request is sent by it in production.
+`cognition.KaliToolGateway` was refactored, byte/semantics-equivalent, to
+reuse the new shared matching primitive -- its exact-SHA test suites pass
+unmodified with the same stage/behavior assertions as before.
+Independent QA (found and closed one real test-coverage gap -- a runtime
+traceback-walk proof later found unreliable due to CPython's own frame-
+clearing-after-unwind behavior, replaced with a deterministic AST-based
+structural proof) and independent security review (25 required
+properties, all PASS) both returned PASS with zero confirmed production
+findings. v0.3.464 is not started.
 
 Version v0.3.462 begins the bounded Guest-Agent application/core foundation
 of roadmap step 5: `research.GuestAgentCore.admit_guest_agent_request`, one

@@ -20,6 +20,10 @@ from research.KaliToolGatewayFailure import (
     KaliToolGatewayFailure,
     KaliToolGatewayStage,
 )
+from research.ResearchKaliOperationAuthorizationConsumption import (
+    authorizations_excluding,
+    find_exact_kali_operation_authorization,
+)
 from research.ResearchKaliOperationAuthorizationStore import (
     ResearchKaliOperationAuthorizationStore,
 )
@@ -85,32 +89,9 @@ class KaliToolGateway:
 
             stage = KaliToolGatewayStage.AUTHORIZATION
             authorizations = self._authorization_store.load()
-            matches = tuple(
-                authorization
-                for authorization in authorizations
-                if authorization.authorization_id == authorization_id
+            authorization = find_exact_kali_operation_authorization(
+                authorizations, authorization_id, preview, now=self._clock()
             )
-            if len(matches) != 1:
-                raise ResearchError(
-                    "Kali operation run requires one recorded authorization."
-                )
-            authorization = matches[0]
-            if authorization.has_expired_at(self._clock()):
-                raise ResearchError("Kali operation run authorization has expired.")
-            if authorization.operation_digest != preview.operation_digest:
-                raise ResearchError(
-                    "Kali operation run authorization digest does not match."
-                )
-            if (
-                authorization.program_id != preview.program_id
-                or authorization.scope_revision_id != preview.scope_revision_id
-                or authorization.scope_revision_digest != preview.scope_revision_digest
-                or authorization.execution_policy_digest
-                != preview.execution_policy_digest
-            ):
-                raise ResearchError(
-                    "Kali operation run authorization binding is stale."
-                )
 
             stage = KaliToolGatewayStage.RUNTIME_READINESS
             readiness = self._runtime_probe.readiness(
@@ -119,11 +100,7 @@ class KaliToolGateway:
             if not readiness.ready:
                 raise ResearchError(f"Kali runtime is not ready: {readiness.reason}")
 
-            remaining = [
-                entry
-                for entry in authorizations
-                if entry.authorization_id != authorization.authorization_id
-            ]
+            remaining = authorizations_excluding(authorizations, authorization)
             stage = KaliToolGatewayStage.AUTHORIZATION_CONSUMPTION
             self._authorization_store.save(remaining)
             stage = KaliToolGatewayStage.DISPATCH
