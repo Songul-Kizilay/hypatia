@@ -2,10 +2,49 @@
 
 ## Runtime Version
 
-`v0.3.465 (Genesis)`
+`v0.3.466 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.466 delivers the Guest-Agent execution-bound request V2 and
+post-replay prepared-invocation foundation. Audited the host's real
+execution path (`cognition.KaliToolGateway.run`'s
+`timeout_seconds=min(preview.max_seconds,
+MAX_KALI_OPERATION_TIMEOUT_SECONDS)`) and confirmed `max_seconds` is the
+one genuinely execution-relevant `ResearchKaliOperationPreview` fact the
+previous request contract never carried. New `GuestAgentProtocolVersion
+.V2` and `GuestAgentExecutionLimits` (one field, `max_seconds: float`,
+fail-closed on bool/NaN/infinity/<=0, normalized to `float`) make
+`GuestAgentRequest.execution_limits` version-coupled, enforced
+structurally: V1 must carry `None`, V2 must carry a real limit. V1
+REQUEST != EXECUTION-BOUND REQUEST. Because the limit is included in the
+same canonical document the existing, unmodified `request_sha256`
+already hashes, it is cryptographically bound into the existing signed
+dispatch proof with zero changes to the proof/signing/verification
+modules. `GuestAgentHostDispatchGrant` now privately binds `max_seconds`
+from the exact consumed preview (no caller override possible) and
+`materialize_request` now always produces V2. New module
+`research.GuestAgentInvocationPreparation`: an unforgeable
+`GuestAgentPreparedInvocation` (code-reconstructed command plan, bounded
+timeout) and `prepare_guest_agent_invocation`, composing unmodified
+admission and replay consumption with, for V2 only and strictly after
+replay `ACCEPTED`, a command plan rebuilt from code (never wire-carried)
+and `timeout_seconds = min(signed_max_seconds,
+MAX_KALI_OPERATION_TIMEOUT_SECONDS)`. PREPARED INVOCATION != PROCESS
+CREATED, != RUNTIME READY, != EXECUTION SUCCESS. The signed-dispatch RPC
+server now calls this shared function instead of inlining admit+replay
+logic; the prepared invocation is immediately discarded -- never stored,
+logged, or forwarded -- and the wire response is unchanged (`DECLINED`
+first-seen, `REPLAY_REJECTED` replayed, `SUCCESS` still unreachable). 86
+new tests; independent QA and security review both PASS (QA found and
+closed one real test-coverage gap and one stale docstring before
+release). `GuestAgentCore`, `GuestAgentReplayProtector`,
+`GuestAgentDispatchProof`, `GuestAgentDispatchVerification`,
+`GuestAgentAuthenticatedSignedDispatchChannel`, and `GuestAgentRpcTransport`
+are all byte-for-byte unmodified. No real capability executor, no real
+Kali Guest Agent process, no runtime readiness, no production signing
+key or credential provisioned. v0.3.467 is not started.
 
 Version v0.3.465 delivers the Guest-Agent authenticated signed-dispatch
 RPC + verify -> admit -> replay-consume composition foundation: one real
@@ -43,7 +82,7 @@ zero confirmed findings. `GuestAgentRpcTransport`, `GuestAgentCore`,
 `GuestAgentAuthenticatedChannel` are all byte-for-byte unmodified. Not
 wired into Bootstrap, `CognitiveEngine`, chat, or the desktop. No
 production signing key or credential is provisioned; zero non-loopback
-network activity. v0.3.466 is not started.
+network activity.
 
 Version v0.3.464 delivers the Guest-Agent signed dispatch authorization
 proof foundation, closing the specific gap v0.3.463's own module

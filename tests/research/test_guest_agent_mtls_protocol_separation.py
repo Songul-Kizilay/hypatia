@@ -117,9 +117,18 @@ class ProtocolRemainsCredentialFreeTests(unittest.TestCase):
             with self.subTest(token=forbidden):
                 self.assertFalse(any(forbidden in key for key in document))
 
-    def test_request_has_exactly_its_known_v0_3_456_fields_unchanged(self) -> None:
-        """This milestone must not add a single field to the existing
-        protocol type -- proven by the exact, unchanged field set."""
+    def test_request_has_exactly_its_known_fields_unchanged(self) -> None:
+        """This mTLS milestone (v0.3.458) must not add a single field to
+        the existing protocol type -- proven by the exact field set.
+
+        `execution_limits` was deliberately added later, by v0.3.466 (the
+        execution-bound V2 request milestone) -- an intentional,
+        separately-authorized widening of the protocol type, not a
+        regression of this test's own v0.3.458 scope boundary (which is
+        about mTLS never leaking a credential/peer-auth field into the
+        wire protocol, proven by the `FORBIDDEN_FIELD_TOKENS` checks
+        above; `execution_limits` matches none of those forbidden
+        tokens)."""
         field_names = {field.name for field in dataclasses.fields(GuestAgentRequest)}
         self.assertEqual(
             field_names,
@@ -130,6 +139,7 @@ class ProtocolRemainsCredentialFreeTests(unittest.TestCase):
                 "operation_kind",
                 "operation_digest",
                 "logical_inputs",
+                "execution_limits",
             },
         )
 

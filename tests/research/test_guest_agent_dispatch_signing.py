@@ -181,7 +181,7 @@ class OneShotPreservationTests(unittest.TestCase):
 
 class RequestDerivationTests(unittest.TestCase):
     """Requirements 7-8: request derives from the exact validated preview;
-    protocol_version is V1."""
+    protocol_version is V2 (execution-bound, since v0.3.466)."""
 
     def test_request_derives_from_exact_validated_preview(self) -> None:
         preview = _preview(hostname="signing.example.com")
@@ -212,7 +212,13 @@ class RequestDerivationTests(unittest.TestCase):
             dict(envelope.request.logical_inputs)["resolved_address"], "203.0.113.9"
         )
 
-    def test_protocol_version_is_v1(self) -> None:
+    def test_protocol_version_is_v2(self) -> None:
+        # v0.3.466: the grant's materialize_request now always produces
+        # the execution-bound V2 generation (see
+        # research.GuestAgentHostAuthorizationHandoff
+        # .GuestAgentHostDispatchGrant.materialize_request's own
+        # docstring) -- the signed envelope this high-level signing path
+        # produces inherits that unchanged.
         grant = _real_grant()
         envelope = create_signed_dispatch_envelope(
             grant,
@@ -221,7 +227,7 @@ class RequestDerivationTests(unittest.TestCase):
             signing_key=Ed25519PrivateKey.generate(),
             now=NOW,
         )
-        self.assertIs(envelope.request.protocol_version, GuestAgentProtocolVersion.V1)
+        self.assertIs(envelope.request.protocol_version, GuestAgentProtocolVersion.V2)
 
 
 class ProofFieldTests(unittest.TestCase):

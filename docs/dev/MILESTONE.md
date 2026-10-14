@@ -10,15 +10,148 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.465 (implementation)
+## Current scope: v0.3.466 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent execution-bound request V2 and post-replay prepared-invocation foundation. Audited `cognition.KaliToolGateway.run`'s real execution path (`timeout_seconds=min(preview.max_seconds, MAX_KALI_OPERATION_TIMEOUT_SECONDS)`) and every other `ResearchKaliOperationPreview` field; `max_seconds` is the one genuinely execution-relevant fact missing from the prior request contract. New `GuestAgentProtocolVersion.V2` + `GuestAgentExecutionLimits` make `GuestAgentRequest.execution_limits` version-coupled, enforced structurally (V1 forbids it, V2 requires it); the limit is cryptographically bound into the existing, unmodified signed dispatch proof (already hashes the same canonical document). `GuestAgentHostDispatchGrant` now privately binds `max_seconds` from the exact consumed preview; `materialize_request` now always produces V2. New module `research.GuestAgentInvocationPreparation`: an unforgeable `GuestAgentPreparedInvocation` (code-reconstructed command plan, bounded timeout) and `prepare_guest_agent_invocation`, composing unmodified admission and replay consumption with, for V2 only and strictly after replay ACCEPTED, a command plan rebuilt from code and a doubly-capped timeout. The signed-dispatch RPC server now calls this shared function; the prepared invocation is immediately discarded. No real executor, no process, no production deployment. |
+| Base SHA | `d4d60c8f10fe8af8d0a2ad22da8ec9c5f8f07b45` (verified remote main; standard merge of PR #446). |
+| Branch | `feature/guest-agent-execution-bound-request-v2-v0.3.466`, worktree `D:\hypatia-v0.3.466` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | EXECUTION LIMIT PRESENT != EXECUTION AUTHORITY. EXECUTION LIMIT VALID != EXECUTION AUTHORITY. SIGNED EXECUTION LIMIT != EXECUTION SUCCESS. PREPARED INVOCATION != PROCESS CREATED, != RUNTIME READY, != EXECUTION SUCCESS, != TRUSTED OUTPUT, != EVIDENCE. V1 REQUEST != EXECUTION-BOUND REQUEST. `GuestAgentCore`/`GuestAgentReplayProtector`/`GuestAgentDispatchProof`/`GuestAgentDispatchVerification`/`GuestAgentAuthenticatedSignedDispatchChannel`/`GuestAgentRpcTransport` all byte-for-byte unmodified. No wire-carried argv/executable/shell; no injectable executor callback; no capability executor of any kind. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP operations ZERO; subprocess creation ZERO; non-loopback network activity ZERO; production signing-key/credential provisioning ZERO. v0.3.467 not started. |
+
+Per the standing ledger convention, v0.3.465 delivery was re-verified
+before this milestone began: release
+`96c5ef9d3518ba7b2a55009c4b76ed25d1e67531`, PR #446 MERGED, standard
+merge `d4d60c8f10fe8af8d0a2ad22da8ec9c5f8f07b45` with parents
+`7ab2d370ee7f69fea3b88a6da432759c0c0bb4bd` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor 96c5ef9d... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged; all four exact-SHA and
+PR-triggered Linux/Windows CI runs for that release are `success`.
+v0.3.465 is delivered.
+
+Execution-limit audit before implementation covered: `ResearchKaliOperationPreview`
+(every field: `max_seconds` is passed to `KaliToolGateway.run`'s
+`timeout_seconds=min(...)` call; `permitted_ports`/`max_request_count`/
+`max_requests_per_minute`/`program_id`/scope and policy digests are
+consumed only by host-side preview construction or already baked into
+the operation digest/command plan -- never passed to a process
+adapter); `KaliToolGateway.run`, `WslKaliOperationProcessAdapter.run`,
+`VmwareKaliOperationProcessAdapter.run` (confirmed each receives only
+`command_plan`/`timeout_seconds`, nothing else from the preview);
+`ResearchKaliOperationExecution.MAX_KALI_OPERATION_TIMEOUT_SECONDS =
+30.0` (the existing global hard cap, reused unchanged). Confirmed
+`ResearchKaliOperationPreview.__post_init__`'s own `max_seconds`
+validation (`<= 0` only) does not reject NaN -- the new
+`GuestAgentExecutionLimits`/`GuestAgentHostDispatchGrant` validation is
+independently stricter (`math.isfinite` plus `<= 0`), closing that gap
+at the point a cryptographically signed execution-relevant fact is
+produced, without touching the existing, reviewed preview class itself.
+
+Delivered: `research.GuestAgentProtocol` (`GuestAgentProtocolVersion.V2`;
+`GuestAgentExecutionLimits`; `GuestAgentRequest.execution_limits`,
+version-coupled in `__post_init__`); `research
+.GuestAgentProtocolSerialization` (wire codec: `execution_limits` is an
+optional key present only for V2, so V1 bytes stay byte-for-byte
+unchanged; closed-field, fail-closed); `research
+.GuestAgentHostAuthorizationHandoff` (`GuestAgentHostDispatchGrant` gains
+`max_seconds`, bound only from the exact consumed preview;
+`materialize_request` now always produces V2); new module `research
+.GuestAgentInvocationPreparation` (`GuestAgentPreparedInvocation`;
+`prepare_guest_agent_invocation`); `research
+.GuestAgentSignedDispatchRpcTransport` (refactored to call the shared
+preparation function instead of inlining admit+replay). No other
+existing file was modified.
+
+86 new focused tests across `test_guest_agent_protocol_v2.py` (34:
+V1-unaffected, V2-required, numeric semantics, signed-binding/tamper
+proofs), `test_guest_agent_invocation_preparation.py` (26: V1/V2
+behavior, ordering including a call-order-tracking test, command-plan
+DNS/HTTPS proofs, timeout double-cap, forgery resistance, structural
+security), `test_guest_agent_host_authorization_handoff.py` (+9: grant
+`max_seconds` binding and its own numeric validation with a real
+capability token), and `test_guest_agent_signed_dispatch_rpc_transport.py`
+(+5: V2 round-trip assertion, `max_seconds` tamper-over-the-wire, a
+manually-signed V1-over-real-wire pair, updated structural/ordering
+proofs for the refactored call site). During implementation, the Lead
+mutation-tested the single most safety-critical property twice: (1)
+reordering `_build_prepared_invocation` before `admit_guest_agent_request`
+-- caught by 6 existing tests; (2) reordering prepared-invocation
+construction before `replay_protector.consume_once` -- NOT caught by any
+return-value-based test (building, then discarding, a
+`GuestAgentPreparedInvocation` has no side effect of its own), which is
+why a dedicated call-order-tracking test
+(`test_prepared_invocation_is_built_strictly_after_replay_consumption`)
+was added and confirmed to catch it; both mutations were reverted
+afterward.
+
+Independent QA review (hypatia-qa, subagent): independently re-ran the
+full `tests/research` Guest-Agent discovery (723 tests) and the full
+`tests/` discovery (9091 tests); independently confirmed V1/V2 version
+coupling is structural (not test-only) by direct construction; wrote and
+ran its own two mutation tests beyond the Lead's (removing the V1/V2
+branch guard in `prepare_guest_agent_invocation`, and widening the
+timeout-cap check in `GuestAgentPreparedInvocation.__post_init__`),
+both caught and reverted; swept the whole `tests/research` tree for any
+stale `protocol_version is V1` assertion on a grant-materialized request
+the Lead might have missed (found none); independently confirmed the six
+named modules are byte-for-byte unmodified. Found and the Lead closed:
+(1) the grant's own `max_seconds` validation had zero direct test
+coverage with a real capability token (now 8 new tests in
+`GrantMaxSecondsValidationTests`); (2) a stale "protocol_version is V1"
+docstring on an already-renamed test class (corrected). A third,
+disclosed, non-blocking observation (narrowing `FORBIDDEN_FIELD_TOKENS`
+from `"exec"` to `"execute"` to avoid a false positive against
+`execution_limits`) was accepted as-is -- `executable`/`execute` still
+catch every actually dangerous field name.
+
+Independent security review (hypatia-security, subagent, read-only):
+traced all 12 required properties with file/line evidence -- version
+coupling is structural; the signed binding is real (independently
+confirmed two requests differing only in `max_seconds` produce different
+canonical bytes/SHA-256, and that `verify_signed_dispatch_envelope`
+recomputes the digest from the request itself, never trusting the
+signed claim); the grant accepts no caller-supplied `max_seconds`
+override; admission precedes replay consumption precedes prepared-
+invocation construction, with no code path reaching construction for
+`ALREADY_CONSUMED`, a replay-store failure, a non-`DECLINED` admission
+outcome, or a V1 request; the prepared invocation is capability-token-
+gated and unforgeable; its timeout is double-capped (both the `min()`
+computation and the type's own defensive ceiling check); the command
+plan is always code-reconstructed over the fixed `GUEST_AGENT` transport
+constant, never wire-carried; the RPC server's `_prepared_invocation` is
+never read, stored, logged, or forwarded; zero new execution-authority
+references; the six named modules are byte-for-byte untouched; every new
+error message is a fixed, code-owned sentence. No CONFIRMED findings.
+
+Full local gates re-run by the Lead on the integrated tree: unittest
+discover 9099 tests, OK (329.6s); Black --check . clean (1148 files);
+Ruff check . clean; MyPy src clean (663 source files); git diff --check
+clean. `git status` confirms exactly two new files and ten modified
+files, nothing else.
+
+**Roadmap status**: the execution-bound V2 request and prepared-
+invocation foundation is delivered; it does not deliver a real
+capability executor, a real Kali Guest Agent process/daemon, runtime
+readiness, or a production deployment -- `admit_guest_agent_request`
+still never returns `SUCCESS`, and the prepared invocation is
+unconditionally discarded by its one caller. The remaining gaps inside
+roadmap step 5 (a real guest process/daemon, production signing-key
+custody, and an actual runtime-readiness/executor gate that would
+consume a `GuestAgentPreparedInvocation`) remain entirely unstarted,
+future, separately-authorized milestones.
+
+## Previous scope: v0.3.465 (release record before integration)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Guest-Agent authenticated signed-dispatch RPC + verify -> admit -> replay-consume composition foundation. Carries one real `GuestAgentSignedDispatchEnvelope` (v0.3.464) across the existing real loopback mTLS TLS 1.3 RPC channel (v0.3.461), and composes, strictly on the GUEST side and strictly in this order: TLS handshake -> authenticated peer identity (reusing `GuestAgentRpcTransport._authenticate_tls_peer`, imported directly, never duplicated) -> bounded frame read -> strict signed-envelope decode (new `GuestAgentSignedDispatchSerialization`) -> `verify_signed_dispatch_envelope` (unmodified) -> `admit_guest_agent_request` (unmodified) -> `GuestAgentReplayProtector.consume_once` (unmodified) -> one fixed, inert `GuestAgentResponse`. No capability executor; no RPC wiring into Bootstrap/CognitiveEngine/chat/desktop; no production key provisioning. |
 | Base SHA | `7ab2d370ee7f69fea3b88a6da432759c0c0bb4bd` (verified remote main; standard merge of PR #445). |
 | Branch | `feature/guest-agent-signed-dispatch-rpc-v0.3.465`, worktree `D:\hypatia-v0.3.465` |
-| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
-| Boundaries | REPLAY CONSUMPTION MUST NEVER OCCUR BEFORE SIGNATURE VERIFICATION. VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY, != REPLAY ACCEPTANCE. REPLAY ACCEPTED != EXECUTION AUTHORITY. GUEST ADMISSION SUCCESS != EXECUTION AUTHORITY. SIGNED RPC SUCCESS != CAPABILITY SUCCESS. A first-seen, valid, admitted dispatch is always `DECLINED` on the wire (never `SUCCESS` -- no capability executor exists). `GuestAgentRpcTransport`/`GuestAgentCore`/`GuestAgentReplayProtector`/`GuestAgentDispatchVerification`/`GuestAgentAuthenticatedChannel` all byte-for-byte unmodified. No generic byte-transport API; no injectable server handler; no capability executor of any kind. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP operations ZERO; non-loopback network activity ZERO; production signing-key/credential provisioning ZERO. v0.3.466 not started. |
+| Status | delivered -- release `96c5ef9d3518ba7b2a55009c4b76ed25d1e67531`, PR #446 MERGED, standard merge `d4d60c8f10fe8af8d0a2ad22da8ec9c5f8f07b45`. |
+| Boundaries | REPLAY CONSUMPTION MUST NEVER OCCUR BEFORE SIGNATURE VERIFICATION. VERIFIED DISPATCH PROOF != EXECUTION AUTHORITY, != REPLAY ACCEPTANCE. REPLAY ACCEPTED != EXECUTION AUTHORITY. GUEST ADMISSION SUCCESS != EXECUTION AUTHORITY. SIGNED RPC SUCCESS != CAPABILITY SUCCESS. A first-seen, valid, admitted dispatch is always `DECLINED` on the wire (never `SUCCESS` -- no capability executor exists). `GuestAgentRpcTransport`/`GuestAgentCore`/`GuestAgentReplayProtector`/`GuestAgentDispatchVerification`/`GuestAgentAuthenticatedChannel` all byte-for-byte unmodified. No generic byte-transport API; no injectable server handler; no capability executor of any kind. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP operations ZERO; non-loopback network activity ZERO; production signing-key/credential provisioning ZERO. |
 
 Per the standing ledger convention, v0.3.464 delivery was re-verified
 before this milestone began: release
