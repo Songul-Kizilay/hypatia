@@ -2,10 +2,58 @@
 
 ## Runtime Version
 
-`v0.3.466 (Genesis)`
+`v0.3.467 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.467 delivers the Guest-Agent local runtime-readiness gate
+foundation for the two reviewed capabilities. Takes an already-created,
+unforgeable `GuestAgentPreparedInvocation` (v0.3.466) and determines
+whether the LOCAL guest runtime has the exact reviewed executable a
+reviewed operation needs -- nothing about a target host, no DNS/HTTP
+request, no execution of the operation's own reviewed argv. PREPARED
+INVOCATION != RUNTIME READY. Audited `ResearchKaliRuntimeReadiness`
+(WSL/VMware): its `process_created`/`network_used` fields are
+structurally forced to `False` even though the real WSL/VMware probes do
+start subprocesses -- reusing that type here would force the same
+dishonest telemetry, so this milestone instead defines a narrow,
+Guest-Agent-specific `GuestAgentLocalReadinessReceipt` (new module
+`research.GuestAgentLocalReadiness`) whose `probe_process_started` field
+honestly reflects whether the probe actually attempted a subprocess,
+while `target_operation_executed`/`target_network_used` remain
+structurally forced `False`. New concrete adapter
+`research.GuestAgentLocalRuntimeProbe.GuestAgentLocalRuntimeProbe`: a
+fixed literal mapping (`DNS_RECORD_LOOKUP` -> `/usr/bin/dig -v`,
+`HTTPS_HEADER_LOOKUP` -> `/usr/bin/curl --version`, never built by
+enumerating the operation-kind enum) cross-checks the prepared
+invocation's transport and executable path before ever invoking
+`subprocess.run` (`shell=False`, `stdin=DEVNULL`, a hard 5-second
+ceiling, bounded/sanitized 500-character output) -- the readiness argv
+is never derived from the operation's own reviewed command plan. New
+module `research.GuestAgentRuntimeReadiness`: an unforgeable
+`GuestAgentRuntimeReadyInvocation` (same module-private capability-token
+pattern as `GuestAgentPreparedInvocation`) and
+`check_guest_agent_runtime_readiness`, constructing one only after the
+probe reports `READY`. RUNTIME READY != EXECUTION AUTHORITY; VERSION
+MATCH != EXECUTION SUCCESS. `GuestAgentSignedDispatchRpcServer` now
+composes this readiness check strictly after a prepared invocation
+exists (never for V1, never for a replayed request); the receipt and any
+ready invocation are discarded exactly like the prepared invocation
+already is -- the wire response is unaffected either way, still
+`DECLINED`/`REPLAY_REJECTED`, `SUCCESS` still unreachable. 73 new tests
+(51 probe, 14 composition, 8 RPC integration/structural); three manual
+mutations proved caught (argv substitution verified statically; bypassing
+the READY check and removing the prepared-invocation guard both verified
+live, then reverted). Independent QA and security review both PASS.
+`GuestAgentCore`, `GuestAgentReplayProtector`, `GuestAgentDispatchProof`,
+`GuestAgentDispatchVerification`, `GuestAgentDispatchSigning`,
+`GuestAgentAuthenticatedSignedDispatchChannel`, `GuestAgentRpcTransport`,
+`GuestAgentInvocationPreparation`, and every WSL/VMware readiness file
+are all byte-for-byte unmodified. No target DNS/HTTP operation, no
+SSH/VMware/WSL, no capability executor, no runtime deployment, no
+production signing key or credential provisioned. v0.3.468 is not
+started.
 
 Version v0.3.466 delivers the Guest-Agent execution-bound request V2 and
 post-replay prepared-invocation foundation. Audited the host's real

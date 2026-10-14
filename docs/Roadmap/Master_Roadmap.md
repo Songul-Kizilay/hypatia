@@ -991,7 +991,7 @@ Recorded priority order:
    real guest process, a real (non-loopback) deployment, and any
    capability dispatch remain separate, unstarted work still inside this
    step.
-5. **(first bounded foundation delivered, v0.3.462-v0.3.466 -- not all of
+5. **(first bounded foundation delivered, v0.3.462-v0.3.467 -- not all of
    step 5)** The guest-side agent itself: a process that receives one
    authenticated, already-authorized request and dispatches it to the one
    allowlisted Kali implementation it names — never an arbitrary command.
@@ -1048,7 +1048,24 @@ Recorded priority order:
    runs, and the wire response remains exactly `DECLINED`/
    `REPLAY_REJECTED` as before. V1 requests remain fully valid and
    byte-for-byte unchanged on the wire; they simply cannot become
-   execution-bound.
+   execution-bound. v0.3.467 closed the next named gap: a
+   `GuestAgentPreparedInvocation` existing says nothing about whether the
+   exact local reviewed executable it names is actually available on
+   *this* guest. A new narrow readiness gate
+   (`research.GuestAgentLocalReadiness`/`GuestAgentLocalRuntimeProbe`/
+   `GuestAgentRuntimeReadiness`) answers only that question, for a fixed
+   local version probe (`/usr/bin/dig -v`, `/usr/bin/curl --version`)
+   cross-checked against the prepared invocation's own transport and
+   executable path before any subprocess attempt -- never the operation's
+   own reviewed target argv, never a DNS/HTTP request. PREPARED
+   INVOCATION != RUNTIME READY; RUNTIME READY != EXECUTION AUTHORITY: a
+   `READY` local probe result produces an unforgeable
+   `GuestAgentRuntimeReadyInvocation`, composed into the signed-dispatch
+   RPC server strictly after a prepared invocation already exists, then
+   discarded exactly like that prepared invocation already was -- the
+   wire response remains exactly `DECLINED`/`REPLAY_REJECTED` either way.
+   No capability dispatch exists yet; no target DNS/HTTPS operation
+   exists; no SSH/VMware/WSL path was touched or replaced.
 6. Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
@@ -1344,15 +1361,42 @@ INVOCATION != PROCESS CREATED, != RUNTIME READY, != EXECUTION SUCCESS,
 -- never stores, logs, or forwards it -- and the wire response remains
 exactly `DECLINED`/`REPLAY_REJECTED`, `SUCCESS` still unreachable. No
 process is spawned, no runtime-readiness probe runs anywhere in this
-milestone. The remaining work inside step 3
+milestone.
+v0.3.466 explicitly left open whether the exact local executable a
+prepared invocation names is actually available on the guest.
+**v0.3.467 closed exactly that gap** with a narrow local
+runtime-readiness foundation (new modules
+`research.GuestAgentLocalReadiness`/`GuestAgentLocalRuntimeProbe`/
+`GuestAgentRuntimeReadiness`): a fixed, code-owned local version probe
+(`/usr/bin/dig -v` for `DNS_RECORD_LOOKUP`, `/usr/bin/curl --version`
+for `HTTPS_HEADER_LOOKUP` -- never the operation's own reviewed target
+argv, never a real DNS/HTTPS request) cross-checked against the exact
+prepared invocation's transport and executable path before any
+subprocess attempt. The existing shared WSL/VMware readiness contract
+(`ResearchKaliRuntimeEnvironment.ResearchKaliRuntimeReadiness`) was
+deliberately not reused for this: its `process_created`/`network_used`
+fields are structurally forced `False` even though the real WSL/VMware
+probes do start subprocesses, and reusing it here would force the same
+dishonest telemetry, so a narrow, honest Guest-Agent-specific type was
+added instead, leaving the shared WSL/VMware contract and every existing
+test it covers completely untouched. `READY` produces a new,
+capability-token-gated, unforgeable `GuestAgentRuntimeReadyInvocation`
+(the same construction pattern `GuestAgentPreparedInvocation` already
+uses) -- composed into the signed-dispatch RPC server strictly after a
+prepared invocation already exists (never for V1, never for a replayed
+request), then discarded exactly like that prepared invocation already
+is. RUNTIME READY != EXECUTION AUTHORITY; VERSION MATCH != EXECUTION
+SUCCESS: the wire response remains exactly `DECLINED`/`REPLAY_REJECTED`
+regardless of whether the local probe reports `READY` or `UNAVAILABLE`,
+`SUCCESS` still unreachable. The remaining work inside step 3
 (real production certificate provisioning/distribution strategy for an
 actual deployment, the real non-loopback VMware Host-Only network path),
 the remainder of step 4 (wiring to a real guest process), the remainder
 of step 5 (a real guest process/daemon, production signing-key custody,
-and an actual runtime-readiness/executor gate that would consume a
-`GuestAgentPreparedInvocation` instead of discarding it), and steps 6-7
-remain separate, unstarted, future milestones, each requiring its own
-authorization.
+and a capability executor that would consume a
+`GuestAgentRuntimeReadyInvocation` instead of discarding it), and steps
+6-7 remain separate, unstarted, future milestones, each requiring its
+own authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,

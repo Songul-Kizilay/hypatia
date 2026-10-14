@@ -10,14 +10,36 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.466 (implementation)
+## Current scope: v0.3.467 (implementation)
+
+| Field | Value |
+| --- | --- |
+| Milestone | Guest-Agent local runtime-readiness gate foundation for the two reviewed capabilities. Takes an already-created, unforgeable `GuestAgentPreparedInvocation` (v0.3.466) and determines whether the LOCAL guest runtime has the exact reviewed executable a reviewed operation needs. PREPARED INVOCATION != RUNTIME READY. Audited `ResearchKaliRuntimeEnvironment.ResearchKaliRuntimeReadiness` (WSL/VMware): its `process_created`/`network_used` fields are structurally forced to `False` even though the real probes do start subprocesses -- reusing that type would force the same dishonest telemetry, so this milestone defines a narrow, Guest-Agent-specific `GuestAgentLocalReadinessReceipt` (new module `research.GuestAgentLocalReadiness`) whose `probe_process_started` honestly varies while `target_operation_executed`/`target_network_used` stay forced `False`. New concrete adapter `research.GuestAgentLocalRuntimeProbe.GuestAgentLocalRuntimeProbe`: a fixed literal mapping (`DNS_RECORD_LOOKUP` -> `/usr/bin/dig -v`, `HTTPS_HEADER_LOOKUP` -> `/usr/bin/curl --version`, never enum-enumerated) cross-checks transport/executable-path before any subprocess attempt; `subprocess.run` uses `shell=False`, `stdin=DEVNULL`, a hard 5-second ceiling, bounded/sanitized 500-character output. New module `research.GuestAgentRuntimeReadiness`: unforgeable `GuestAgentRuntimeReadyInvocation` (same capability-token pattern as `GuestAgentPreparedInvocation`) and `check_guest_agent_runtime_readiness`, constructed only on `READY`. RUNTIME READY != EXECUTION AUTHORITY. The signed-dispatch RPC server composes this strictly after a prepared invocation exists (never V1, never a replay); receipt and ready invocation are discarded exactly like the prepared invocation already is -- wire response unchanged either way. No capability executor, no target operation, no SSH/VMware/WSL. |
+| Base SHA | `7a5c7240f1f3c6f0f343a91ff669d047686107a4` (verified remote main; standard merge of PR #447). |
+| Branch | `feature/guest-agent-local-runtime-readiness-v0.3.467`, worktree `D:\hypatia-v0.3.467` |
+| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Boundaries | PREPARED INVOCATION != RUNTIME READY. RUNTIME READY != EXECUTION AUTHORITY. VERSION MATCH != CAPABILITY PERMITTED. VERSION MATCH != EXECUTION SUCCESS. LOCAL READINESS PROCESS != TARGET OPERATION. READINESS OUTPUT != TRUSTED EVIDENCE. RUNTIME-READY INVOCATION != EXECUTION SUCCESS, != AUTHORITY TO EXPAND SCOPE. READINESS FAILURE != AUTHORITY DECISION. `GuestAgentCore`/`GuestAgentReplayProtector`/`GuestAgentDispatchProof`/`GuestAgentDispatchSigning`/`GuestAgentDispatchVerification`/`GuestAgentAuthenticatedSignedDispatchChannel`/`GuestAgentRpcTransport`/`GuestAgentInvocationPreparation` and every WSL/VMware readiness file all byte-for-byte unmodified. The only permitted production subprocess argv are exactly `("/usr/bin/dig", "-v")` and `("/usr/bin/curl", "--version")`; no PATH fallback, no package install, no generic process/execution channel. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP target operations ZERO; non-loopback network activity ZERO; production signing-key/credential provisioning ZERO; real Kali VM contact during development ZERO. v0.3.468 not started. |
+
+Per the standing ledger convention, v0.3.466 delivery was re-verified
+before this milestone began: release
+`8ba69f90598c9fe8133caebbce2ea55a3016e196`, PR #447 MERGED, standard
+merge `7a5c7240f1f3c6f0f343a91ff669d047686107a4` with parents
+`d4d60c8f10fe8af8d0a2ad22da8ec9c5f8f07b45` and the release SHA (confirmed
+by `git log -1 --format="%H %P"` on the merge commit).
+`git merge-base --is-ancestor 8ba69f90... origin/main` succeeded;
+author/committer identity on the release commit is Songul Kizilay's
+existing GitHub noreply identity, unchanged; all four exact-SHA and
+PR-triggered Linux/Windows CI runs for that release are `success`.
+v0.3.466 is delivered.
+
+## Previous scope: v0.3.466 (release record before integration)
 
 | Field | Value |
 | --- | --- |
 | Milestone | Guest-Agent execution-bound request V2 and post-replay prepared-invocation foundation. Audited `cognition.KaliToolGateway.run`'s real execution path (`timeout_seconds=min(preview.max_seconds, MAX_KALI_OPERATION_TIMEOUT_SECONDS)`) and every other `ResearchKaliOperationPreview` field; `max_seconds` is the one genuinely execution-relevant fact missing from the prior request contract. New `GuestAgentProtocolVersion.V2` + `GuestAgentExecutionLimits` make `GuestAgentRequest.execution_limits` version-coupled, enforced structurally (V1 forbids it, V2 requires it); the limit is cryptographically bound into the existing, unmodified signed dispatch proof (already hashes the same canonical document). `GuestAgentHostDispatchGrant` now privately binds `max_seconds` from the exact consumed preview; `materialize_request` now always produces V2. New module `research.GuestAgentInvocationPreparation`: an unforgeable `GuestAgentPreparedInvocation` (code-reconstructed command plan, bounded timeout) and `prepare_guest_agent_invocation`, composing unmodified admission and replay consumption with, for V2 only and strictly after replay ACCEPTED, a command plan rebuilt from code and a doubly-capped timeout. The signed-dispatch RPC server now calls this shared function; the prepared invocation is immediately discarded. No real executor, no process, no production deployment. |
 | Base SHA | `d4d60c8f10fe8af8d0a2ad22da8ec9c5f8f07b45` (verified remote main; standard merge of PR #446). |
 | Branch | `feature/guest-agent-execution-bound-request-v2-v0.3.466`, worktree `D:\hypatia-v0.3.466` |
-| Status | implementation complete; independent security/QA review and full local gates passed; exact-SHA CI, PR and standard merge pending. |
+| Status | delivered -- release `8ba69f90598c9fe8133caebbce2ea55a3016e196`, PR #447 MERGED, standard merge `7a5c7240f1f3c6f0f343a91ff669d047686107a4`. |
 | Boundaries | EXECUTION LIMIT PRESENT != EXECUTION AUTHORITY. EXECUTION LIMIT VALID != EXECUTION AUTHORITY. SIGNED EXECUTION LIMIT != EXECUTION SUCCESS. PREPARED INVOCATION != PROCESS CREATED, != RUNTIME READY, != EXECUTION SUCCESS, != TRUSTED OUTPUT, != EVIDENCE. V1 REQUEST != EXECUTION-BOUND REQUEST. `GuestAgentCore`/`GuestAgentReplayProtector`/`GuestAgentDispatchProof`/`GuestAgentDispatchVerification`/`GuestAgentAuthenticatedSignedDispatchChannel`/`GuestAgentRpcTransport` all byte-for-byte unmodified. No wire-carried argv/executable/shell; no injectable executor callback; no capability executor of any kind. Target traffic ZERO; SSH/VMware/WSL/Kali activity ZERO; DNS/HTTP operations ZERO; subprocess creation ZERO; non-loopback network activity ZERO; production signing-key/credential provisioning ZERO. v0.3.467 not started. |
 
 Per the standing ledger convention, v0.3.465 delivery was re-verified
