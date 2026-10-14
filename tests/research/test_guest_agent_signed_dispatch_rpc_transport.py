@@ -55,6 +55,10 @@ from research.GuestAgentDispatchVerification import (  # noqa: E402
     GuestAgentDispatchVerificationFailure,
     GuestAgentDispatchVerificationStage,
 )
+from research.GuestAgentExecutionAdmission import (  # noqa: E402
+    GuestAgentExecutionBoundaryReceipt,
+    admit_guest_agent_execution,
+)
 from research.GuestAgentHostAuthorizationHandoff import (  # noqa: E402
     consume_authorization_for_guest_agent_dispatch,
 )
@@ -1218,6 +1222,62 @@ class StructuralSecurityTests(unittest.TestCase):
         self.assertIn("_prepared_invocation", test_source)
         self.assertIn("is not None", test_source)
 
+    def test_readiness_then_admission_in_source_order(self) -> None:
+        """`serve_one_signed_dispatch` calls
+        `check_guest_agent_runtime_readiness` before it ever calls
+        `admit_guest_agent_execution` -- execution admission must never be
+        attempted before readiness has run."""
+        readiness_line = self._first_call_lineno(
+            self.tree, "check_guest_agent_runtime_readiness"
+        )
+        admission_line = self._first_call_lineno(
+            self.tree, "admit_guest_agent_execution"
+        )
+        self.assertGreater(
+            readiness_line, 0, "no call to check_guest_agent_runtime_readiness"
+        )
+        self.assertGreater(admission_line, 0, "no call to admit_guest_agent_execution")
+        self.assertLess(readiness_line, admission_line)
+
+    def test_admission_call_is_guarded_by_ready_invocation_none_check(self) -> None:
+        """The one `admit_guest_agent_execution` call site is structurally
+        inside an `if _ready_invocation is not None:` block -- never
+        unconditional -- so a V1 path, a replay-rejected path, and a
+        readiness-`UNAVAILABLE` path (where `_ready_invocation` is `None`
+        in every case) cannot reach it by construction."""
+        serve_def = None
+        for node in ast.walk(self.tree):
+            if (
+                isinstance(node, ast.FunctionDef)
+                and node.name == "serve_one_signed_dispatch"
+            ):
+                serve_def = node
+                break
+        self.assertIsNotNone(serve_def)
+        # There are two nested `if ... is not None:` guards here (the
+        # outer `_prepared_invocation` readiness guard, the inner
+        # `_ready_invocation` admission guard) -- find the INNERMOST one
+        # that directly contains the admission call, not merely any
+        # enclosing one.
+        candidate_ifs = [
+            node
+            for node in ast.walk(serve_def)  # type: ignore[arg-type]
+            if isinstance(node, ast.If)
+            and any(
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Name)
+                and inner.func.id == "admit_guest_agent_execution"
+                for inner in ast.walk(node)
+            )
+        ]
+        self.assertTrue(
+            candidate_ifs, "admit_guest_agent_execution is not inside an if-block"
+        )
+        guarding_if = min(candidate_ifs, key=lambda node: len(list(ast.walk(node))))
+        test_source = ast.unparse(guarding_if.test)
+        self.assertIn("_ready_invocation", test_source)
+        self.assertIn("is not None", test_source)
+
     def test_admit_then_replay_consume_in_source_order_within_preparation(
         self,
     ) -> None:
@@ -1550,6 +1610,256 @@ class ReadinessIntegrationTests(_LoopbackMtlsFixture):
         self.assertNotIn("error", outcome, msg=outcome.get("error"))
         self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
         run.assert_not_called()
+
+
+class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
+    """v0.3.468: exact-request execution admission composed into the real
+    RPC server, strictly after readiness `READY`.
+
+    STILL DECLINED: every case here proves the wire response is unaffected
+    by execution admission -- admission is observed only through a spy on
+    `admit_guest_agent_execution` itself (`mock.patch.object(...,
+    wraps=...)`, preserving real behavior), never through a wire-visible
+    fact."""
+
+    def test_v1_request_never_reaches_execution_admission(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        from research.GuestAgentProtocol import GuestAgentRequest
+
+        v1_request = GuestAgentRequest(
+            protocol_version=GuestAgentProtocolVersion.V1,
+            request_id="v1-admission",
+            nonce="v1-admission-nonce",
+            operation_kind=_preview().operation_kind,
+            operation_digest="a" * 64,
+            logical_inputs=(("hostname", "example.com"), ("dns_record_type", "A")),
+        )
+        envelope = _sign_arbitrary_request_for_test(
+            v1_request, signing_key=signing_key, now=NOW
+        )
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(v1_request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch.object(
+            transport_module,
+            "admit_guest_agent_execution",
+            wraps=admit_guest_agent_execution,
+        ) as admission_spy:
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        admission_spy.assert_not_called()
+        self.assertEqual(probe.calls, [])
+
+    def test_replayed_request_never_reaches_execution_admission(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        store = _FakeReplayStore()
+        envelope = _real_envelope(signing_key)
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+
+        def _make_server() -> GuestAgentSignedDispatchRpcServer:
+            return GuestAgentSignedDispatchRpcServer(
+                build_guest_server_tls_context(guest_config),
+                guest_config,
+                verification_key=signing_key.public_key(),
+                replay_protector=GuestAgentReplayProtector(store),
+                clock=lambda: NOW,
+                local_runtime_probe=probe,
+            )
+
+        with mock.patch.object(
+            transport_module,
+            "admit_guest_agent_execution",
+            wraps=admit_guest_agent_execution,
+        ) as admission_spy:
+            first_server = _make_server()
+            first_port = first_server.bind()
+            thread1, outcome1 = _run_server(first_server)
+            client1 = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, first_port
+            )
+            client1.send_signed_dispatch(envelope)
+            thread1.join(timeout=5.0)
+            self.assertNotIn("error", outcome1, msg=outcome1.get("error"))
+            self.assertEqual(admission_spy.call_count, 1)
+
+            second_server = _make_server()
+            second_port = second_server.bind()
+            thread2, outcome2 = _run_server(second_server)
+            client2 = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, second_port
+            )
+            response2 = client2.send_signed_dispatch(envelope)
+            thread2.join(timeout=5.0)
+            self.assertNotIn("error", outcome2, msg=outcome2.get("error"))
+            self.assertEqual(response2.status, GuestAgentResponseStatus.REPLAY_REJECTED)
+            # The replay never added a second call: admission ran exactly
+            # once, for the first-seen dispatch only.
+            self.assertEqual(admission_spy.call_count, 1)
+
+    def test_readiness_unavailable_never_reaches_execution_admission(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key)
+        probe = _RecordingLocalReadinessProbe(
+            _unavailable_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch.object(
+            transport_module,
+            "admit_guest_agent_execution",
+            wraps=admit_guest_agent_execution,
+        ) as admission_spy:
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        admission_spy.assert_not_called()
+
+    def test_ready_first_seen_request_reaches_admission_exactly_once_still_declined(
+        self,
+    ) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch.object(
+            transport_module,
+            "admit_guest_agent_execution",
+            wraps=admit_guest_agent_execution,
+        ) as admission_spy:
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        self.assertEqual(response.output_lines, ())
+        admission_spy.assert_called_once()
+        verified_arg, ready_arg = admission_spy.call_args[0]
+        self.assertEqual(verified_arg.request.request_id, envelope.request.request_id)
+        self.assertIs(
+            ready_arg.prepared_invocation.operation_kind,
+            envelope.request.operation_kind,
+        )
+        # `wraps=admit_guest_agent_execution` means the spy still calls the
+        # real function and returns its real result -- proving this is a
+        # genuine admission, not a stub -- confirmed directly against the
+        # real function with the exact same arguments the server passed.
+        real_result = admit_guest_agent_execution(verified_arg, ready_arg)
+        self.assertIsInstance(real_result, GuestAgentExecutionBoundaryReceipt)
+
+    def test_ready_https_request_also_reaches_admission_still_declined(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_https_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch.object(
+            transport_module,
+            "admit_guest_agent_execution",
+            wraps=admit_guest_agent_execution,
+        ) as admission_spy:
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        admission_spy.assert_called_once()
+
+    def test_default_server_never_calls_admission_without_custom_probe(
+        self,
+    ) -> None:
+        """A server constructed without `local_runtime_probe` (the default
+        `UnavailableGuestAgentLocalReadinessProbe`, fails closed) must
+        never reach execution admission at all."""
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key)
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+        )
+        port = server.bind()
+        with mock.patch.object(
+            transport_module,
+            "admit_guest_agent_execution",
+            wraps=admit_guest_agent_execution,
+        ) as admission_spy:
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        admission_spy.assert_not_called()
 
 
 if __name__ == "__main__":

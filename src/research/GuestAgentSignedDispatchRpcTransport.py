@@ -66,6 +66,22 @@ fails closed with zero subprocess attempts, exactly like the default
 `research.ResearchKaliRuntimeEnvironment.UnavailableResearchKaliRuntimeProbe`
 used elsewhere in this repository.
 
+v0.3.468 note: when readiness does produce a `GuestAgentRuntimeReadyInvocation`,
+this server now also calls `research.GuestAgentExecutionAdmission
+.admit_guest_agent_execution` with it and the already-verified `verified`
+dispatch from step 5 -- strictly after both exist, strictly before
+responding. EXECUTION ADMISSION != EXECUTION SUCCESS: the resulting
+`GuestAgentExecutionBoundaryReceipt` (and the `GuestAgentExecutionAdmission`
+it wraps) is discarded exactly like the prepared invocation and readiness
+receipt already are -- the wire response is unaffected either way, still
+`DECLINED`, `SUCCESS` still unreachable. `admit_guest_agent_execution`
+itself proves the runtime-ready invocation corresponds exactly to the
+verified dispatch's own request (never merely that operation kinds
+match) -- see that module's own docstring for the full exact-binding
+proof. No executor of any kind is introduced; this milestone still calls
+neither `subprocess.run`/`subprocess.Popen`/`os.system` nor any process
+adapter.
+
 WHY DECLINED REMAINS THE SUCCESSFUL FOUNDATION RESULT: `admit_guest_agent_request`
 never returns `SUCCESS` -- no capability executor exists anywhere this
 module reaches, by design (see `research.GuestAgentCore`'s own module
@@ -140,6 +156,7 @@ from research.GuestAgentDispatchVerification import (
     GuestAgentDispatchVerificationError,
     verify_signed_dispatch_envelope,
 )
+from research.GuestAgentExecutionAdmission import admit_guest_agent_execution
 from research.GuestAgentInvocationPreparation import prepare_guest_agent_invocation
 from research.GuestAgentLocalReadiness import (
     GuestAgentLocalReadinessProbe,
@@ -534,6 +551,14 @@ class GuestAgentSignedDispatchRpcServer:
                 _receipt, _ready_invocation = check_guest_agent_runtime_readiness(
                     _prepared_invocation, self._local_runtime_probe
                 )
+                if _ready_invocation is not None:
+                    _boundary_receipt = admit_guest_agent_execution(
+                        verified, _ready_invocation
+                    )
+                    # `_boundary_receipt` (and the `GuestAgentExecutionAdmission`
+                    # it wraps, if any) is discarded unconditionally -- see
+                    # the module docstring's v0.3.468 note. No executor
+                    # consumes it; the wire response below is unaffected.
                 # `_receipt`/`_ready_invocation` are discarded unconditionally,
                 # exactly like `_prepared_invocation` itself: this server
                 # holds no durable execution authority after the request
