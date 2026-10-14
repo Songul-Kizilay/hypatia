@@ -95,7 +95,13 @@ FORBIDDEN_METHOD_NAMES = (
 )
 
 # No field, anywhere in the protocol, may be named (or mean) an arbitrary
-# command channel.
+# command channel. "execute" (not the bare substring "exec") is the
+# token checked here: v0.3.466 introduces the legitimate, reviewed
+# `GuestAgentRequest.execution_limits` field (an execution *limit*, never
+# an execution *command*), which contains "exec" as a substring of the
+# ordinary English word "execution" -- "executable" and "execute" below
+# already catch every actually dangerous field name ("execute_command",
+# "can_execute", a bare "executable", etc.) without that false positive.
 FORBIDDEN_FIELD_TOKENS = (
     "shell",
     "command",
@@ -105,7 +111,7 @@ FORBIDDEN_FIELD_TOKENS = (
     "script",
     "powershell",
     "bash",
-    "exec",
+    "execute",
     "raw_command",
 )
 
@@ -267,10 +273,17 @@ class ImmutabilityTests(unittest.TestCase):
 class ProtocolVersionTests(unittest.TestCase):
     """Requirements 3, 4: protocol version is closed, bounded, and fails closed."""
 
-    def test_exactly_one_protocol_version_exists_today(self) -> None:
-        self.assertEqual(len(list(GuestAgentProtocolVersion)), 1)
+    def test_exactly_two_protocol_versions_exist_today(self) -> None:
+        # v0.3.466 deliberately adds V2 (the execution-bound generation);
+        # this is the one, reviewed, intentional widening of this closed
+        # enum this milestone makes -- see GuestAgentProtocolVersion's own
+        # docstring. Still exactly two, never a silently-growing set.
+        self.assertEqual(len(list(GuestAgentProtocolVersion)), 2)
         self.assertEqual(
             GuestAgentProtocolVersion.V1.value, "hypatia-kali-guest-agent/1"
+        )
+        self.assertEqual(
+            GuestAgentProtocolVersion.V2.value, "hypatia-kali-guest-agent/2"
         )
 
     def test_non_enum_protocol_version_is_rejected(self) -> None:

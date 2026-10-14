@@ -51,6 +51,7 @@ no field here to put it in.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -76,17 +77,25 @@ MAX_RESPONSE_DETAIL_LENGTH = 500
 class GuestAgentProtocolVersion(StrEnum):
     """Name one closed, code-owned Guest-Agent protocol generation.
 
-    Exactly one member today, deliberately -- exactly one protocol
-    generation has been designed. Product version and protocol version are
-    different facts: `v0.3.456` is when this generation was introduced, not
-    what it is called. Adding `V2` is a future decision about a second,
-    genuinely different wire generation existing, not a convenience bump;
-    until then, anything that is not `V1` -- including a string that merely
-    looks like a future version -- must fail closed, never silently
-    downgrade to `V1`.
+    Product version and protocol version are different facts: a product
+    version like `v0.3.456` is when a generation was introduced, not what
+    it is called. Anything that is not a named member below -- including a
+    string that merely looks like a future version -- must fail closed,
+    never silently downgrade to an earlier one.
+
+    `V1` names the original generation: a typed operation request with no
+    execution-limit binding. `V2` names the execution-bound generation
+    introduced in v0.3.466: a typed operation request that additionally
+    carries the signed `GuestAgentExecutionLimits` a future bounded
+    execution gate would need. V1 REQUEST != EXECUTION-BOUND REQUEST --
+    see `GuestAgentRequest.execution_limits`'s own docstring. Neither
+    version is, or implies, execution authority; `V2` closes a missing-
+    fact gap (the guest previously had no signed, host-approved process-
+    time ceiling to honor), it does not grant a new one.
     """
 
     V1 = "hypatia-kali-guest-agent/1"
+    V2 = "hypatia-kali-guest-agent/2"
 
 
 class GuestAgentResponseStatus(StrEnum):
@@ -115,6 +124,62 @@ class GuestAgentResponseStatus(StrEnum):
     def permits_output(self) -> bool:
         """Return whether this outcome may carry non-empty output lines."""
         return self is GuestAgentResponseStatus.SUCCESS
+
+
+@dataclass(frozen=True, slots=True)
+class GuestAgentExecutionLimits:
+    """The signed execution-limit facts a V2 request binds; grants nothing.
+
+    EXECUTION LIMIT PRESENT != EXECUTION AUTHORITY. EXECUTION LIMIT VALID
+    != EXECUTION AUTHORITY. SIGNED EXECUTION LIMIT != EXECUTION SUCCESS.
+    This type only bounds what a future executor MAY consume; it never
+    grants a new operation, and admitting or verifying one does not imply
+    any capability may run.
+
+    `max_seconds` is the one genuinely execution-relevant fact a future
+    guest executor needs that the V1 protocol never carried: audited
+    directly against `cognition.KaliToolGateway.run`, which passes
+    `timeout_seconds=min(preview.max_seconds, MAX_KALI_OPERATION_TIMEOUT_SECONDS)`
+    to the process adapter -- the exact host-approved upper bound on how
+    long a reviewed operation's process may run. Every other
+    `ResearchKaliOperationPreview` field audited for this milestone
+    (`permitted_ports`, `max_request_count`, `max_requests_per_minute`,
+    `program_id`, scope/policy digests) is consumed only by host-side
+    preview construction or the operation digest itself, never passed to
+    `ResearchKaliOperationProcessAdapter.run` -- so carrying only this one
+    field, rather than the whole preview, is a deliberate, audited
+    decision, not an oversight.
+
+    Validation mirrors the stricter of this repository's two existing
+    timeout-bound checks
+    (`research.WslKaliOperationProcessAdapter._timeout`'s chained
+    `0 < value <= ...` comparison, which already rejects NaN and
+    infinities by how Python chained comparisons evaluate) rather than
+    `ResearchKaliOperationPreview.__post_init__`'s own looser `<= 0`-only
+    check, which does not reject NaN. No new upper ceiling is invented
+    here: the exact host-approved value is carried uncapped, exactly as
+    `ResearchKaliOperationPreview.max_seconds` itself carries it uncapped
+    -- `MAX_KALI_OPERATION_TIMEOUT_SECONDS` is applied only once, later, at
+    the same point production code already applies it (computing a
+    prepared invocation's actual process timeout), never here. A bare
+    `int`/`float` is normalized to `float` on construction so this type's
+    own canonical wire encoding is deterministic regardless of whether a
+    caller passed a whole number as `int` or `float` -- never rounded,
+    truncated, or widened.
+    """
+
+    max_seconds: float
+
+    def __post_init__(self) -> None:
+        if isinstance(self.max_seconds, bool) or not isinstance(
+            self.max_seconds, int | float
+        ):
+            raise ResearchError(
+                "Guest-agent execution limit time budget must be a number."
+            )
+        if not math.isfinite(self.max_seconds) or self.max_seconds <= 0:
+            raise ResearchError("Guest-agent execution limit time budget is invalid.")
+        object.__setattr__(self, "max_seconds", float(self.max_seconds))
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +220,18 @@ class GuestAgentRequest:
     `tools.ProductCapabilitySchemaCatalog` to exist, and because `research`
     does not depend on `tools` (the existing direction is the other way:
     `tools.ProductCapabilitySchemaDefaults` already depends on `research`).
+
+    `execution_limits` is version-coupled, never independently optional:
+    a `V1` request must carry `None` (V1 REQUEST != EXECUTION-BOUND
+    REQUEST -- the original generation never described an execution
+    limit, so it must never silently acquire one), and a `V2` request
+    must carry a real `GuestAgentExecutionLimits` (never `None`, never a
+    caller-chosen default -- there is no "if missing, use 30 seconds"
+    anywhere in this type). This coupling is enforced here, structurally,
+    not merely by convention: constructing a mismatched pair always
+    raises, whether the caller is this repository's own signing code or
+    wire-decoded data (`research.GuestAgentProtocolSerialization` relies
+    on exactly this check rather than duplicating it).
     """
 
     protocol_version: GuestAgentProtocolVersion
@@ -163,6 +240,7 @@ class GuestAgentRequest:
     operation_kind: ResearchKaliOperationKind
     operation_digest: str
     logical_inputs: tuple[tuple[str, str], ...] = ()
+    execution_limits: GuestAgentExecutionLimits | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.protocol_version, GuestAgentProtocolVersion):
@@ -176,6 +254,17 @@ class GuestAgentRequest:
         if not is_kali_operation_digest(self.operation_digest):
             raise ResearchError("Guest-agent request operation digest is invalid.")
         self._validate_logical_inputs()
+        self._validate_execution_limits()
+
+    def _validate_execution_limits(self) -> None:
+        if self.protocol_version is GuestAgentProtocolVersion.V1:
+            if self.execution_limits is not None:
+                raise ResearchError(
+                    "Guest-agent V1 request must not carry execution limits."
+                )
+        elif self.protocol_version is GuestAgentProtocolVersion.V2:
+            if not isinstance(self.execution_limits, GuestAgentExecutionLimits):
+                raise ResearchError("Guest-agent V2 request requires execution limits.")
 
     def _validate_logical_inputs(self) -> None:
         if not isinstance(self.logical_inputs, tuple):

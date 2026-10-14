@@ -24,7 +24,9 @@ GUEST side and strictly in this order:
        (unmodified)
     7. `research.GuestAgentReplayProtector.GuestAgentReplayProtector
        .consume_once` (unmodified)
-    8. one inert, typed `GuestAgentResponse`
+    8. one inert, typed `GuestAgentResponse`, and -- only for an
+       execution-bound V2 request whose replay identity was just freshly
+       accepted -- a discarded `GuestAgentPreparedInvocation`
 
 REPLAY CONSUMPTION MUST NEVER OCCUR BEFORE SIGNATURE VERIFICATION: step 7
 is reached only after step 5 has already succeeded, so forged or
@@ -33,10 +35,22 @@ unauthenticated traffic can never spend a replay identity. Admission (step
 and side-effect-free -- a request this guest would not admit anyway never
 spends a replay identity for it. Neither property is merely a code-review
 convention here: `serve_one_signed_dispatch` below calls
-`verify_signed_dispatch_envelope` and `admit_guest_agent_request` in that
-literal source order, strictly before the one `replay_protector
-.consume_once` call site, and there is exactly one such call site in this
-module.
+`verify_signed_dispatch_envelope` before it calls
+`research.GuestAgentInvocationPreparation.prepare_guest_agent_invocation`
+(which itself calls `admit_guest_agent_request` before its one
+`replay_protector.consume_once` call site, in that literal source order)
+-- see that module's own docstring for the full admit -> replay-consume
+-> prepare composition, reused here rather than duplicated inline.
+
+v0.3.466 note: step 8 may also produce a `GuestAgentPreparedInvocation`
+for a `GuestAgentProtocolVersion.V2` request once replay is
+`ACCEPTED` -- PREPARED INVOCATION != EXECUTION AUTHORITY, != RUNTIME
+READINESS, != PROCESS CREATION, != EXECUTION SUCCESS. This server never
+uses it for anything: it is constructed, immediately discarded (never
+stored as instance state, never logged, never passed anywhere else), and
+the wire response remains exactly what v0.3.465 already sent --
+`DECLINED` for a first-seen admitted dispatch, `REPLAY_REJECTED` for a
+replay. No process is spawned by preparing one.
 
 WHY DECLINED REMAINS THE SUCCESSFUL FOUNDATION RESULT: `admit_guest_agent_request`
 never returns `SUCCESS` -- no capability executor exists anywhere this
@@ -99,7 +113,6 @@ import ssl
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Final
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -108,21 +121,18 @@ from research.GuestAgentAuthenticatedSignedDispatchChannel import (
     GuestAgentAuthenticatedSignedDispatchGuestChannel,
     GuestAgentAuthenticatedSignedDispatchHostChannel,
 )
-from research.GuestAgentCore import admit_guest_agent_request
 from research.GuestAgentDispatchProof import GuestAgentSignedDispatchEnvelope
 from research.GuestAgentDispatchVerification import (
     GuestAgentDispatchVerificationError,
     verify_signed_dispatch_envelope,
 )
+from research.GuestAgentInvocationPreparation import prepare_guest_agent_invocation
 from research.GuestAgentMtlsTrustConfiguration import (
     GuestAgentMtlsTrustConfiguration,
     GuestAgentPeerRole,
 )
-from research.GuestAgentProtocol import GuestAgentResponse, GuestAgentResponseStatus
-from research.GuestAgentReplayProtector import (
-    GuestAgentReplayOutcome,
-    GuestAgentReplayProtector,
-)
+from research.GuestAgentProtocol import GuestAgentResponse
+from research.GuestAgentReplayProtector import GuestAgentReplayProtector
 from research.GuestAgentRpcFraming import (
     GuestAgentRpcFramingError,
     read_guest_agent_rpc_frame,
@@ -138,10 +148,6 @@ from research.GuestAgentRpcTransport import (
 #: module's own timing needs (connect/handshake/read/write bounds) are
 #: identical in kind to the plain transport's.
 _DEFAULT_TIMEOUTS = GuestAgentRpcTransportTimeouts()
-
-_DETAIL_REPLAY_REJECTED: Final[str] = (
-    "This request's replay identity has already been consumed."
-)
 
 
 class GuestAgentSignedDispatchRpcFailureKind(StrEnum):
@@ -483,26 +489,18 @@ class GuestAgentSignedDispatchRpcServer:
                     GuestAgentSignedDispatchRpcFailureKind.DISPATCH_VERIFICATION_FAILED
                 ) from error
 
-            admitted = admit_guest_agent_request(verified.request)
-            if admitted.status is GuestAgentResponseStatus.DECLINED:
-                try:
-                    outcome = self._replay_protector.consume_once(verified.request)
-                except ResearchError as error:
-                    raise GuestAgentSignedDispatchRpcTransportError(
-                        GuestAgentSignedDispatchRpcFailureKind.REPLAY_CONSUMPTION_FAILED
-                    ) from error
-                if outcome is GuestAgentReplayOutcome.ALREADY_CONSUMED:
-                    final_response = GuestAgentResponse(
-                        protocol_version=admitted.protocol_version,
-                        request_id=admitted.request_id,
-                        status=GuestAgentResponseStatus.REPLAY_REJECTED,
-                        detail=_DETAIL_REPLAY_REJECTED,
-                        output_lines=(),
-                    )
-                else:
-                    final_response = admitted
-            else:
-                final_response = admitted
+            try:
+                final_response, _prepared_invocation = prepare_guest_agent_invocation(
+                    verified.request, self._replay_protector
+                )
+            except ResearchError as error:
+                raise GuestAgentSignedDispatchRpcTransportError(
+                    GuestAgentSignedDispatchRpcFailureKind.REPLAY_CONSUMPTION_FAILED
+                ) from error
+            # `_prepared_invocation` is discarded unconditionally: this
+            # server holds no durable execution authority after the
+            # request ends and never invokes a process. See the module
+            # docstring's v0.3.466 note.
 
             payload = channel.encode_response(final_response)
             tls_conn.settimeout(self._timeouts.write_seconds)

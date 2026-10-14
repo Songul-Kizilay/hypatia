@@ -21,6 +21,7 @@ import json
 
 from core.Exceptions import ResearchError
 from research.GuestAgentProtocol import (
+    GuestAgentExecutionLimits,
     GuestAgentProtocolVersion,
     GuestAgentRequest,
     GuestAgentResponse,
@@ -37,8 +38,16 @@ _REQUEST_REQUIRED_KEYS = frozenset(
         "operation_digest",
     }
 )
-_REQUEST_OPTIONAL_KEYS = frozenset({"logical_inputs"})
+#: `execution_limits` is optional at the wire-document level only in the
+#: sense that a V1 document never carries the key at all (so its bytes
+#: are byte-for-byte unchanged from before this field existed); a V2
+#: document always carries it. The actual required/forbidden-by-version
+#: rule is enforced once, structurally, by `GuestAgentRequest.__post_init__`
+#: itself -- this module never duplicates that check.
+_REQUEST_OPTIONAL_KEYS = frozenset({"logical_inputs", "execution_limits"})
 _REQUEST_ALLOWED_KEYS = _REQUEST_REQUIRED_KEYS | _REQUEST_OPTIONAL_KEYS
+
+_EXECUTION_LIMITS_REQUIRED_KEYS = frozenset({"max_seconds"})
 
 _RESPONSE_REQUIRED_KEYS = frozenset(
     {"protocol_version", "request_id", "status", "detail"}
@@ -48,10 +57,16 @@ _RESPONSE_ALLOWED_KEYS = _RESPONSE_REQUIRED_KEYS | _RESPONSE_OPTIONAL_KEYS
 
 
 def guest_agent_request_document(request: GuestAgentRequest) -> dict[str, object]:
-    """Render one request as a plain, JSON-safe document."""
+    """Render one request as a plain, JSON-safe document.
+
+    A V1 request's document never carries an `execution_limits` key at
+    all (not even `null`) -- the key is present if, and only if,
+    `request.execution_limits is not None`, keeping a V1 document's bytes
+    byte-for-byte identical to this function's pre-V2 output.
+    """
     if not isinstance(request, GuestAgentRequest):
         raise ResearchError("Guest-agent request document requires a bounded request.")
-    return {
+    document: dict[str, object] = {
         "protocol_version": request.protocol_version.value,
         "request_id": request.request_id,
         "nonce": request.nonce,
@@ -59,6 +74,20 @@ def guest_agent_request_document(request: GuestAgentRequest) -> dict[str, object
         "operation_digest": request.operation_digest,
         "logical_inputs": [list(pair) for pair in request.logical_inputs],
     }
+    if request.execution_limits is not None:
+        document["execution_limits"] = guest_agent_execution_limits_document(
+            request.execution_limits
+        )
+    return document
+
+
+def guest_agent_execution_limits_document(
+    limits: GuestAgentExecutionLimits,
+) -> dict[str, object]:
+    """Render one execution-limit set as a plain, JSON-safe document."""
+    if not isinstance(limits, GuestAgentExecutionLimits):
+        raise ResearchError("Guest-agent execution limits document is invalid.")
+    return {"max_seconds": limits.max_seconds}
 
 
 def canonical_guest_agent_request_bytes(request: GuestAgentRequest) -> bytes:
@@ -68,10 +97,22 @@ def canonical_guest_agent_request_bytes(request: GuestAgentRequest) -> bytes:
 
 def guest_agent_request_from_document(document: object) -> GuestAgentRequest:
     """Parse one request from an already-decoded document; fail closed on
-    anything unknown, missing, or malformed."""
+    anything unknown, missing, or malformed.
+
+    Whether `execution_limits` is required, forbidden, or malformed for
+    the decoded `protocol_version` is never decided here -- the parsed
+    value (or `None`, when the key is absent) is always handed to
+    `GuestAgentRequest`'s own constructor, which is the one place that
+    rule is enforced.
+    """
     fields = _require_object_with_keys(
         document, _REQUEST_REQUIRED_KEYS, _REQUEST_ALLOWED_KEYS, "request"
     )
+    execution_limits = None
+    if "execution_limits" in fields:
+        execution_limits = guest_agent_execution_limits_from_document(
+            fields["execution_limits"]
+        )
     return GuestAgentRequest(
         protocol_version=_parse_protocol_version(
             fields["protocol_version"], "protocol version"
@@ -83,6 +124,28 @@ def guest_agent_request_from_document(document: object) -> GuestAgentRequest:
         ),
         operation_digest=_require_str(fields["operation_digest"], "operation digest"),
         logical_inputs=_parse_logical_inputs(fields.get("logical_inputs", [])),
+        execution_limits=execution_limits,
+    )
+
+
+def guest_agent_execution_limits_from_document(
+    document: object,
+) -> GuestAgentExecutionLimits:
+    """Parse one execution-limit set from an already-decoded document.
+
+    Fails closed on an unknown key, a missing `max_seconds`, or a
+    malformed `max_seconds` -- the full numeric validation (finite,
+    positive, not a bool) is `GuestAgentExecutionLimits.__post_init__`'s
+    own job, not duplicated here.
+    """
+    fields = _require_object_with_keys(
+        document,
+        _EXECUTION_LIMITS_REQUIRED_KEYS,
+        _EXECUTION_LIMITS_REQUIRED_KEYS,
+        "execution limits",
+    )
+    return GuestAgentExecutionLimits(
+        max_seconds=_parse_max_seconds(fields["max_seconds"])
     )
 
 
@@ -232,6 +295,12 @@ def _parse_response_status(value: object, label: str) -> GuestAgentResponseStatu
         raise ResearchError(
             f"Guest-agent protocol {label} is not recognized."
         ) from error
+
+
+def _parse_max_seconds(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ResearchError("Guest-agent execution limit time budget must be a number.")
+    return float(value)
 
 
 def _parse_logical_inputs(value: object) -> tuple[tuple[str, str], ...]:

@@ -59,10 +59,24 @@ security property from host authorization consumption and is never
 touched here: HOST AUTHORIZATION CONSUMED != GUEST REPLAY CONSUMED. A
 future real dispatch path will need both, in the correct order, but this
 milestone performs zero replay consumption.
+
+v0.3.466 note: `GuestAgentHostDispatchGrant` also privately binds
+`max_seconds` -- the exact `ResearchKaliOperationPreview.max_seconds`
+value whose authorization was just consumed, carried uncapped (the same
+`MAX_KALI_OPERATION_TIMEOUT_SECONDS` ceiling
+`cognition.KaliToolGateway.run` already applies is applied later, by
+whatever future layer actually prepares an invocation, never here).
+`materialize_request` now always produces a `GuestAgentProtocolVersion.V2`
+request carrying this exact limit as a signed
+`research.GuestAgentProtocol.GuestAgentExecutionLimits` -- SIGNED
+EXECUTION LIMIT != EXECUTION AUTHORITY; this module still does not claim
+the guest may execute anything, only that it now also knows the one
+execution-relevant fact a future bounded execution gate would need.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -75,6 +89,7 @@ from research.GuestAgentCore import (
     FIELD_RESOLVED_ADDRESS,
 )
 from research.GuestAgentProtocol import (
+    GuestAgentExecutionLimits,
     GuestAgentProtocolVersion,
     GuestAgentRequest,
 )
@@ -166,9 +181,14 @@ class GuestAgentHostDispatchGrant:
     consumed the exact matching authorization. A caller cannot forge one
     merely by copying strings into this dataclass.
 
-    `operation_kind`, `operation_digest`, and `logical_inputs` are the
-    exact facts of the preview whose authorization was just consumed --
-    never independently caller-suppliable. One-shot:
+    `operation_kind`, `operation_digest`, `logical_inputs`, and
+    `max_seconds` are the exact facts of the preview whose authorization
+    was just consumed -- never independently caller-suppliable.
+    `max_seconds` is carried exactly as
+    `ResearchKaliOperationPreview.max_seconds` held it, uncapped by
+    `MAX_KALI_OPERATION_TIMEOUT_SECONDS` (that cap is applied later, at
+    the same point production code already applies it -- see
+    `research.GuestAgentInvocationPreparation`). One-shot:
     `materialize_request` yields at most one real `GuestAgentRequest`;
     a second call fails closed, under the same lock that guards the
     first, so two concurrent callers can never both succeed.
@@ -177,6 +197,7 @@ class GuestAgentHostDispatchGrant:
     operation_kind: ResearchKaliOperationKind
     operation_digest: str
     logical_inputs: tuple[tuple[str, str], ...]
+    max_seconds: float
     _capability_token: object = field(repr=False, compare=False)
     _already_materialized: bool = field(default=False, repr=False, compare=False)
     _lock: RLock = field(default_factory=RLock, repr=False, compare=False)
@@ -206,6 +227,21 @@ class GuestAgentHostDispatchGrant:
             raise ResearchError(
                 "Guest-agent host dispatch grant logical inputs are invalid."
             )
+        if (
+            isinstance(self.max_seconds, bool)
+            or not isinstance(self.max_seconds, int | float)
+            or not math.isfinite(self.max_seconds)
+            or self.max_seconds <= 0
+        ):
+            # Stricter than `ResearchKaliOperationPreview.__post_init__`'s
+            # own `<= 0`-only check (which does not reject NaN): a NaN
+            # `preview.max_seconds` would silently pass that existing
+            # check, so this grant -- about to produce a cryptographically
+            # signed execution-relevant fact -- independently closes that
+            # gap here rather than trusting the preview's own weaker bound.
+            raise ResearchError(
+                "Guest-agent host dispatch grant execution time budget is " "invalid."
+            )
 
     @property
     def already_materialized(self) -> bool:
@@ -219,8 +255,14 @@ class GuestAgentHostDispatchGrant:
         boundary (REQUEST ID != AUTHORIZATION, NONCE != AUTHORIZATION --
         they are transport/replay identity, not authorization facts) and
         validated only by `GuestAgentRequest`'s own existing bounds. Every
-        other field is copied from this grant's own already-validated
-        facts -- never independently suppliable here. Raises
+        other field, including the execution limit, is copied from this
+        grant's own already-validated facts -- never independently
+        suppliable here, and never a caller-chosen default. The produced
+        request is always `GuestAgentProtocolVersion.V2` -- this is now
+        the one normal high-level Guest-Agent signing path, and every
+        grant this module can construct already carries a real,
+        preview-derived `max_seconds`, so there is no honest V1 request
+        this function could produce instead. Raises
         `core.Exceptions.ResearchError` if this grant already materialized
         a request, or if `GuestAgentRequest`'s own validation rejects
         `request_id`/`nonce` (in which case this grant remains unconsumed
@@ -234,12 +276,15 @@ class GuestAgentHostDispatchGrant:
                     "Guest-agent host dispatch grant has already been used."
                 )
             request = GuestAgentRequest(
-                protocol_version=GuestAgentProtocolVersion.V1,
+                protocol_version=GuestAgentProtocolVersion.V2,
                 request_id=request_id,
                 nonce=nonce,
                 operation_kind=self.operation_kind,
                 operation_digest=self.operation_digest,
                 logical_inputs=self.logical_inputs,
+                execution_limits=GuestAgentExecutionLimits(
+                    max_seconds=self.max_seconds
+                ),
             )
             object.__setattr__(self, "_already_materialized", True)
         return request
@@ -316,6 +361,7 @@ def consume_authorization_for_guest_agent_dispatch(
         operation_kind=preview.operation_kind,
         operation_digest=preview.operation_digest,
         logical_inputs=logical_inputs,
+        max_seconds=preview.max_seconds,
         _capability_token=_DISPATCH_GRANT_CAPABILITY,
     )
 

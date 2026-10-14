@@ -991,7 +991,7 @@ Recorded priority order:
    real guest process, a real (non-loopback) deployment, and any
    capability dispatch remain separate, unstarted work still inside this
    step.
-5. **(first bounded foundation delivered, v0.3.462-v0.3.465 -- not all of
+5. **(first bounded foundation delivered, v0.3.462-v0.3.466 -- not all of
    step 5)** The guest-side agent itself: a process that receives one
    authenticated, already-authorized request and dispatches it to the one
    allowlisted Kali implementation it names — never an arbitrary command.
@@ -1028,7 +1028,27 @@ Recorded priority order:
    exists; this new composed transport has zero production callers of
    its own (not wired into `Bootstrap`, `CognitiveEngine`, chat, or the
    desktop), so no RPC request carrying a signed envelope is sent in
-   production today; no production signing key is provisioned.
+   production today; no production signing key is provisioned. v0.3.466
+   closed the next named gap: the request this chain carries never told
+   the guest the one execution-relevant fact a future executor would need
+   to honor -- the host-approved process-time ceiling
+   (`cognition.KaliToolGateway.run`'s
+   `timeout_seconds=min(preview.max_seconds,
+   MAX_KALI_OPERATION_TIMEOUT_SECONDS)`). A new, version-coupled
+   `GuestAgentProtocolVersion.V2` request now carries a signed
+   `GuestAgentExecutionLimits` (just `max_seconds`, the one field audited
+   as actually execution-relevant), cryptographically bound into the same
+   existing signed dispatch proof with zero changes to the proof/
+   verification modules themselves. After replay is `ACCEPTED` for a V2
+   request, a new, unforgeable `GuestAgentPreparedInvocation` is
+   constructed -- a code-reconstructed command plan (never wire-carried)
+   plus a doubly-capped timeout -- then immediately discarded by its one
+   caller. PREPARED INVOCATION != PROCESS CREATED, != RUNTIME READY, !=
+   EXECUTION SUCCESS: no process is spawned, no runtime-readiness probe
+   runs, and the wire response remains exactly `DECLINED`/
+   `REPLAY_REJECTED` as before. V1 requests remain fully valid and
+   byte-for-byte unchanged on the wire; they simply cannot become
+   execution-bound.
 6. Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
@@ -1290,14 +1310,49 @@ directly rather than duplicating it. This new composed transport still
 has zero production callers of its own -- not wired into `Bootstrap`,
 `CognitiveEngine`, chat, or the desktop -- so no RPC request carrying a
 signed envelope is sent in production today; no production signing key
-is provisioned. The remaining work inside step 3
+is provisioned.
+v0.3.465 explicitly did not give the guest the one execution-relevant
+fact a future executor would need: the host-approved process-time
+ceiling. **v0.3.466 closed exactly that gap**
+(`research.GuestAgentProtocol.GuestAgentExecutionLimits`/
+`GuestAgentProtocolVersion.V2`; new module
+`research.GuestAgentInvocationPreparation`): a version-coupled V2
+request now carries a signed `max_seconds` -- audited directly against
+`cognition.KaliToolGateway.run`'s own
+`timeout_seconds=min(preview.max_seconds,
+MAX_KALI_OPERATION_TIMEOUT_SECONDS)` call, confirmed the one preview
+field actually passed to a process adapter (every other preview field
+remains host-side-only) -- cryptographically bound into the SAME
+existing signed dispatch proof with zero changes to
+`GuestAgentDispatchProof.py`/`GuestAgentDispatchVerification.py`,
+because `request_sha256` already hashes the canonical document the new
+field was added to. `GuestAgentHostDispatchGrant` privately binds this
+limit from the exact consumed preview (no caller override is possible);
+`materialize_request` now always produces V2, so the one normal
+high-level signing path is execution-bound by default, while V1 remains
+fully valid and byte-for-byte unchanged on the wire for anything that
+still constructs it directly. After replay is `ACCEPTED` for a V2
+request -- strictly after, proven by a dedicated call-order test added
+once mutation testing showed a naive return-value check could not catch
+a reordering regression -- a new, capability-token-gated, unforgeable
+`GuestAgentPreparedInvocation` is constructed: a command plan
+reconstructed from CODE (`kali_operation_command_plan(...,
+transport=GUEST_AGENT)`, never wire-carried argv/executable/shell) and
+a timeout double-capped at `MAX_KALI_OPERATION_TIMEOUT_SECONDS`. PREPARED
+INVOCATION != PROCESS CREATED, != RUNTIME READY, != EXECUTION SUCCESS,
+!= TRUSTED OUTPUT, != EVIDENCE: the RPC server immediately discards it
+-- never stores, logs, or forwards it -- and the wire response remains
+exactly `DECLINED`/`REPLAY_REJECTED`, `SUCCESS` still unreachable. No
+process is spawned, no runtime-readiness probe runs anywhere in this
+milestone. The remaining work inside step 3
 (real production certificate provisioning/distribution strategy for an
 actual deployment, the real non-loopback VMware Host-Only network path),
 the remainder of step 4 (wiring to a real guest process), the remainder
 of step 5 (a real guest process/daemon, production signing-key custody,
-and wiring this composed transport to an actual production entry point),
-and steps 6-7 remain separate, unstarted, future milestones, each
-requiring its own authorization.
+and an actual runtime-readiness/executor gate that would consume a
+`GuestAgentPreparedInvocation` instead of discarding it), and steps 6-7
+remain separate, unstarted, future milestones, each requiring its own
+authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,

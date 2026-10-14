@@ -26,6 +26,7 @@ if str(SRC_DIR) not in sys.path:
 from core.Exceptions import ResearchError  # noqa: E402
 from research.GuestAgentCore import admit_guest_agent_request  # noqa: E402
 from research.GuestAgentHostAuthorizationHandoff import (  # noqa: E402
+    _DISPATCH_GRANT_CAPABILITY,
     GuestAgentHostAuthorizationHandoffError,
     GuestAgentHostAuthorizationHandoffStage,
     GuestAgentHostDispatchGrant,
@@ -447,8 +448,56 @@ class GrantForgeryResistanceTests(unittest.TestCase):
                 operation_kind=ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
                 operation_digest="a" * 64,
                 logical_inputs=(("hostname", "example.com"), ("dns_record_type", "A")),
+                max_seconds=5.0,
                 _capability_token=object(),  # type: ignore[call-arg]
             )
+
+
+class GrantMaxSecondsValidationTests(unittest.TestCase):
+    """The grant's own `max_seconds` validation (stricter than
+    `ResearchKaliOperationPreview.__post_init__`'s `<= 0`-only check,
+    which does not reject NaN) fires even with a REAL capability token --
+    not merely bypassed by the token-forgery guard above."""
+
+    def _construct(self, max_seconds: object) -> None:
+        GuestAgentHostDispatchGrant(
+            operation_kind=ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
+            operation_digest="a" * 64,
+            logical_inputs=(("hostname", "example.com"), ("dns_record_type", "A")),
+            max_seconds=max_seconds,  # type: ignore[arg-type]
+            _capability_token=_DISPATCH_GRANT_CAPABILITY,
+        )
+
+    def test_valid_max_seconds_with_real_token_constructs_cleanly(self) -> None:
+        self._construct(5.0)  # must not raise
+
+    def test_bool_rejected(self) -> None:
+        with self.assertRaises(ResearchError):
+            self._construct(True)
+
+    def test_non_numeric_rejected(self) -> None:
+        with self.assertRaises(ResearchError):
+            self._construct("5")
+
+    def test_zero_rejected(self) -> None:
+        with self.assertRaises(ResearchError):
+            self._construct(0)
+
+    def test_negative_rejected(self) -> None:
+        with self.assertRaises(ResearchError):
+            self._construct(-1.0)
+
+    def test_nan_rejected(self) -> None:
+        with self.assertRaises(ResearchError):
+            self._construct(float("nan"))
+
+    def test_positive_infinity_rejected(self) -> None:
+        with self.assertRaises(ResearchError):
+            self._construct(float("inf"))
+
+    def test_negative_infinity_rejected(self) -> None:
+        with self.assertRaises(ResearchError):
+            self._construct(float("-inf"))
 
 
 class PreviewBindingProjectionTests(unittest.TestCase):
@@ -566,7 +615,11 @@ class RequestIdNonceTests(unittest.TestCase):
 class RequestConstructionTests(unittest.TestCase):
     """Requirements 28-32: the constructed request's shape."""
 
-    def test_protocol_version_is_v1(self) -> None:
+    def test_protocol_version_is_v2(self) -> None:
+        # v0.3.466: materialize_request now always produces the
+        # execution-bound V2 generation -- every grant this module can
+        # construct already carries a real, preview-derived max_seconds,
+        # so there is no honest V1 request this function could produce.
         preview = _preview()
         authorization = _authorize(preview)
         store = FakeAuthorizationStore([authorization])
@@ -574,7 +627,18 @@ class RequestConstructionTests(unittest.TestCase):
             store, authorization.authorization_id, preview, now=NOW
         )
         request = grant.materialize_request(request_id="r1", nonce="n1")
-        self.assertIs(request.protocol_version, GuestAgentProtocolVersion.V1)
+        self.assertIs(request.protocol_version, GuestAgentProtocolVersion.V2)
+
+    def test_request_carries_signed_execution_limits_from_preview(self) -> None:
+        preview = _preview()
+        authorization = _authorize(preview)
+        store = FakeAuthorizationStore([authorization])
+        grant = consume_authorization_for_guest_agent_dispatch(
+            store, authorization.authorization_id, preview, now=NOW
+        )
+        request = grant.materialize_request(request_id="r1", nonce="n1")
+        self.assertIsNotNone(request.execution_limits)
+        self.assertEqual(request.execution_limits.max_seconds, preview.max_seconds)
 
     def test_request_uses_exact_consumed_preview_digest(self) -> None:
         preview = _preview()

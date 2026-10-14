@@ -41,6 +41,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: E402
     Ed25519PrivateKey,
 )
 
+import research.GuestAgentInvocationPreparation as preparation_module  # noqa: E402
 import research.GuestAgentSignedDispatchRpcTransport as transport_module  # noqa: E402
 from core.Exceptions import ResearchError  # noqa: E402
 from research.GuestAgentDispatchProof import (  # noqa: E402
@@ -62,6 +63,7 @@ from research.GuestAgentMtlsContext import (  # noqa: E402
     build_host_client_tls_context,
 )
 from research.GuestAgentProtocol import (
+    GuestAgentProtocolVersion,
     GuestAgentResponse,
     GuestAgentResponseStatus,
 )  # noqa: E402
@@ -91,6 +93,7 @@ from tests.research.test_guest_agent_loopback_mtls_handshake import (  # noqa: E
 
 THIS_FILE = Path(__file__).resolve()
 TRANSPORT_MODULE_FILE = SRC_DIR / "research" / "GuestAgentSignedDispatchRpcTransport.py"
+PREPARATION_MODULE_FILE = SRC_DIR / "research" / "GuestAgentInvocationPreparation.py"
 
 _authorization_ids = count(1)
 
@@ -149,7 +152,16 @@ def _run_server(server: GuestAgentSignedDispatchRpcServer):
 
 class RealRoundTripTests(_LoopbackMtlsFixture):
     """A first-seen, valid, admitted signed dispatch is DECLINED on the
-    wire; the identical dispatch replayed later is REPLAY_REJECTED."""
+    wire; the identical dispatch replayed later is REPLAY_REJECTED.
+
+    v0.3.466 note: `_real_envelope` now always carries a V2
+    (execution-bound) request -- `GuestAgentHostDispatchGrant
+    .materialize_request` always produces V2 since this milestone (see
+    its own docstring) -- so every test in this class already exercises
+    the V2 path end-to-end, including silent prepared-invocation
+    construction/discard, with no change to the wire-observable
+    behavior v0.3.465 already established.
+    """
 
     def test_first_seen_valid_dispatch_is_declined(self) -> None:
         host_config = self.host_config()
@@ -157,6 +169,8 @@ class RealRoundTripTests(_LoopbackMtlsFixture):
         signing_key = Ed25519PrivateKey.generate()
         replay_protector = GuestAgentReplayProtector(_FakeReplayStore())
         envelope = _real_envelope(signing_key)
+        self.assertIs(envelope.request.protocol_version, GuestAgentProtocolVersion.V2)
+        self.assertIsNotNone(envelope.request.execution_limits)
 
         server = GuestAgentSignedDispatchRpcServer(
             build_guest_server_tls_context(guest_config),
@@ -282,6 +296,142 @@ class RealRoundTripTests(_LoopbackMtlsFixture):
             self.assertEqual(version, "TLSv1.3")
 
 
+def _sign_arbitrary_request_for_test(
+    request,
+    *,
+    signing_key: Ed25519PrivateKey,
+    now: datetime,
+) -> GuestAgentSignedDispatchEnvelope:
+    """Test-only: sign ANY request, bypassing the one real production entry
+    point (`create_signed_dispatch_envelope`, which accepts only an
+    already-consumed `GuestAgentHostDispatchGrant` and therefore -- since
+    v0.3.466 -- can only ever produce V2). `materialize_request` always
+    produces V2 now, so this is the only way to exercise "V1 RPC BEHAVIOR"
+    end-to-end over a real signed envelope; it performs the identical
+    signing steps `create_signed_dispatch_envelope` performs internally,
+    just without requiring a grant."""
+    import hashlib
+    from datetime import timedelta
+
+    from research.GuestAgentDispatchProof import (
+        DISPATCH_PROOF_GUEST_AUDIENCE_IDENTITY,
+        DISPATCH_PROOF_HOST_ISSUER_IDENTITY,
+        MAX_DISPATCH_PROOF_VALIDITY_SECONDS,
+        GuestAgentDispatchAuthorizationProof,
+        GuestAgentDispatchProofMetadata,
+        GuestAgentDispatchProofVersion,
+        canonical_guest_agent_dispatch_proof_metadata_bytes,
+    )
+    from research.GuestAgentProtocolSerialization import (
+        canonical_guest_agent_request_bytes,
+    )
+
+    metadata = GuestAgentDispatchProofMetadata(
+        proof_version=GuestAgentDispatchProofVersion.V1,
+        request_sha256=hashlib.sha256(
+            canonical_guest_agent_request_bytes(request)
+        ).hexdigest(),
+        issuer_identity=DISPATCH_PROOF_HOST_ISSUER_IDENTITY,
+        audience_identity=DISPATCH_PROOF_GUEST_AUDIENCE_IDENTITY,
+        issued_at=now,
+        expires_at=now + timedelta(seconds=MAX_DISPATCH_PROOF_VALIDITY_SECONDS),
+    )
+    signature = signing_key.sign(
+        canonical_guest_agent_dispatch_proof_metadata_bytes(metadata)
+    )
+    proof = GuestAgentDispatchAuthorizationProof(
+        metadata=metadata, signature_hex=signature.hex()
+    )
+    return GuestAgentSignedDispatchEnvelope(request=request, proof=proof)
+
+
+class V1OverRealWireTests(_LoopbackMtlsFixture):
+    """V1 RPC BEHAVIOR: a manually-signed V1 request still verifies, is
+    still admitted/DECLINED, and replay behavior remains compatible --
+    but it never carries a prepared invocation (not observable on the
+    wire; proven directly against `prepare_guest_agent_invocation` in
+    tests.research.test_guest_agent_invocation_preparation)."""
+
+    def _v1_request(self):
+        from research.GuestAgentProtocol import (
+            GuestAgentProtocolVersion,
+            GuestAgentRequest,
+        )
+        from research.ResearchKaliOperationPreview import ResearchKaliOperationKind
+
+        return GuestAgentRequest(
+            protocol_version=GuestAgentProtocolVersion.V1,
+            request_id="v1-r1",
+            nonce="v1-n1",
+            operation_kind=ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
+            operation_digest="a" * 64,
+            logical_inputs=(("hostname", "example.com"), ("dns_record_type", "A")),
+        )
+
+    def test_v1_first_seen_dispatch_is_declined(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _sign_arbitrary_request_for_test(
+            self._v1_request(), signing_key=signing_key, now=NOW
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+        )
+        port = server.bind()
+        thread, outcome = _run_server(server)
+        client = GuestAgentSignedDispatchRpcClient(
+            build_host_client_tls_context(host_config), host_config, port
+        )
+        response = client.send_signed_dispatch(envelope)
+        thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+
+    def test_v1_replayed_dispatch_is_replay_rejected(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _sign_arbitrary_request_for_test(
+            self._v1_request(), signing_key=signing_key, now=NOW
+        )
+        store = _FakeReplayStore()
+
+        def _make_server() -> GuestAgentSignedDispatchRpcServer:
+            return GuestAgentSignedDispatchRpcServer(
+                build_guest_server_tls_context(guest_config),
+                guest_config,
+                verification_key=signing_key.public_key(),
+                replay_protector=GuestAgentReplayProtector(store),
+                clock=lambda: NOW,
+            )
+
+        first_server = _make_server()
+        first_port = first_server.bind()
+        thread1, outcome1 = _run_server(first_server)
+        client1 = GuestAgentSignedDispatchRpcClient(
+            build_host_client_tls_context(host_config), host_config, first_port
+        )
+        client1.send_signed_dispatch(envelope)
+        thread1.join(timeout=5.0)
+        self.assertNotIn("error", outcome1, msg=outcome1.get("error"))
+
+        second_server = _make_server()
+        second_port = second_server.bind()
+        thread2, outcome2 = _run_server(second_server)
+        client2 = GuestAgentSignedDispatchRpcClient(
+            build_host_client_tls_context(host_config), host_config, second_port
+        )
+        response2 = client2.send_signed_dispatch(envelope)
+        thread2.join(timeout=5.0)
+        self.assertNotIn("error", outcome2, msg=outcome2.get("error"))
+        self.assertEqual(response2.status, GuestAgentResponseStatus.REPLAY_REJECTED)
+
+
 class OrderingTests(_LoopbackMtlsFixture):
     """Replay consumption must never occur before signature verification;
     admission must never be skipped by going straight to replay."""
@@ -315,7 +465,7 @@ class OrderingTests(_LoopbackMtlsFixture):
                 side_effect=GuestAgentDispatchVerificationError(failure),
             ) as mock_verify,
             mock.patch.object(
-                transport_module, "admit_guest_agent_request"
+                preparation_module, "admit_guest_agent_request"
             ) as mock_admit,
         ):
             thread, outcome = _run_server(server)
@@ -361,7 +511,7 @@ class OrderingTests(_LoopbackMtlsFixture):
         port = server.bind()
 
         with mock.patch.object(
-            transport_module, "admit_guest_agent_request", return_value=fake_response
+            preparation_module, "admit_guest_agent_request", return_value=fake_response
         ) as mock_admit:
             thread, outcome = _run_server(server)
             client = GuestAgentSignedDispatchRpcClient(
@@ -401,7 +551,7 @@ class OrderingTests(_LoopbackMtlsFixture):
         port = server.bind()
 
         with mock.patch.object(
-            transport_module, "admit_guest_agent_request", return_value=fake_response
+            preparation_module, "admit_guest_agent_request", return_value=fake_response
         ):
             thread, outcome = _run_server(server)
             client = GuestAgentSignedDispatchRpcClient(
@@ -504,6 +654,32 @@ class AdversarialVerificationTests(_LoopbackMtlsFixture):
         signing_key = Ed25519PrivateKey.generate()
         envelope = _real_envelope(signing_key)
         tampered_request = dataclasses.replace(envelope.request, nonce="tampered-nonce")
+        tampered_envelope = dataclasses.replace(envelope, request=tampered_request)
+        self._assert_aborted_without_replay(
+            envelope=tampered_envelope,
+            verification_key=signing_key.public_key(),
+            store=_FakeReplayStore(),
+            clock=lambda: NOW,
+            host_config=host_config,
+            guest_config=guest_config,
+        )
+
+    def test_tampered_max_seconds_aborts(self) -> None:
+        import dataclasses
+
+        from research.GuestAgentProtocol import GuestAgentExecutionLimits
+
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key)
+        self.assertIsNotNone(envelope.request.execution_limits)
+        tampered_request = dataclasses.replace(
+            envelope.request,
+            execution_limits=GuestAgentExecutionLimits(
+                max_seconds=envelope.request.execution_limits.max_seconds + 1.0
+            ),
+        )
         tampered_envelope = dataclasses.replace(envelope, request=tampered_request)
         self._assert_aborted_without_replay(
             envelope=tampered_envelope,
@@ -820,6 +996,7 @@ class FrameSizeTests(unittest.TestCase):
             MAX_LOGICAL_INPUT_VALUE_LENGTH,
             MAX_NONCE_LENGTH,
             MAX_REQUEST_ID_LENGTH,
+            GuestAgentExecutionLimits,
             GuestAgentProtocolVersion,
             GuestAgentRequest,
         )
@@ -835,13 +1012,16 @@ class FrameSizeTests(unittest.TestCase):
             )
             for i in range(MAX_LOGICAL_INPUT_FIELDS)
         )
+        # V2 (execution-bound) is now the worst case: it carries every V1
+        # field plus `execution_limits`.
         request = GuestAgentRequest(
-            protocol_version=GuestAgentProtocolVersion.V1,
+            protocol_version=GuestAgentProtocolVersion.V2,
             request_id=request_id,
             nonce=nonce,
             operation_kind=ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
             operation_digest="a" * 64,
             logical_inputs=logical_inputs,
+            execution_limits=GuestAgentExecutionLimits(max_seconds=30.0),
         )
         now = datetime.now(_UTC)
         metadata = GuestAgentDispatchProofMetadata(
@@ -870,6 +1050,10 @@ class StructuralSecurityTests(unittest.TestCase):
         self.tree = ast.parse(
             TRANSPORT_MODULE_FILE.read_text(encoding="utf-8"),
             filename=str(TRANSPORT_MODULE_FILE),
+        )
+        self.preparation_tree = ast.parse(
+            PREPARATION_MODULE_FILE.read_text(encoding="utf-8"),
+            filename=str(PREPARATION_MODULE_FILE),
         )
 
     @staticmethod
@@ -946,33 +1130,76 @@ class StructuralSecurityTests(unittest.TestCase):
         for inner in ast.walk(serve_def):  # type: ignore[arg-type]
             self.assertNotIsInstance(inner, (ast.For, ast.While))
 
-    def test_verify_then_admit_then_replay_consume_in_source_order(self) -> None:
-        def _first_call_lineno(name_fragment: str) -> int:
-            matches = []
-            for node in ast.walk(self.tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                func = node.func
-                if isinstance(func, ast.Name) and func.id == name_fragment:
-                    matches.append(node.lineno)
-                elif isinstance(func, ast.Attribute) and func.attr == name_fragment:
-                    matches.append(node.lineno)
-            self.assertTrue(matches, f"no call to {name_fragment!r} found")
-            return min(matches)
+    @staticmethod
+    def _first_call_lineno(tree: ast.AST, name_fragment: str) -> int:
+        matches = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Name) and func.id == name_fragment:
+                matches.append(node.lineno)
+            elif isinstance(func, ast.Attribute) and func.attr == name_fragment:
+                matches.append(node.lineno)
+        return min(matches) if matches else -1
 
-        verify_line = _first_call_lineno("verify_signed_dispatch_envelope")
-        admit_line = _first_call_lineno("admit_guest_agent_request")
-        consume_line = _first_call_lineno("consume_once")
-        self.assertLess(verify_line, admit_line)
+    def test_verify_then_prepare_invocation_in_source_order(self) -> None:
+        """`serve_one_signed_dispatch` calls `verify_signed_dispatch_envelope`
+        before it calls `prepare_guest_agent_invocation` -- the shared
+        function that itself composes admit -> replay-consume (proven
+        separately below, within that function's own module)."""
+        verify_line = self._first_call_lineno(
+            self.tree, "verify_signed_dispatch_envelope"
+        )
+        prepare_line = self._first_call_lineno(
+            self.tree, "prepare_guest_agent_invocation"
+        )
+        self.assertGreater(verify_line, 0, "no call to verify_signed_dispatch_envelope")
+        self.assertGreater(prepare_line, 0, "no call to prepare_guest_agent_invocation")
+        self.assertLess(verify_line, prepare_line)
+
+    def test_admit_then_replay_consume_in_source_order_within_preparation(
+        self,
+    ) -> None:
+        """Within `research.GuestAgentInvocationPreparation` itself,
+        `admit_guest_agent_request` precedes the sole `consume_once` call
+        site -- the composition this milestone reuses rather than
+        duplicating inline in the transport module."""
+        admit_line = self._first_call_lineno(
+            self.preparation_tree, "admit_guest_agent_request"
+        )
+        consume_line = self._first_call_lineno(self.preparation_tree, "consume_once")
+        self.assertGreater(admit_line, 0, "no call to admit_guest_agent_request")
+        self.assertGreater(consume_line, 0, "no call to consume_once")
         self.assertLess(admit_line, consume_line)
 
     def test_exactly_one_consume_once_call_site(self) -> None:
         calls = [
             node
-            for node in ast.walk(self.tree)
+            for node in ast.walk(self.preparation_tree)
             if isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "consume_once"
+        ]
+        self.assertEqual(len(calls), 1)
+
+    def test_exactly_one_prepare_guest_agent_invocation_call_site_in_transport(
+        self,
+    ) -> None:
+        calls = [
+            node
+            for node in ast.walk(self.tree)
+            if isinstance(node, ast.Call)
+            and (
+                (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "prepare_guest_agent_invocation"
+                )
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "prepare_guest_agent_invocation"
+                )
+            )
         ]
         self.assertEqual(len(calls), 1)
 

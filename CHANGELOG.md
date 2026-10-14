@@ -2,6 +2,110 @@
 
 All notable project changes are recorded here.
 
+## [0.3.466] - 2026-10-14
+
+### Added
+
+- Guest-Agent execution-bound request V2 and post-replay prepared-
+  invocation foundation. Audited the host's real execution path
+  (`cognition.KaliToolGateway.run`, which passes
+  `timeout_seconds=min(preview.max_seconds,
+  MAX_KALI_OPERATION_TIMEOUT_SECONDS)` to the process adapter) and every
+  other `ResearchKaliOperationPreview` field: `max_seconds` is the one
+  genuinely execution-relevant fact the previous `GuestAgentRequest`
+  (now `GuestAgentProtocolVersion.V1`) never carried -- `permitted_ports`,
+  `max_request_count`, `max_requests_per_minute`, `program_id`, and the
+  scope/policy digests are all consumed only by host-side preview
+  construction or the operation digest itself, never passed to a process
+  adapter, so this milestone carries only `max_seconds`, not the whole
+  preview.
+- New `GuestAgentProtocolVersion.V2` and `research.GuestAgentProtocol
+  .GuestAgentExecutionLimits` (one field, `max_seconds: float`; rejects
+  bool/non-number/NaN/+-infinity/<=0; normalizes `int` to `float` so
+  canonical bytes stay deterministic; carries the exact host-approved
+  value uncapped -- the existing `MAX_KALI_OPERATION_TIMEOUT_SECONDS`
+  ceiling is applied later, at the same point production code already
+  applies it, never at this type). `GuestAgentRequest.execution_limits`
+  is version-coupled, enforced structurally by its own constructor: a
+  `V1` request must carry `None`; a `V2` request must carry a real
+  `GuestAgentExecutionLimits`. V1 REQUEST != EXECUTION-BOUND REQUEST.
+- `research.GuestAgentProtocolSerialization` gained wire codec support:
+  `execution_limits` is an optional key present only for V2 (so V1's
+  canonical bytes remain byte-for-byte identical to before this
+  milestone), closed-field (unknown keys rejected, missing/malformed
+  `max_seconds` fails closed), with the version-coupling rule enforced
+  once by `GuestAgentRequest`'s own constructor rather than duplicated.
+  Because this field is included in the same canonical document
+  `GuestAgentDispatchProof`'s existing, unmodified `request_sha256`
+  already hashes, the execution limit is cryptographically bound into
+  the existing signed dispatch proof with zero changes to
+  `GuestAgentDispatchProof.py`/`GuestAgentDispatchSigning.py`/
+  `GuestAgentDispatchVerification.py` -- tampering `max_seconds` after
+  signing breaks Ed25519 verification exactly like tampering any other
+  request field.
+- `research.GuestAgentHostAuthorizationHandoff.GuestAgentHostDispatchGrant`
+  now also privately binds `max_seconds`, bound only from the exact
+  `ResearchKaliOperationPreview` whose authorization was consumed (no
+  caller override is possible -- `materialize_request` takes no
+  `max_seconds` parameter), with its own stricter NaN/infinity-rejecting
+  validation. `materialize_request` now always produces a `V2` request
+  carrying this exact limit -- the one normal high-level Guest-Agent
+  signing path is now execution-bound by default.
+- New module `research.GuestAgentInvocationPreparation`:
+  `GuestAgentPreparedInvocation` (capability-token-gated, unforgeable;
+  contains only a code-reconstructed command plan and a bounded
+  timeout) and `prepare_guest_agent_invocation`, composing (unmodified)
+  `admit_guest_agent_request` -> (unmodified)
+  `GuestAgentReplayProtector.consume_once` -> for a `V2` request only,
+  strictly after replay `ACCEPTED`, reconstruction of the reviewed
+  command plan from CODE (the existing, unmodified
+  `kali_operation_command_plan(..., transport=GUEST_AGENT)`, never
+  wire-carried argv/executable/shell) and
+  `timeout_seconds = min(signed_max_seconds,
+  MAX_KALI_OPERATION_TIMEOUT_SECONDS)` -- the identical semantics the
+  real host gateway already applies, never widened. PREPARED INVOCATION
+  != PROCESS CREATED, != RUNTIME READY, != EXECUTION SUCCESS, != TRUSTED
+  OUTPUT, != EVIDENCE. `research.GuestAgentSignedDispatchRpcTransport
+  .GuestAgentSignedDispatchRpcServer` now calls this shared function
+  instead of inlining admit+replay logic; the prepared invocation (when
+  one is produced) is immediately discarded -- never stored, logged, or
+  forwarded -- and the wire response is unchanged from v0.3.465
+  (`DECLINED` for a first-seen admitted dispatch, `REPLAY_REJECTED` for
+  a replay, `SUCCESS` still unreachable).
+- 86 new focused tests prove: V1 is completely unaffected (identical
+  canonical bytes, identical decode behavior, cannot carry execution
+  limits, cannot create a prepared invocation); V2 requires execution
+  limits and fails closed on every malformed/missing/unknown-field wire
+  shape; every numeric edge case for `max_seconds` (bool, NaN, +-infinity,
+  zero, negative, very small, very large, int-to-float normalization, no
+  rounding up); a changed `max_seconds` changes the canonical bytes, the
+  request SHA-256, and breaks Ed25519 verification; the grant's own
+  `max_seconds` validation fires even with a real capability token; the
+  prepared invocation is unforgeable and its timeout is double-capped
+  (both the `min()` computation and the type's own defensive ceiling
+  check); the exact DNS (`dig`) and HTTPS (`curl`) command plans match
+  the existing reviewed builder bit-for-bit; admission runs before
+  replay consumption, which runs strictly before prepared-invocation
+  construction -- proven not only by return-value assertions but by a
+  call-order-tracking test, after mutation testing during implementation
+  found that a naive return-value check alone could not catch a
+  regression that built (and silently discarded) a prepared invocation
+  before replay acceptance.
+- Independent QA and independent security review both returned PASS;
+  QA found and closed one real test-coverage gap (the grant's own
+  `max_seconds` validation lacked direct test coverage with a real
+  capability token) and one stale docstring, both fixed before release.
+  Full local gates: 9099 tests OK, Black/Ruff/MyPy clean, `git diff
+  --check` clean. `GuestAgentCore`, `GuestAgentReplayProtector`,
+  `GuestAgentDispatchProof`, `GuestAgentDispatchVerification`,
+  `GuestAgentAuthenticatedSignedDispatchChannel`, and
+  `GuestAgentRpcTransport` are all byte-for-byte unmodified. No
+  subprocess, no real Kali execution, no production credential or
+  signing-key provisioning, zero non-loopback network activity. This
+  milestone does not deliver a real capability executor, a real Kali
+  Guest Agent process, or runtime readiness -- `admit_guest_agent_request`
+  still never returns `SUCCESS`, by design.
+
 ## [0.3.465] - 2026-10-13
 
 ### Added
