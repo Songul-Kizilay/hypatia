@@ -2,10 +2,52 @@
 
 ## Runtime Version
 
-`v0.3.468 (Genesis)`
+`v0.3.469 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.469 delivers the first bounded real Guest-Agent
+`DNS_RECORD_LOOKUP` executor adapter, gated by the exact
+execution-admission boundary (v0.3.468) and not yet wired into RPC.
+Introduces exactly ONE real target-operation process capability:
+`/usr/bin/dig +time=5 +tries=1 +short <hostname> <A|AAAA|CNAME>`. New
+module `research.GuestAgentDnsExecutionAdapter`:
+`execute_guest_agent_dns_record_lookup(execution_admission)` accepts
+ONLY a real, unforgeable `GuestAgentExecutionAdmission` -- never a
+request, a verified dispatch alone, a prepared invocation alone, a
+runtime-ready invocation alone, or a hostname/record-type/executable/
+argv/timeout/callback/shell string as a separate parameter; the
+executable, argv, and timeout are read exclusively from the admission's
+own already-exact-bound, already-capped facts. Deliberately not built by
+copying `WslKaliOperationProcessAdapter`/`VmwareKaliOperationProcessAdapter`
+(whose `.run(command_plan, *, timeout_seconds)` interface itself accepts
+separate caller-supplied parameters -- the shape this milestone
+forbids). DNS only: `HTTPS_HEADER_LOOKUP` and any future operation kind
+fail closed before `subprocess.run`; `_validate_reviewed_dns_command_plan`
+independently re-proves operation kind, transport, executable, `shell is
+False`, exact argv length/prefix, hostname shape, and record-type
+membership (`A`/`AAAA`/`CNAME`, fixed literal, never enum-enumerated)
+before every attempt. Manual mutation testing found this redundantly
+layered: HTTPS could not reach a mocked `subprocess.run` until four
+independent checks were simultaneously neutralized. `subprocess.run` is
+called at most once, with the exact admitted timeout and no retry,
+fallback executable, PATH search, or package install. New
+`GuestAgentDnsExecutionResult` honestly distinguishes process-started,
+exit code, timeout, and bounded/sanitized stdout/stderr --
+`evidence_recorded`/`claim_created`/`source_accepted`/`memory_written`
+all structurally forced `False`: this milestone ends at a bounded,
+untrusted process result, no evidence parsing, no claim, no memory
+write. 65 new tests; five manual mutations proved caught then reverted.
+Independent QA and security review both PASS. `GuestAgentExecutionAdmission`,
+`GuestAgentRuntimeReadiness`, `GuestAgentInvocationPreparation`,
+`GuestAgentDispatchVerification`, `GuestAgentSignedDispatchRpcTransport`,
+`ResearchKaliOperationPreview`, `ResearchKaliOperationExecution`,
+`WslKaliOperationProcessAdapter`, and `VmwareKaliOperationProcessAdapter`
+are all byte-for-byte unmodified; the new executor has zero RPC/
+Bootstrap/CognitiveEngine/chat/desktop callers. No real DNS query, no
+real Kali VM contact, no SSH/VMware/WSL, no production signing key or
+credential provisioned. v0.3.470 is not started.
 
 Version v0.3.468 delivers the Guest-Agent typed execution-admission
 boundary and non-executing execution receipt/result contract. NO REAL

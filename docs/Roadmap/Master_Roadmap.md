@@ -1095,10 +1095,47 @@ Recorded priority order:
    callback of any kind exists yet; no target DNS/HTTPS operation
    exists; no new subprocess or network capability was introduced (the
    v0.3.467 local-readiness probe remains the only one).
-6. Migrating the two existing reviewed Kali operations
+6. **(first bounded foundation delivered, v0.3.469 -- not all of step 6)**
+   Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
-   real and independently reviewed.
+   real and independently reviewed -- true as of v0.3.468. v0.3.469
+   delivered this step's first bounded foundation: new module
+   `research.GuestAgentDnsExecutionAdapter`
+   (`execute_guest_agent_dns_record_lookup`), a real `DNS_RECORD_LOOKUP`
+   executor accepting ONLY a real, unforgeable `GuestAgentExecutionAdmission`
+   (v0.3.468) -- never a request, a verified dispatch alone, a prepared
+   invocation alone, a runtime-ready invocation alone, or a hostname/
+   record-type/executable/argv/timeout/callback/shell string as a
+   separate parameter. The exact executable, argv, and timeout are read
+   exclusively from the admission's own already-exact-bound,
+   already-capped facts -- never re-derived or caller-widened.
+   Deliberately not built by copying `WslKaliOperationProcessAdapter`/
+   `VmwareKaliOperationProcessAdapter`: both implement
+   `ResearchKaliOperationProcessAdapter`, whose own `.run(command_plan, *,
+   timeout_seconds)` interface accepts a command plan and timeout as
+   separate caller-supplied parameters -- exactly the shape this
+   milestone forbids. `HTTPS_HEADER_LOOKUP` and any future operation kind
+   fail closed before `subprocess.run` is ever reached; manual mutation
+   testing found this gate redundantly layered across (at least) four
+   independent checks (operation kind, executable path, argv length,
+   argv prefix), each individually sufficient to block an HTTPS/curl-
+   shaped command plan. `subprocess.run` is called at most once, with
+   `shell=False` and the exact admitted timeout, never a retry, fallback
+   executable, PATH search, or package install. The new
+   `GuestAgentDnsExecutionResult` honestly distinguishes whether the
+   local process started, its exit code, and whether it timed out, with
+   bounded/sanitized stdout/stderr; `evidence_recorded`/`claim_created`/
+   `source_accepted`/`memory_written` are all structurally forced
+   `False` -- this milestone ends at a bounded, untrusted process result,
+   never evidence, a claim, or a memory write. This executor is NOT
+   wired into `GuestAgentSignedDispatchRpcServer`, `Bootstrap`,
+   `CognitiveEngine`, chat, or the desktop -- it has zero production
+   callers; the existing RPC chain (verify -> admit -> replay -> prepare
+   -> readiness -> execution admission -> NOT-EXECUTED receipt ->
+   `DECLINED`) is completely unchanged, `SUCCESS` still unreachable on
+   the wire. RPC wiring remains separately authorized future work, not
+   started by this milestone.
 7. Retiring the SSH-based VMware guest path once the guest-agent transport
    is proven equivalent or stronger, not before.
 
@@ -1453,16 +1490,37 @@ resulting receipt is discarded exactly like every earlier value in this
 chain already is -- the wire response remains exactly
 `DECLINED`/`REPLAY_REJECTED`, `SUCCESS` still unreachable. No executor,
 process adapter, or generic execution callback of any kind exists yet;
-no new subprocess or network capability was introduced. The remaining
-work inside step 3
+no new subprocess or network capability was introduced.
+With steps 1-5's first bounded foundations all delivered, **v0.3.469
+began step 6** with its own first bounded foundation: a real
+`research.GuestAgentDnsExecutionAdapter.execute_guest_agent_dns_record_lookup`,
+accepting ONLY a real `GuestAgentExecutionAdmission` and reading its
+executable/argv/timeout exclusively from that admission's own
+already-exact-bound facts -- never re-derived, never caller-widened, and
+deliberately not built from the existing `ResearchKaliOperationProcessAdapter`
+interface (whose `.run(command_plan, *, timeout_seconds)` shape itself
+accepts separate caller-supplied parameters). `HTTPS_HEADER_LOOKUP`
+fails closed before any subprocess attempt, independently proven
+redundant across (at least) four separate checks by manual mutation
+testing. `subprocess.run` is called at most once, with the exact
+admitted, already-capped timeout and no retry; the resulting
+`GuestAgentDnsExecutionResult` is bounded and explicitly untrusted, with
+`evidence_recorded`/`claim_created`/`source_accepted`/`memory_written`
+all structurally forced `False`. This executor is NOT wired into
+`GuestAgentSignedDispatchRpcServer` or anything else -- it has zero
+production callers, and the existing RPC wire semantics
+(`DECLINED`/`REPLAY_REJECTED`, `SUCCESS` unreachable) are completely
+unchanged. The remaining work inside step 3
 (real production certificate provisioning/distribution strategy for an
 actual deployment, the real non-loopback VMware Host-Only network path),
 the remainder of step 4 (wiring to a real guest process), the remainder
 of step 5 (a real guest process/daemon, production signing-key custody,
 and a capability executor that would consume a
-`GuestAgentExecutionAdmission` instead of discarding it), and steps
-6-7 remain separate, unstarted, future milestones, each requiring its
-own authorization.
+`GuestAgentExecutionAdmission` instead of discarding it), the remainder
+of step 6 (an HTTPS executor, RPC wiring of the DNS executor into
+`GuestAgentSignedDispatchRpcServer`, and retiring the WSL/VMware process
+adapters for these two operations), and step 7 remain separate,
+unstarted, future milestones, each requiring its own authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,
