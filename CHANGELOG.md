@@ -2,6 +2,107 @@
 
 All notable project changes are recorded here.
 
+## [0.3.468] - 2026-10-14
+
+### Added
+
+- Guest-Agent typed execution-admission boundary and non-executing
+  execution receipt/result contract. NO REAL CAPABILITY EXECUTION. This
+  is the final typed in-process boundary a future real executor would be
+  required to consume, extending the existing chain (verified signed
+  dispatch -> admission -> replay ACCEPTED -> `GuestAgentPreparedInvocation`
+  -> local runtime readiness -> `GuestAgentRuntimeReadyInvocation`) with
+  one more step: exact-request execution-admission binding -> a typed
+  NOT-EXECUTED receipt -> STOP. No target process runs.
+- New module `research.GuestAgentExecutionAdmission`:
+  `GuestAgentExecutionAdmission` (capability-token-gated unforgeable
+  value, same pattern as `GuestAgentPreparedInvocation`/
+  `GuestAgentRuntimeReadyInvocation`), constructible only from BOTH a
+  real `research.GuestAgentDispatchVerification.GuestAgentVerifiedDispatch`
+  AND a real `research.GuestAgentRuntimeReadiness.GuestAgentRuntimeReadyInvocation`
+  -- neither alone is sufficient. VERIFIED DISPATCH != EXECUTION
+  AUTHORITY BY ITSELF. RUNTIME READY != EXECUTION AUTHORITY BY ITSELF.
+- EXACT BINDING, NOT FUZZY MATCHING: `GuestAgentExecutionAdmission.__post_init__`
+  reconstructs the expected prepared invocation directly from the
+  verified dispatch's own request by reusing (never re-deriving)
+  `research.GuestAgentInvocationPreparation._build_prepared_invocation`
+  -- the one existing function that already performs this reconstruction
+  for the real preparation path (a private helper reused directly across
+  module boundaries, mirroring this codebase's own existing reuse of
+  `research.GuestAgentRpcTransport._authenticate_tls_peer`). The
+  reconstructed `GuestAgentPreparedInvocation` is compared by dataclass
+  equality (`operation_kind`, `command_plan`, `timeout_seconds`, never
+  the construction-only capability token) against the runtime-ready
+  invocation's own prepared invocation -- one equality check that
+  transitively proves exact executable, exact argv, exact transport, and
+  `shell is False`, since `ResearchKaliOperationCommandPlan` equality
+  compares all five of those fields together. A mismatch of any kind --
+  different hostname, different DNS record type, different resolved
+  address, different signed `max_seconds` (once capped), different
+  operation kind, a tampered executable/argv/transport, or a
+  confused-deputy pairing of two individually-valid-and-unforgeable
+  objects for *different* requests -- fails exactly the same way: no
+  admission, ever, via `admit_guest_agent_execution` returning `None`
+  (never raising).
+- `GuestAgentExecutionAdmission.__post_init__` independently re-checks
+  this exact binding even when the real capability token is supplied
+  directly (defense in depth, mirroring `GuestAgentRuntimeReadyInvocation`'s
+  own independent re-validation of its readiness receipt), and
+  explicitly rejects a V1 (non-execution-bound) verified dispatch before
+  ever attempting reconstruction -- a second, independent layer of the
+  same V1-never-reaches-execution-admission guarantee the existing chain
+  already provides structurally (V1 never produces a prepared invocation
+  in the first place).
+- New `GuestAgentExecutionBoundaryStatus`/`GuestAgentExecutionBoundaryReceipt`:
+  a bounded, honest "admitted, not executed" receipt. NOT-EXECUTED
+  RECEIPT != PROCESS RESULT. Every field that could claim real work
+  happened is structurally forced to its inert value --
+  `process_created`, `target_operation_executed`, `target_network_used`,
+  `timed_out`, `evidence_recorded`, `claim_created`, and
+  `memory_written` are all forced `False`; `output_lines` is forced
+  empty; `exit_code` is forced `None`; `status` is the single
+  `NOT_EXECUTED` member. PROCESS NOT CREATED != OPERATION PERFORMED.
+- `research.GuestAgentSignedDispatchRpcTransport.GuestAgentSignedDispatchRpcServer`
+  now composes `admit_guest_agent_execution` strictly after readiness
+  produces a `GuestAgentRuntimeReadyInvocation` (nested inside both the
+  existing prepared-invocation guard and a new ready-invocation guard --
+  structurally impossible for V1, a replayed request, or a
+  readiness-`UNAVAILABLE` result to reach it). The resulting receipt
+  (and the admission it wraps) is discarded unconditionally; the wire
+  response is unaffected either way -- still `DECLINED`/`REPLAY_REJECTED`,
+  `SUCCESS` still unreachable. No new injectable handler or generic
+  executor callback was added to the server.
+- 50 new tests (42 unit-level: forgery resistance, exact-binding success
+  and mismatch for every individual fact, the confused-deputy
+  cross-request-pairing proof, V1 rejection, receipt field semantics,
+  structural security; 8 RPC integration/structural: V1/replay/
+  readiness-unavailable zero-call proofs, a ready first-seen DNS and
+  HTTPS request each reaching admission exactly once with the wire
+  response still `DECLINED`, and two new structural ordering/guard
+  proofs). Three manual mutations proved caught, then reverted:
+  weakening the exact-binding check to compare only `operation_kind`
+  (10 test failures, including the confused-deputy pairing test);
+  removing the ready-invocation guard so admission is attempted even
+  when readiness is `UNAVAILABLE` (3 failures -- admission is safely
+  attempted-and-rejected rather than never attempted, which the ordering
+  guard exists specifically to prevent); and forcing the producer call
+  site to construct a receipt claiming `process_created=True` (4
+  errors -- the receipt's own `__post_init__` independently vetoes the
+  claim even at that one producer site). Independent QA and independent
+  security review both returned PASS.
+- `research.GuestAgentDispatchVerification`, `GuestAgentInvocationPreparation`,
+  `GuestAgentRuntimeReadiness`, `GuestAgentLocalReadiness`,
+  `GuestAgentCore`, `GuestAgentReplayProtector`, `GuestAgentDispatchProof`,
+  `GuestAgentDispatchSigning`, `GuestAgentAuthenticatedSignedDispatchChannel`,
+  `GuestAgentRpcTransport`, and `ResearchKaliOperationPreview` are all
+  byte-for-byte unmodified. No executor (`GuestAgentCapabilityExecutor`,
+  `GuestAgentProcessAdapter`, `GuestAgentDnsExecutor`,
+  `GuestAgentHttpsExecutor`, `GuestAgentOperationRunner`) was introduced;
+  no target DNS query, no HTTP request, no SSH/VMware/WSL operation, no
+  new subprocess/socket capability (the v0.3.467 local-readiness probe
+  remains the only one, unchanged), no production signing key or
+  credential provisioned, zero non-loopback network activity.
+
 ## [0.3.467] - 2026-10-14
 
 ### Added

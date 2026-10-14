@@ -2,10 +2,49 @@
 
 ## Runtime Version
 
-`v0.3.467 (Genesis)`
+`v0.3.468 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.468 delivers the Guest-Agent typed execution-admission
+boundary and non-executing execution receipt/result contract. NO REAL
+CAPABILITY EXECUTION. This is the final typed in-process boundary a
+future real executor would be required to consume: new module
+`research.GuestAgentExecutionAdmission` adds `GuestAgentExecutionAdmission`
+(capability-token-gated, unforgeable; constructible only from BOTH a
+real `GuestAgentVerifiedDispatch` AND a real `GuestAgentRuntimeReadyInvocation`
+-- neither alone is sufficient) and `GuestAgentExecutionBoundaryReceipt`
+(a structurally-forced "admitted, not executed" receipt --
+`process_created`/`target_operation_executed`/`target_network_used`/
+`timed_out`/`evidence_recorded`/`claim_created`/`memory_written` all
+forced `False`, `output_lines` forced empty, `exit_code` forced `None`).
+`GuestAgentExecutionAdmission.__post_init__` reconstructs the expected
+prepared invocation directly from the verified dispatch's own request
+(reusing, not re-deriving, `GuestAgentInvocationPreparation
+._build_prepared_invocation`) and compares it by dataclass equality
+against the runtime-ready invocation's own prepared invocation -- one
+check that transitively proves exact hostname/DNS-type/resolved-address
+(via argv), exact executable, exact argv, exact transport, `shell is
+False`, and exact capped timeout, closing the confused-deputy gap where
+a legitimately-ready invocation for one request could otherwise be
+paired with a verified dispatch for a different one. `GuestAgentSignedDispatchRpcServer`
+composes this strictly after readiness `READY` (nested inside both the
+existing prepared-invocation guard and a new ready-invocation guard);
+the resulting receipt is discarded unconditionally -- wire response
+unaffected, still `DECLINED`/`REPLAY_REJECTED`, `SUCCESS` still
+unreachable. 50 new tests; three manual mutations proved caught then
+reverted (operation-kind-only weakening: 10 failures; admission attempted
+before readiness READY: 3 failures; forced executed-receipt claim: 4
+errors). Independent QA and security review both PASS.
+`GuestAgentDispatchVerification`, `GuestAgentInvocationPreparation`,
+`GuestAgentRuntimeReadiness`, `GuestAgentLocalReadiness`, `GuestAgentCore`,
+`GuestAgentReplayProtector`, `GuestAgentDispatchProof`,
+`GuestAgentDispatchSigning`, `GuestAgentAuthenticatedSignedDispatchChannel`,
+`GuestAgentRpcTransport`, and `ResearchKaliOperationPreview` are all
+byte-for-byte unmodified. No executor, no target DNS/HTTP operation, no
+SSH/VMware/WSL, no new subprocess/socket capability, no production
+signing key or credential provisioned. v0.3.469 is not started.
 
 Version v0.3.467 delivers the Guest-Agent local runtime-readiness gate
 foundation for the two reviewed capabilities. Takes an already-created,

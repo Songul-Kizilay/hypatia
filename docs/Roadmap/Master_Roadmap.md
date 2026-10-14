@@ -991,7 +991,7 @@ Recorded priority order:
    real guest process, a real (non-loopback) deployment, and any
    capability dispatch remain separate, unstarted work still inside this
    step.
-5. **(first bounded foundation delivered, v0.3.462-v0.3.467 -- not all of
+5. **(first bounded foundation delivered, v0.3.462-v0.3.468 -- not all of
    step 5)** The guest-side agent itself: a process that receives one
    authenticated, already-authorized request and dispatches it to the one
    allowlisted Kali implementation it names — never an arbitrary command.
@@ -1065,7 +1065,36 @@ Recorded priority order:
    discarded exactly like that prepared invocation already was -- the
    wire response remains exactly `DECLINED`/`REPLAY_REJECTED` either way.
    No capability dispatch exists yet; no target DNS/HTTPS operation
-   exists; no SSH/VMware/WSL path was touched or replaced.
+   exists; no SSH/VMware/WSL path was touched or replaced. v0.3.468
+   closed the final named gap before a real executor could ever be
+   introduced: neither a verified dispatch nor a runtime-ready invocation
+   alone is execution authority, and nothing yet proved the runtime-ready
+   invocation actually corresponds to the one verified request rather
+   than merely sharing its operation kind -- the confused-deputy shape
+   where a legitimately-ready invocation for one admitted request could
+   be paired with a verified dispatch for a different one. New module
+   `research.GuestAgentExecutionAdmission` adds `GuestAgentExecutionAdmission`
+   (capability-token-gated, unforgeable; requires BOTH inputs) and proves
+   the exact binding by reconstructing the expected prepared invocation
+   directly from the verified dispatch's own request (reusing, never
+   re-deriving, the existing reconstruction function) and comparing it
+   by dataclass equality against the runtime-ready invocation's own
+   prepared invocation -- transitively proving exact hostname, DNS
+   record type, resolved address, executable, argv, transport, `shell is
+   False`, and capped timeout all match, or admission is refused.
+   `GuestAgentExecutionBoundaryReceipt` represents only "admitted, not
+   executed": every field that could claim real work happened
+   (`process_created`, `target_operation_executed`, `target_network_used`,
+   `timed_out`, `evidence_recorded`, `claim_created`, `memory_written`,
+   `output_lines`, `exit_code`) is structurally forced to its inert
+   value. The signed-dispatch RPC server composes this strictly after
+   readiness `READY`; the resulting receipt is discarded exactly like
+   every earlier value in this chain already is -- the wire response
+   remains exactly `DECLINED`/`REPLAY_REJECTED`, `SUCCESS` still
+   unreachable. No executor, process adapter, or generic execution
+   callback of any kind exists yet; no target DNS/HTTPS operation
+   exists; no new subprocess or network capability was introduced (the
+   v0.3.467 local-readiness probe remains the only one).
 6. Migrating the two existing reviewed Kali operations
    (`DNS_RECORD_LOOKUP`, `HTTPS_HEADER_LOOKUP`) from today's WSL/VMware
    process adapters onto the guest-agent transport, only once steps 1-5 are
@@ -1388,13 +1417,50 @@ request), then discarded exactly like that prepared invocation already
 is. RUNTIME READY != EXECUTION AUTHORITY; VERSION MATCH != EXECUTION
 SUCCESS: the wire response remains exactly `DECLINED`/`REPLAY_REJECTED`
 regardless of whether the local probe reports `READY` or `UNAVAILABLE`,
-`SUCCESS` still unreachable. The remaining work inside step 3
+`SUCCESS` still unreachable.
+Neither a verified dispatch nor a runtime-ready invocation was ever
+proven to correspond to each other exactly -- only that each,
+independently, was individually valid. **v0.3.468 closed that gap**
+with the final typed in-process boundary before any real executor could
+be introduced (new module `research.GuestAgentExecutionAdmission`):
+`GuestAgentExecutionAdmission`, capability-token-gated and unforgeable
+exactly like `GuestAgentPreparedInvocation`/`GuestAgentRuntimeReadyInvocation`,
+constructible only from BOTH a real `GuestAgentVerifiedDispatch` AND a
+real `GuestAgentRuntimeReadyInvocation` -- neither alone sufficient.
+VERIFIED DISPATCH != EXECUTION AUTHORITY BY ITSELF; RUNTIME READY !=
+EXECUTION AUTHORITY BY ITSELF. Its own construction reconstructs the
+expected prepared invocation directly from the verified dispatch's own
+request (reusing, never re-deriving, the same
+`_build_prepared_invocation` function the real preparation path already
+uses) and compares it by dataclass equality against the runtime-ready
+invocation's own prepared invocation -- one check that transitively
+proves exact hostname, DNS record type, resolved address, executable,
+argv, transport, and `shell is False` all match (every one of those
+facts lives inside the compared `ResearchKaliOperationCommandPlan`), plus
+the exact capped timeout -- closing the confused-deputy shape where a
+legitimately-ready invocation for one admitted request could otherwise be
+paired with a verified dispatch for an unrelated one; proven by pairing
+two fully legitimate, independently-signed, independently-ready chains
+for different requests and confirming admission is still refused. A new
+`GuestAgentExecutionBoundaryReceipt` represents only "admitted, not
+executed" -- `process_created`, `target_operation_executed`,
+`target_network_used`, `timed_out`, `evidence_recorded`,
+`claim_created`, `memory_written`, `output_lines`, and `exit_code` are
+all structurally forced to their inert values, so this type cannot be
+constructed to claim a process ran or evidence exists. Composed into the
+signed-dispatch RPC server strictly after readiness `READY`; the
+resulting receipt is discarded exactly like every earlier value in this
+chain already is -- the wire response remains exactly
+`DECLINED`/`REPLAY_REJECTED`, `SUCCESS` still unreachable. No executor,
+process adapter, or generic execution callback of any kind exists yet;
+no new subprocess or network capability was introduced. The remaining
+work inside step 3
 (real production certificate provisioning/distribution strategy for an
 actual deployment, the real non-loopback VMware Host-Only network path),
 the remainder of step 4 (wiring to a real guest process), the remainder
 of step 5 (a real guest process/daemon, production signing-key custody,
 and a capability executor that would consume a
-`GuestAgentRuntimeReadyInvocation` instead of discarding it), and steps
+`GuestAgentExecutionAdmission` instead of discarding it), and steps
 6-7 remain separate, unstarted, future milestones, each requiring its
 own authorization.
 
