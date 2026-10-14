@@ -798,19 +798,38 @@ class StructuralSecurityTests(unittest.TestCase):
 
 
 class RpcIntegrationAbsenceTests(unittest.TestCase):
-    """Proves the RPC transport is completely untouched by this milestone:
-    zero references to the new module or its public names anywhere in
-    `GuestAgentSignedDispatchRpcTransport.py`."""
+    """v0.3.469: proved the RPC transport was completely untouched by this
+    milestone. v0.3.470 note: a separately authorized later milestone
+    (v0.3.470) deliberately wired this exact executor into
+    `GuestAgentSignedDispatchRpcServer`, strictly behind the full existing
+    authority chain -- see `research.GuestAgentSignedDispatchRpcTransport`'s
+    own module docstring and
+    `tests.research.test_guest_agent_signed_dispatch_rpc_transport
+    .DnsRpcExecutionTests`/`DnsRpcStructuralSecurityTests`/
+    `DnsRpcNoHiddenCallerTests` for the full wiring proof. This milestone's
+    own files (this one, and `src/research/GuestAgentDnsExecutionAdapter.py`
+    itself) remain unmodified by v0.3.470; only the transport module and
+    its own tests changed."""
 
-    def test_rpc_transport_never_references_the_dns_executor(self) -> None:
-        source = TRANSPORT_MODULE_FILE.read_text(encoding="utf-8")
+    def test_executor_still_has_zero_bootstrap_chat_desktop_callers(self) -> None:
+        """The one authorized RPC caller aside, this executor must still
+        never be referenced by Bootstrap, CognitiveEngine, chat, or the
+        desktop."""
         forbidden = (
-            "GuestAgentDnsExecutionAdapter",
             "execute_guest_agent_dns_record_lookup",
-            "GuestAgentDnsExecutionResult",
+            "GuestAgentDnsExecutionAdapter",
         )
-        for name in forbidden:
-            self.assertNotIn(name, source)
+        offending_files = []
+        for path in SRC_DIR.rglob("*.py"):
+            if path.name in (
+                "GuestAgentDnsExecutionAdapter.py",
+                "GuestAgentSignedDispatchRpcTransport.py",
+            ):
+                continue
+            text = path.read_text(encoding="utf-8")
+            if any(name in text for name in forbidden):
+                offending_files.append(str(path))
+        self.assertEqual(offending_files, [])
 
 
 if __name__ == "__main__":

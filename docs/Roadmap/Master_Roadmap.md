@@ -1128,14 +1128,43 @@ Recorded priority order:
    bounded/sanitized stdout/stderr; `evidence_recorded`/`claim_created`/
    `source_accepted`/`memory_written` are all structurally forced
    `False` -- this milestone ends at a bounded, untrusted process result,
-   never evidence, a claim, or a memory write. This executor is NOT
-   wired into `GuestAgentSignedDispatchRpcServer`, `Bootstrap`,
-   `CognitiveEngine`, chat, or the desktop -- it has zero production
-   callers; the existing RPC chain (verify -> admit -> replay -> prepare
-   -> readiness -> execution admission -> NOT-EXECUTED receipt ->
-   `DECLINED`) is completely unchanged, `SUCCESS` still unreachable on
-   the wire. RPC wiring remains separately authorized future work, not
-   started by this milestone.
+   never evidence, a claim, or a memory write. As delivered in v0.3.469
+   itself, this executor was NOT yet wired into
+   `GuestAgentSignedDispatchRpcServer`, `Bootstrap`, `CognitiveEngine`,
+   chat, or the desktop -- it had zero production callers; the existing
+   RPC chain (verify -> admit -> replay -> prepare -> readiness ->
+   execution admission -> NOT-EXECUTED receipt -> `DECLINED`) was
+   completely unchanged, `SUCCESS` still unreachable on the wire. RPC
+   wiring was separately authorized future work at that point.
+
+   **v0.3.470 delivered that RPC wiring** -- the first executable
+   signed-dispatch RPC path for this one bounded `DNS_RECORD_LOOKUP`
+   capability, still only DNS, still only this one reviewed executor.
+   `GuestAgentSignedDispatchRpcServer.serve_one_signed_dispatch` now
+   calls the existing, unmodified `execute_guest_agent_dns_record_lookup`
+   directly -- hardcoded, never a handler/callback/process-adapter
+   parameter/executor registry/dynamic dispatcher -- strictly after the
+   exact execution admission from v0.3.468, gated by one explicit,
+   hardcoded `is ResearchKaliOperationKind.DNS_RECORD_LOOKUP` comparison
+   (never built by enumerating the enum). `HTTPS_HEADER_LOOKUP`, and any
+   future operation kind, remain exactly `DECLINED`, byte-for-byte
+   unchanged. The existing `GuestAgentResponse`/`GuestAgentResponseStatus`
+   wire contract is reused with no protocol-version bump: a created,
+   non-timed-out, exit-0 process maps to `SUCCESS` with the executor's
+   own bounded `stdout_lines`; a nonzero exit, a timeout, or the
+   executor's own bounded `ResearchError` all map to the existing
+   `FAILED` member with empty `output_lines`, never raw `stderr` or raw
+   exception text. `SUCCESS` means only "the reviewed DNS process
+   completed with exit code 0" -- never a trusted DNS answer, a reachable
+   target, correct output, or evidence; no DNS result parser is called,
+   and no evidence/claim/memory write occurs anywhere in this path.
+   Exactly one execution attempt per accepted request, with no retry
+   after any failure mode, including a response-write failure once the
+   process has already run; a replayed request is rejected before
+   readiness, admission, or the executor are ever reached. Bootstrap,
+   CognitiveEngine, chat, and desktop callers of the DNS executor remain
+   ZERO; no HTTPS execution, no Guest-Agent daemon, and no production
+   deployment exist after this milestone either.
 7. Retiring the SSH-based VMware guest path once the guest-agent transport
    is proven equivalent or stronger, not before.
 
@@ -1506,21 +1535,33 @@ testing. `subprocess.run` is called at most once, with the exact
 admitted, already-capped timeout and no retry; the resulting
 `GuestAgentDnsExecutionResult` is bounded and explicitly untrusted, with
 `evidence_recorded`/`claim_created`/`source_accepted`/`memory_written`
-all structurally forced `False`. This executor is NOT wired into
-`GuestAgentSignedDispatchRpcServer` or anything else -- it has zero
-production callers, and the existing RPC wire semantics
-(`DECLINED`/`REPLAY_REJECTED`, `SUCCESS` unreachable) are completely
-unchanged. The remaining work inside step 3
+all structurally forced `False`. As delivered in v0.3.469 itself, this
+executor was NOT yet wired into `GuestAgentSignedDispatchRpcServer` or
+anything else -- it had zero production callers, and the existing RPC
+wire semantics (`DECLINED`/`REPLAY_REJECTED`, `SUCCESS` unreachable) were
+completely unchanged at that point.
+
+**v0.3.470 delivered that RPC wiring**: `GuestAgentSignedDispatchRpcServer
+.serve_one_signed_dispatch` now calls the existing, unmodified
+`execute_guest_agent_dns_record_lookup` directly, hardcoded, strictly
+after the exact execution admission and strictly gated by one explicit
+`is ResearchKaliOperationKind.DNS_RECORD_LOOKUP` comparison --
+`HTTPS_HEADER_LOOKUP` and any future operation kind remain `DECLINED`,
+unchanged. `GuestAgentResponseStatus.SUCCESS` is reachable on the wire
+for the first time, reusing the existing response contract with no
+protocol-version bump, and meaning only "the reviewed DNS process
+completed with exit code 0" -- never a trusted fact or evidence. Exactly
+one execution attempt per accepted request, no retry of any kind,
+including after a response-write failure; Bootstrap, CognitiveEngine,
+chat, and desktop callers remain ZERO. The remaining work inside step 3
 (real production certificate provisioning/distribution strategy for an
 actual deployment, the real non-loopback VMware Host-Only network path),
 the remainder of step 4 (wiring to a real guest process), the remainder
-of step 5 (a real guest process/daemon, production signing-key custody,
-and a capability executor that would consume a
-`GuestAgentExecutionAdmission` instead of discarding it), the remainder
-of step 6 (an HTTPS executor, RPC wiring of the DNS executor into
-`GuestAgentSignedDispatchRpcServer`, and retiring the WSL/VMware process
-adapters for these two operations), and step 7 remain separate,
-unstarted, future milestones, each requiring its own authorization.
+of step 5 (a real guest process/daemon and production signing-key
+custody), the remainder of step 6 (an HTTPS executor and retiring the
+WSL/VMware process adapters for these two operations), and step 7 remain
+separate, unstarted, future milestones, each requiring its own
+authorization.
 
 ### Bug Bounty Researcher: bounded roadmap direction (recorded 2026-09-23,
 product-direction only — not scoped as a whole, not authorized as a whole,

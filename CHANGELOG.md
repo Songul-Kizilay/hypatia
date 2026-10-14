@@ -2,6 +2,75 @@
 
 All notable project changes are recorded here.
 
+## [0.3.470] - 2026-10-14
+
+### Added
+
+- First executable signed-dispatch RPC path for the bounded
+  `DNS_RECORD_LOOKUP` Guest-Agent capability. Wires the existing,
+  unmodified v0.3.469 `research.GuestAgentDnsExecutionAdapter
+  .execute_guest_agent_dns_record_lookup` executor directly into the
+  existing `research.GuestAgentSignedDispatchRpcTransport
+  .GuestAgentSignedDispatchRpcServer` chain -- the first point in the
+  repository where a real target-operation subprocess becomes reachable
+  over an authenticated (loopback-only, mTLS) network RPC path.
+- Preserves the exact existing gate ordering unchanged: mTLS handshake,
+  authenticated peer, bounded frame, signed-envelope decode, Ed25519
+  dispatch-proof verification, capability admission, replay-protector
+  consume-once, prepared invocation, local runtime readiness, runtime-ready
+  invocation, exact execution admission -- and now, only after all of
+  those succeed, a single hardcoded call to the one reviewed DNS executor.
+- DNS ONLY: the executor call site is guarded by one explicit, hardcoded
+  `is ResearchKaliOperationKind.DNS_RECORD_LOOKUP` comparison -- never
+  built by enumerating the enum. `HTTPS_HEADER_LOOKUP`, and any future
+  operation kind, remain exactly `DECLINED`, byte-for-byte unchanged from
+  v0.3.468, with zero executor calls.
+- Reuses the existing `GuestAgentResponse`/`GuestAgentResponseStatus`
+  wire contract exactly, with no protocol-version bump: a DNS process that
+  was created, did not time out, and exited `0` maps to `SUCCESS` with a
+  fixed detail sentence and the executor's own bounded `stdout_lines`;
+  a nonzero exit, a timeout, or the executor's own bounded
+  `core.Exceptions.ResearchError` (the process could not even start) all
+  map to the existing `FAILED` member with empty `output_lines` and a
+  separate fixed detail sentence. Raw `stderr` and raw exception text
+  never cross the wire in either case. `SUCCESS` means only "the reviewed
+  DNS process completed with exit code 0" -- never that a DNS answer
+  exists, that the target is reachable, that the output is correct, or
+  that the output is trusted or is evidence; no DNS result parser is
+  called, and no evidence, claim, or memory write occurs anywhere in this
+  path.
+- Exactly one execution attempt per accepted request, with no retry of
+  any kind: not after a timeout, a nonzero exit, an `OSError`, or a
+  response-write failure once the DNS process has already run. A replayed
+  (duplicate) request is rejected before readiness, admission, or the
+  executor are ever reached, and its identity stays consumed regardless of
+  whether the response bytes ever reach the host.
+- Default construction of `GuestAgentSignedDispatchRpcServer` (no custom
+  `local_runtime_probe`) still produces zero DNS execution -- the default
+  probe fails closed unconditionally, unchanged from v0.3.467.
+- 65 new/updated tests across the RPC transport and DNS adapter test
+  modules, including AST-based structural tests proving the transport
+  gains no generic handler, executor callback, executor registry, or
+  dynamic capability dispatcher, and that the only real target-operation
+  call reachable from the new RPC path is the one hardcoded
+  `execute_guest_agent_dns_record_lookup(execution_admission)` call site.
+  Seven manual mutations (execute before replay accepted; execute HTTPS
+  through the same path; execute twice/add retry; return SUCCESS for a
+  timeout/nonzero result; leak stderr onto the wire; execute while
+  readiness is unavailable; allow a replayed request to execute) were each
+  applied, confirmed caught by the test suite, and reverted. Independent
+  QA and security review both PASS, the latter proving all 30 required
+  execution-authority invariants. Zero real target DNS queries, HTTP
+  requests, or Kali/SSH/VMware/WSL activity occurred during development.
+- `research.GuestAgentDnsExecutionAdapter`,
+  `research.GuestAgentExecutionAdmission`,
+  `research.GuestAgentInvocationPreparation`,
+  `research.GuestAgentRuntimeReadiness`, `research.GuestAgentReplayProtector`,
+  and `research.ResearchKaliOperationPreview` are all byte-for-byte
+  unmodified. Bootstrap, CognitiveEngine, chat, and desktop callers of the
+  DNS executor remain ZERO after this milestone; HTTPS execution remains
+  ZERO; no Guest-Agent daemon or production deployment exists.
+
 ## [0.3.469] - 2026-10-14
 
 ### Added

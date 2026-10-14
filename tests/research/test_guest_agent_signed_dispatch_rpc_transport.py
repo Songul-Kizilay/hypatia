@@ -55,6 +55,9 @@ from research.GuestAgentDispatchVerification import (  # noqa: E402
     GuestAgentDispatchVerificationFailure,
     GuestAgentDispatchVerificationStage,
 )
+from research.GuestAgentDnsExecutionAdapter import (  # noqa: E402
+    execute_guest_agent_dns_record_lookup,
+)
 from research.GuestAgentExecutionAdmission import (  # noqa: E402
     GuestAgentExecutionBoundaryReceipt,
     admit_guest_agent_execution,
@@ -72,10 +75,14 @@ from research.GuestAgentMtlsContext import (  # noqa: E402
     build_host_client_tls_context,
 )
 from research.GuestAgentProtocol import (
+    MAX_RESPONSE_DETAIL_LENGTH,
     GuestAgentProtocolVersion,
     GuestAgentResponse,
     GuestAgentResponseStatus,
 )  # noqa: E402
+from research.GuestAgentProtocolSerialization import (  # noqa: E402
+    canonical_guest_agent_response_bytes,
+)
 from research.GuestAgentReplayProtector import (  # noqa: E402
     GuestAgentReplayProtector,
 )
@@ -88,6 +95,11 @@ from research.GuestAgentSignedDispatchRpcTransport import (  # noqa: E402
 )
 from research.GuestAgentSignedDispatchSerialization import (  # noqa: E402
     canonical_guest_agent_signed_dispatch_envelope_bytes,
+)
+from research.ResearchKaliOperationExecution import (  # noqa: E402
+    KALI_OPERATION_OUTPUT_TRUST,
+    MAX_KALI_OPERATION_OUTPUT_LINE_CHARACTERS,
+    MAX_KALI_OPERATION_OUTPUT_LINES,
 )
 from research.ResearchKaliOperationPreview import (  # noqa: E402
     ResearchKaliCommandTransport,
@@ -1398,11 +1410,14 @@ def _unavailable_receipt_for(operation_kind) -> GuestAgentLocalReadinessReceipt:
 class ReadinessIntegrationTests(_LoopbackMtlsFixture):
     """v0.3.467: local runtime readiness composed into the real RPC server.
 
-    STILL DECLINED: every case here proves the wire response is unaffected
-    by readiness (`READY` or `UNAVAILABLE`) -- readiness is observed only
-    through the injected probe's own call count/arguments, never through a
-    wire-visible fact, exactly how v0.3.466's prepared-invocation discard is
-    already proven (see `V1OverRealWireTests`'s own class docstring)."""
+    Readiness itself is observed only through the injected probe's own
+    call count/arguments. Before v0.3.470, the wire response stayed
+    `DECLINED` regardless of readiness outcome for every operation kind --
+    that remains true for HTTPS and for `UNAVAILABLE` readiness today, but
+    a READY DNS request now reaches real execution (see
+    `DnsRpcExecutionTests` for the full SUCCESS/FAILED proof); every test
+    below that exercises that exact scenario mocks `subprocess.run`
+    deterministically, never performing a real DNS query."""
 
     def test_v1_request_never_reaches_readiness(self) -> None:
         from research.GuestAgentProtocol import GuestAgentRequest
@@ -1444,6 +1459,12 @@ class ReadinessIntegrationTests(_LoopbackMtlsFixture):
         self.assertEqual(probe.calls, [])
 
     def test_replayed_v2_request_never_reaches_readiness(self) -> None:
+        """v0.3.470 note: the default preview is DNS, so once admitted and
+        READY this dispatch now reaches real execution -- `subprocess.run`
+        is mocked deterministically (never a real DNS query) so this test
+        stays safe to run anywhere, including CI."""
+        import subprocess as subprocess_module
+
         host_config = self.host_config()
         guest_config = self.guest_config()
         signing_key = Ed25519PrivateKey.generate()
@@ -1463,32 +1484,52 @@ class ReadinessIntegrationTests(_LoopbackMtlsFixture):
                 local_runtime_probe=probe,
             )
 
-        first_server = _make_server()
-        first_port = first_server.bind()
-        thread1, outcome1 = _run_server(first_server)
-        client1 = GuestAgentSignedDispatchRpcClient(
-            build_host_client_tls_context(host_config), host_config, first_port
-        )
-        client1.send_signed_dispatch(envelope)
-        thread1.join(timeout=5.0)
-        self.assertNotIn("error", outcome1, msg=outcome1.get("error"))
-        self.assertEqual(len(probe.calls), 1)  # the first-seen dispatch
+        with mock.patch.object(
+            subprocess_module,
+            "run",
+            return_value=subprocess_module.CompletedProcess(
+                args=(), returncode=0, stdout="1.2.3.4\n", stderr=""
+            ),
+        ) as run:
+            first_server = _make_server()
+            first_port = first_server.bind()
+            thread1, outcome1 = _run_server(first_server)
+            client1 = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, first_port
+            )
+            client1.send_signed_dispatch(envelope)
+            thread1.join(timeout=5.0)
+            self.assertNotIn("error", outcome1, msg=outcome1.get("error"))
+            self.assertEqual(len(probe.calls), 1)  # the first-seen dispatch
 
-        second_server = _make_server()
-        second_port = second_server.bind()
-        thread2, outcome2 = _run_server(second_server)
-        client2 = GuestAgentSignedDispatchRpcClient(
-            build_host_client_tls_context(host_config), host_config, second_port
-        )
-        response2 = client2.send_signed_dispatch(envelope)
-        thread2.join(timeout=5.0)
-        self.assertNotIn("error", outcome2, msg=outcome2.get("error"))
-        self.assertEqual(response2.status, GuestAgentResponseStatus.REPLAY_REJECTED)
-        # The replay never added a second call: readiness ran exactly once,
-        # for the first-seen dispatch only.
-        self.assertEqual(len(probe.calls), 1)
+            second_server = _make_server()
+            second_port = second_server.bind()
+            thread2, outcome2 = _run_server(second_server)
+            client2 = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, second_port
+            )
+            response2 = client2.send_signed_dispatch(envelope)
+            thread2.join(timeout=5.0)
+            self.assertNotIn("error", outcome2, msg=outcome2.get("error"))
+            self.assertEqual(response2.status, GuestAgentResponseStatus.REPLAY_REJECTED)
+            # The replay never added a second call: readiness ran exactly
+            # once, for the first-seen dispatch only, and the DNS executor
+            # itself ran at most once overall -- never retried for the
+            # replay.
+            self.assertEqual(len(probe.calls), 1)
+            run.assert_called_once()
 
-    def test_ready_first_seen_dns_v2_request_still_declined_on_wire(self) -> None:
+    def test_ready_first_seen_dns_v2_request_reaches_readiness_once(self) -> None:
+        """v0.3.470 note: readiness `READY` for a DNS request no longer
+        implies the wire stays `DECLINED` -- once v0.3.470 wired a real
+        executor in, this exact scenario (readiness `READY`, admission
+        succeeds) now reaches real execution. That full SUCCESS/FAILED
+        proof lives in `DnsRpcExecutionTests` below; this test keeps its
+        original, narrower scope: readiness itself is still reached
+        exactly once for the first-seen dispatch. `subprocess.run` is
+        mocked deterministically -- never a real DNS query."""
+        import subprocess as subprocess_module
+
         host_config = self.host_config()
         guest_config = self.guest_config()
         signing_key = Ed25519PrivateKey.generate()
@@ -1505,15 +1546,21 @@ class ReadinessIntegrationTests(_LoopbackMtlsFixture):
             local_runtime_probe=probe,
         )
         port = server.bind()
-        thread, outcome = _run_server(server)
-        client = GuestAgentSignedDispatchRpcClient(
-            build_host_client_tls_context(host_config), host_config, port
-        )
-        response = client.send_signed_dispatch(envelope)
-        thread.join(timeout=5.0)
+        with mock.patch.object(
+            subprocess_module,
+            "run",
+            return_value=subprocess_module.CompletedProcess(
+                args=(), returncode=0, stdout="1.2.3.4\n", stderr=""
+            ),
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
         self.assertNotIn("error", outcome, msg=outcome.get("error"))
-        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
-        self.assertEqual(response.output_lines, ())
+        self.assertEqual(response.status, GuestAgentResponseStatus.SUCCESS)
         self.assertEqual(len(probe.calls), 1)
         prepared = probe.calls[0]
         self.assertEqual(
@@ -1616,11 +1663,14 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
     """v0.3.468: exact-request execution admission composed into the real
     RPC server, strictly after readiness `READY`.
 
-    STILL DECLINED: every case here proves the wire response is unaffected
-    by execution admission -- admission is observed only through a spy on
-    `admit_guest_agent_execution` itself (`mock.patch.object(...,
-    wraps=...)`, preserving real behavior), never through a wire-visible
-    fact."""
+    Admission is observed only through a spy on `admit_guest_agent_execution`
+    itself (`mock.patch.object(..., wraps=...)`, preserving real behavior).
+    Before v0.3.470, admission succeeding never changed the wire response
+    for any operation kind -- that remains true for HTTPS today, but a
+    successful DNS admission now reaches real execution (see
+    `DnsRpcExecutionTests` for the full SUCCESS/FAILED proof); every test
+    below that exercises that exact scenario mocks `subprocess.run`
+    deterministically, never performing a real DNS query."""
 
     def test_v1_request_never_reaches_execution_admission(self) -> None:
         host_config = self.host_config()
@@ -1668,6 +1718,11 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
         self.assertEqual(probe.calls, [])
 
     def test_replayed_request_never_reaches_execution_admission(self) -> None:
+        """v0.3.470 note: the default preview is DNS, so this dispatch now
+        reaches real execution once admitted -- `subprocess.run` is mocked
+        deterministically, never a real DNS query."""
+        import subprocess as subprocess_module
+
         host_config = self.host_config()
         guest_config = self.guest_config()
         signing_key = Ed25519PrivateKey.generate()
@@ -1687,11 +1742,20 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
                 local_runtime_probe=probe,
             )
 
-        with mock.patch.object(
-            transport_module,
-            "admit_guest_agent_execution",
-            wraps=admit_guest_agent_execution,
-        ) as admission_spy:
+        with (
+            mock.patch.object(
+                transport_module,
+                "admit_guest_agent_execution",
+                wraps=admit_guest_agent_execution,
+            ) as admission_spy,
+            mock.patch.object(
+                subprocess_module,
+                "run",
+                return_value=subprocess_module.CompletedProcess(
+                    args=(), returncode=0, stdout="1.2.3.4\n", stderr=""
+                ),
+            ) as run,
+        ):
             first_server = _make_server()
             first_port = first_server.bind()
             thread1, outcome1 = _run_server(first_server)
@@ -1714,8 +1778,11 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
             self.assertNotIn("error", outcome2, msg=outcome2.get("error"))
             self.assertEqual(response2.status, GuestAgentResponseStatus.REPLAY_REJECTED)
             # The replay never added a second call: admission ran exactly
-            # once, for the first-seen dispatch only.
+            # once, for the first-seen dispatch only, and the DNS executor
+            # itself ran at most once overall -- never retried for the
+            # replay.
             self.assertEqual(admission_spy.call_count, 1)
+            run.assert_called_once()
 
     def test_readiness_unavailable_never_reaches_execution_admission(self) -> None:
         host_config = self.host_config()
@@ -1749,9 +1816,17 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
         self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
         admission_spy.assert_not_called()
 
-    def test_ready_first_seen_request_reaches_admission_exactly_once_still_declined(
+    def test_ready_first_seen_dns_request_reaches_admission_exactly_once(
         self,
     ) -> None:
+        """v0.3.470 note: this exact scenario (readiness READY, admission
+        succeeds, DNS operation) now reaches real execution and returns
+        SUCCESS instead of the pre-v0.3.470 DECLINED -- `subprocess.run` is
+        mocked deterministically, never a real DNS query. The admission
+        plumbing proof below (exactly one call, correct arguments, a
+        genuine non-stub admission) is unchanged from v0.3.468."""
+        import subprocess as subprocess_module
+
         host_config = self.host_config()
         guest_config = self.guest_config()
         signing_key = Ed25519PrivateKey.generate()
@@ -1768,11 +1843,20 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
             local_runtime_probe=probe,
         )
         port = server.bind()
-        with mock.patch.object(
-            transport_module,
-            "admit_guest_agent_execution",
-            wraps=admit_guest_agent_execution,
-        ) as admission_spy:
+        with (
+            mock.patch.object(
+                transport_module,
+                "admit_guest_agent_execution",
+                wraps=admit_guest_agent_execution,
+            ) as admission_spy,
+            mock.patch.object(
+                subprocess_module,
+                "run",
+                return_value=subprocess_module.CompletedProcess(
+                    args=(), returncode=0, stdout="1.2.3.4\n", stderr=""
+                ),
+            ),
+        ):
             thread, outcome = _run_server(server)
             client = GuestAgentSignedDispatchRpcClient(
                 build_host_client_tls_context(host_config), host_config, port
@@ -1780,8 +1864,8 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
             response = client.send_signed_dispatch(envelope)
             thread.join(timeout=5.0)
         self.assertNotIn("error", outcome, msg=outcome.get("error"))
-        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
-        self.assertEqual(response.output_lines, ())
+        self.assertEqual(response.status, GuestAgentResponseStatus.SUCCESS)
+        self.assertEqual(response.output_lines, ("1.2.3.4",))
         admission_spy.assert_called_once()
         verified_arg, ready_arg = admission_spy.call_args[0]
         self.assertEqual(verified_arg.request.request_id, envelope.request.request_id)
@@ -1860,6 +1944,847 @@ class ExecutionAdmissionIntegrationTests(_LoopbackMtlsFixture):
         self.assertNotIn("error", outcome, msg=outcome.get("error"))
         self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
         admission_spy.assert_not_called()
+
+
+def _completed(*, returncode: int = 0, stdout: str = "", stderr: str = ""):
+    import subprocess as subprocess_module
+
+    return subprocess_module.CompletedProcess(
+        args=(), returncode=returncode, stdout=stdout, stderr=stderr
+    )
+
+
+class DnsRpcExecutionTests(_LoopbackMtlsFixture):
+    """v0.3.470: the first executable signed-dispatch RPC path, for
+    `DNS_RECORD_LOOKUP` only.
+
+    EXECUTION ADMISSION != EXECUTION SUCCESS. Every positive test proves a
+    real local `dig` process (mocked deterministically -- never a real DNS
+    query) is reached exactly once, with the exact admitted argv and
+    timeout, strictly after the full existing authority chain succeeds.
+    Every negative/adversarial test proves the executor is unreachable
+    (zero calls) for any gate failure, and that `FAILED`/`DECLINED` never
+    leak raw stderr or exception text onto the wire.
+    """
+
+    def test_valid_first_seen_dns_request_reaches_executor_exactly_once(
+        self,
+    ) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run") as run,
+        ):
+            run.return_value = _completed(stdout="1.2.3.4\n")
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        executor_spy.assert_called_once()
+        (admission_arg,) = executor_spy.call_args[0]
+        self.assertIs(
+            admission_arg.runtime_ready_invocation.prepared_invocation.operation_kind,
+            ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
+        )
+        self.assertEqual(response.status, GuestAgentResponseStatus.SUCCESS)
+
+    def test_exit_zero_is_success(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch(
+            "subprocess.run", return_value=_completed(stdout="93.184.216.34\n")
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.SUCCESS)
+        self.assertEqual(response.output_lines, ("93.184.216.34",))
+        self.assertEqual(response.output_trust, KALI_OPERATION_OUTPUT_TRUST)
+
+    def test_empty_stdout_exit_zero_is_success_with_empty_output(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch("subprocess.run", return_value=_completed(stdout="")):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.SUCCESS)
+        self.assertEqual(response.output_lines, ())
+
+    def test_nonzero_exit_is_failed(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch(
+            "subprocess.run",
+            return_value=_completed(
+                returncode=1, stderr="top secret internal failure detail"
+            ),
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.FAILED)
+        self.assertEqual(response.output_lines, ())
+        self.assertNotIn("top secret internal failure detail", response.detail)
+
+    def test_timeout_is_failed(self) -> None:
+        import subprocess as subprocess_module
+
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch(
+            "subprocess.run",
+            side_effect=subprocess_module.TimeoutExpired(cmd="dig", timeout=5.0),
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.FAILED)
+        self.assertEqual(response.output_lines, ())
+
+    def test_oserror_is_failed_without_leaking_exception_text(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch(
+            "subprocess.run",
+            side_effect=FileNotFoundError("/some/secret/internal/path"),
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.FAILED)
+        self.assertEqual(response.output_lines, ())
+        self.assertNotIn("/some/secret/internal/path", response.detail)
+
+    def test_stderr_never_appears_on_wire_on_success(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch(
+            "subprocess.run",
+            return_value=_completed(
+                stdout="1.2.3.4\n", stderr="stderr leak canary text"
+            ),
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.SUCCESS)
+        self.assertNotIn("stderr leak canary text", response.output_lines)
+        self.assertNotIn("stderr leak canary text", response.detail)
+
+    def test_https_request_never_reaches_executor_and_stays_declined(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_https_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run") as run,
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        executor_spy.assert_not_called()
+        run.assert_not_called()
+
+    def test_v1_request_never_reaches_executor(self) -> None:
+        from research.GuestAgentProtocol import GuestAgentRequest
+
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        v1_request = GuestAgentRequest(
+            protocol_version=GuestAgentProtocolVersion.V1,
+            request_id="v1-executor",
+            nonce="v1-executor-nonce",
+            operation_kind=_preview().operation_kind,
+            operation_digest="a" * 64,
+            logical_inputs=(("hostname", "example.com"), ("dns_record_type", "A")),
+        )
+        envelope = _sign_arbitrary_request_for_test(
+            v1_request, signing_key=signing_key, now=NOW
+        )
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(v1_request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run") as run,
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        executor_spy.assert_not_called()
+        run.assert_not_called()
+
+    def test_readiness_unavailable_never_reaches_executor(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _unavailable_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run") as run,
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        executor_spy.assert_not_called()
+        run.assert_not_called()
+
+    def test_invalid_signature_never_reaches_executor(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        wrong_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            # A verification key that does NOT match the signing key --
+            # the real Ed25519 signature check must fail.
+            verification_key=wrong_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run") as run,
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            with self.assertRaises(GuestAgentSignedDispatchRpcTransportError):
+                client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        executor_spy.assert_not_called()
+        run.assert_not_called()
+
+    def test_replayed_request_never_reaches_executor_twice(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        store = _FakeReplayStore()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+
+        def _make_server() -> GuestAgentSignedDispatchRpcServer:
+            return GuestAgentSignedDispatchRpcServer(
+                build_guest_server_tls_context(guest_config),
+                guest_config,
+                verification_key=signing_key.public_key(),
+                replay_protector=GuestAgentReplayProtector(store),
+                clock=lambda: NOW,
+                local_runtime_probe=probe,
+            )
+
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run", return_value=_completed(stdout="1.2.3.4\n")),
+        ):
+            first_server = _make_server()
+            first_port = first_server.bind()
+            thread1, outcome1 = _run_server(first_server)
+            client1 = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, first_port
+            )
+            response1 = client1.send_signed_dispatch(envelope)
+            thread1.join(timeout=5.0)
+            self.assertNotIn("error", outcome1, msg=outcome1.get("error"))
+            self.assertEqual(response1.status, GuestAgentResponseStatus.SUCCESS)
+            self.assertEqual(executor_spy.call_count, 1)
+
+            second_server = _make_server()
+            second_port = second_server.bind()
+            thread2, outcome2 = _run_server(second_server)
+            client2 = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, second_port
+            )
+            response2 = client2.send_signed_dispatch(envelope)
+            thread2.join(timeout=5.0)
+            self.assertNotIn("error", outcome2, msg=outcome2.get("error"))
+            self.assertEqual(response2.status, GuestAgentResponseStatus.REPLAY_REJECTED)
+            self.assertEqual(executor_spy.call_count, 1)
+
+    def test_exact_argv_and_timeout_passed_to_subprocess(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(
+            signing_key, preview=_preview(hostname="example.com", max_seconds=7.0)
+        )
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+        with mock.patch(
+            "subprocess.run", return_value=_completed(stdout="1.2.3.4\n")
+        ) as run:
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        run.assert_called_once()
+        argv = run.call_args[0][0]
+        self.assertEqual(
+            argv, ("/usr/bin/dig", "+time=5", "+tries=1", "+short", "example.com", "A")
+        )
+        self.assertEqual(run.call_args.kwargs["timeout"], 7.0)
+
+    def test_response_write_failure_does_not_cause_second_executor_call(self) -> None:
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        probe = _RecordingLocalReadinessProbe(
+            _ready_receipt_for(envelope.request.operation_kind)
+        )
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+            local_runtime_probe=probe,
+        )
+        port = server.bind()
+
+        # Both the CLIENT (writing the outgoing request) and the SERVER
+        # (writing its response) call this same imported name. The first
+        # call must genuinely write real bytes to the real socket (or the
+        # server's own frame read would simply time out waiting for data
+        # that was never sent) -- only the SECOND call (the server's
+        # response write, reached only after the executor already ran)
+        # is forced to fail.
+        real_write = transport_module.write_guest_agent_rpc_frame
+        write_call_count = {"n": 0}
+        write_lock = threading.Lock()
+
+        def _write_side_effect(sock, payload):
+            with write_lock:
+                write_call_count["n"] += 1
+                call_number = write_call_count["n"]
+            if call_number == 1:
+                return real_write(sock, payload)
+            raise OSError("forced response-write failure for test")
+
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run", return_value=_completed(stdout="1.2.3.4\n")),
+            mock.patch.object(
+                transport_module,
+                "write_guest_agent_rpc_frame",
+                side_effect=_write_side_effect,
+            ),
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            with self.assertRaises(GuestAgentSignedDispatchRpcTransportError):
+                client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        # The executor still ran exactly once (the operation may already
+        # have occurred); the server never retries it merely because the
+        # response write itself then failed.
+        executor_spy.assert_called_once()
+        self.assertIn("error", outcome)
+
+    def test_default_server_never_reaches_executor(self) -> None:
+        """Default construction (no `local_runtime_probe`) must remain
+        non-executing: zero DNS target execution with no caller-supplied
+        probe."""
+        host_config = self.host_config()
+        guest_config = self.guest_config()
+        signing_key = Ed25519PrivateKey.generate()
+        envelope = _real_envelope(signing_key, preview=_preview())
+        server = GuestAgentSignedDispatchRpcServer(
+            build_guest_server_tls_context(guest_config),
+            guest_config,
+            verification_key=signing_key.public_key(),
+            replay_protector=GuestAgentReplayProtector(_FakeReplayStore()),
+            clock=lambda: NOW,
+        )
+        port = server.bind()
+        with (
+            mock.patch.object(
+                transport_module,
+                "execute_guest_agent_dns_record_lookup",
+                wraps=execute_guest_agent_dns_record_lookup,
+            ) as executor_spy,
+            mock.patch("subprocess.run") as run,
+        ):
+            thread, outcome = _run_server(server)
+            client = GuestAgentSignedDispatchRpcClient(
+                build_host_client_tls_context(host_config), host_config, port
+            )
+            response = client.send_signed_dispatch(envelope)
+            thread.join(timeout=5.0)
+        self.assertNotIn("error", outcome, msg=outcome.get("error"))
+        self.assertEqual(response.status, GuestAgentResponseStatus.DECLINED)
+        executor_spy.assert_not_called()
+        run.assert_not_called()
+
+    def test_max_bounded_success_response_fits_rpc_frame(self) -> None:
+        detail = "x" * MAX_RESPONSE_DETAIL_LENGTH
+        output_lines = tuple(
+            ("y" * MAX_KALI_OPERATION_OUTPUT_LINE_CHARACTERS)
+            for _ in range(MAX_KALI_OPERATION_OUTPUT_LINES)
+        )
+        response = GuestAgentResponse(
+            protocol_version=GuestAgentProtocolVersion.V2,
+            request_id="r" * 200,
+            status=GuestAgentResponseStatus.SUCCESS,
+            detail=detail,
+            output_lines=output_lines,
+        )
+        data = canonical_guest_agent_response_bytes(response)
+        self.assertLess(len(data), MAX_GUEST_AGENT_RPC_FRAME_SIZE)
+        # Comfortable headroom, not a coincidental near-miss.
+        self.assertLess(len(data), MAX_GUEST_AGENT_RPC_FRAME_SIZE - 100_000)
+
+
+class DnsRpcStructuralSecurityTests(unittest.TestCase):
+    """AST-level proof that the one real executor call is hardcoded,
+    narrowly guarded, and that no generic executor/process/network
+    channel was introduced anywhere in the RPC transport module."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = TRANSPORT_MODULE_FILE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.source)
+
+    def test_exactly_one_execute_guest_agent_dns_record_lookup_call_site(self) -> None:
+        calls = [
+            node
+            for node in ast.walk(self.tree)
+            if isinstance(node, ast.Call)
+            and (
+                (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "execute_guest_agent_dns_record_lookup"
+                )
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "execute_guest_agent_dns_record_lookup"
+                )
+            )
+        ]
+        self.assertEqual(len(calls), 1)
+
+    def test_executor_call_is_guarded_by_dns_operation_kind_check(self) -> None:
+        """The one executor call site is inside an `if ... is
+        ResearchKaliOperationKind.DNS_RECORD_LOOKUP:` block -- a single
+        explicit comparison, never built by enumerating the enum."""
+        serve_def = None
+        for node in ast.walk(self.tree):
+            if (
+                isinstance(node, ast.FunctionDef)
+                and node.name == "serve_one_signed_dispatch"
+            ):
+                serve_def = node
+                break
+        self.assertIsNotNone(serve_def)
+        candidate_ifs = [
+            node
+            for node in ast.walk(serve_def)  # type: ignore[arg-type]
+            if isinstance(node, ast.If)
+            and any(
+                isinstance(inner, ast.Call)
+                and (
+                    (
+                        isinstance(inner.func, ast.Name)
+                        and inner.func.id == "execute_guest_agent_dns_record_lookup"
+                    )
+                    or (
+                        isinstance(inner.func, ast.Attribute)
+                        and inner.func.attr == "execute_guest_agent_dns_record_lookup"
+                    )
+                )
+                for inner in ast.walk(node)
+            )
+        ]
+        self.assertTrue(candidate_ifs)
+        guarding_if = min(candidate_ifs, key=lambda node: len(list(ast.walk(node))))
+        test_source = ast.unparse(guarding_if.test)
+        self.assertIn("DNS_RECORD_LOOKUP", test_source)
+        self.assertIn(" is ", test_source)
+
+    def test_executor_call_is_guarded_by_boundary_receipt_none_check(self) -> None:
+        serve_def = None
+        for node in ast.walk(self.tree):
+            if (
+                isinstance(node, ast.FunctionDef)
+                and node.name == "serve_one_signed_dispatch"
+            ):
+                serve_def = node
+                break
+        self.assertIsNotNone(serve_def)
+        candidate_ifs = [
+            node
+            for node in ast.walk(serve_def)  # type: ignore[arg-type]
+            if isinstance(node, ast.If)
+            and any(
+                isinstance(inner, ast.Call)
+                and (
+                    (
+                        isinstance(inner.func, ast.Name)
+                        and inner.func.id == "execute_guest_agent_dns_record_lookup"
+                    )
+                    or (
+                        isinstance(inner.func, ast.Attribute)
+                        and inner.func.attr == "execute_guest_agent_dns_record_lookup"
+                    )
+                )
+                for inner in ast.walk(node)
+            )
+        ]
+        self.assertTrue(candidate_ifs)
+        matching_guards = [
+            node
+            for node in candidate_ifs
+            if "_boundary_receipt" in ast.unparse(node.test)
+        ]
+        self.assertTrue(
+            matching_guards,
+            "no enclosing if-block test mentions _boundary_receipt",
+        )
+        test_source = ast.unparse(matching_guards[0].test)
+        self.assertIn("is not None", test_source)
+
+    def test_readiness_admission_executor_in_source_order(self) -> None:
+        readiness_line = self._first_call_lineno("check_guest_agent_runtime_readiness")
+        admission_line = self._first_call_lineno("admit_guest_agent_execution")
+        executor_line = self._first_call_lineno("execute_guest_agent_dns_record_lookup")
+        self.assertGreater(readiness_line, 0)
+        self.assertGreater(admission_line, 0)
+        self.assertGreater(executor_line, 0)
+        self.assertLess(readiness_line, admission_line)
+        self.assertLess(admission_line, executor_line)
+
+    def _first_call_lineno(self, name_fragment: str) -> int:
+        matches = []
+        for node in ast.walk(self.tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Name) and func.id == name_fragment:
+                matches.append(node.lineno)
+            elif isinstance(func, ast.Attribute) and func.attr == name_fragment:
+                matches.append(node.lineno)
+        return min(matches) if matches else -1
+
+    def test_no_generic_handler_or_executor_registry(self) -> None:
+        forbidden_identifiers = {
+            "handler",
+            "executor_callback",
+            "run_callback",
+            "process_adapter",
+            "executor_registry",
+            "capability_dispatcher",
+        }
+        names = {
+            node.id for node in ast.walk(self.tree) if isinstance(node, ast.Name)
+        } | {node.arg for node in ast.walk(self.tree) if isinstance(node, ast.arg)}
+        self.assertFalse(names & forbidden_identifiers, names & forbidden_identifiers)
+
+    def test_no_curl_https_executor_or_dangerous_identifiers(self) -> None:
+        forbidden_identifiers = {
+            "curl",
+            "ssh",
+            "vmrun",
+            "wsl",
+            "eval",
+            "exec",
+            "GuestAgentCapabilityExecutor",
+            "GuestAgentHttpsExecutor",
+            "GuestAgentDnsExecutor",
+            "ResearchDnsLookupResultParser",
+        }
+        names = {
+            node.id for node in ast.walk(self.tree) if isinstance(node, ast.Name)
+        } | {
+            node.attr for node in ast.walk(self.tree) if isinstance(node, ast.Attribute)
+        }
+        self.assertFalse(names & forbidden_identifiers, names & forbidden_identifiers)
+
+    def test_no_evidence_claim_memory_identifiers(self) -> None:
+        forbidden_identifiers = {
+            "ResearchEvidenceRecord",
+            "create_claim",
+            "accept_source",
+            "write_memory",
+            "SecurityFinding",
+        }
+        names = {
+            node.id for node in ast.walk(self.tree) if isinstance(node, ast.Name)
+        } | {
+            node.attr for node in ast.walk(self.tree) if isinstance(node, ast.Attribute)
+        }
+        self.assertFalse(names & forbidden_identifiers, names & forbidden_identifiers)
+
+    def test_no_dynamic_import_eval_exec_os_system_popen(self) -> None:
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in (
+                    "eval",
+                    "exec",
+                    "__import__",
+                ):
+                    self.fail(f"forbidden call found: {node.func.id}")
+                if isinstance(node.func, ast.Attribute) and node.func.attr in (
+                    "system",
+                    "Popen",
+                ):
+                    self.fail(f"forbidden call found: {node.func.attr}")
+
+    def test_no_shell_true_anywhere(self) -> None:
+        self.assertNotIn("shell=True", self.source)
+        self.assertNotIn("shell = True", self.source)
+
+
+class DnsRpcNoHiddenCallerTests(unittest.TestCase):
+    """Repo-wide proof the new real executor has zero production callers
+    beyond the one hardcoded RPC call site this milestone adds."""
+
+    def test_no_bootstrap_cognitive_engine_chat_or_desktop_caller(self) -> None:
+        src_dir = SRC_DIR
+        forbidden_names = (
+            "execute_guest_agent_dns_record_lookup",
+            "GuestAgentDnsExecutionAdapter",
+        )
+        offending_files = []
+        for path in src_dir.rglob("*.py"):
+            if path.name in (
+                "GuestAgentDnsExecutionAdapter.py",
+                "GuestAgentSignedDispatchRpcTransport.py",
+            ):
+                continue
+            text = path.read_text(encoding="utf-8")
+            if any(name in text for name in forbidden_names):
+                offending_files.append(str(path))
+        self.assertEqual(offending_files, [])
 
 
 if __name__ == "__main__":
