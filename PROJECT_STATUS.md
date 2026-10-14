@@ -2,10 +2,54 @@
 
 ## Runtime Version
 
-`v0.3.469 (Genesis)`
+`v0.3.470 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.470 delivers the first executable signed-dispatch RPC path
+for the bounded `DNS_RECORD_LOOKUP` Guest-Agent capability: the existing,
+unmodified v0.3.469 `execute_guest_agent_dns_record_lookup` executor is
+now wired directly into the existing
+`GuestAgentSignedDispatchRpcServer` chain -- the first point in the
+repository where a real target-operation subprocess is reachable over an
+authenticated (loopback-only, mTLS) network RPC path. The exact existing
+gate ordering is unchanged: mTLS, authenticated peer, bounded frame,
+signed-envelope decode, Ed25519 verification, capability admission,
+replay-consume, prepared invocation, local runtime readiness,
+runtime-ready invocation, exact execution admission -- and only then one
+hardcoded, explicit `is ResearchKaliOperationKind.DNS_RECORD_LOOKUP`
+comparison gates the one reviewed executor call. `HTTPS_HEADER_LOOKUP`,
+and any future operation kind, stay exactly `DECLINED`, unchanged from
+v0.3.468, with zero executor calls. Reuses the existing
+`GuestAgentResponse`/`GuestAgentResponseStatus` wire contract with no
+protocol-version bump: a created, non-timed-out, exit-0 process maps to
+`SUCCESS` with the executor's own bounded `stdout_lines`; a nonzero exit,
+a timeout, or the executor's own bounded `ResearchError` all map to the
+existing `FAILED` member with empty `output_lines` -- raw `stderr` and raw
+exception text never cross the wire either way, and `SUCCESS` means only
+"the reviewed DNS process completed with exit code 0," never a trusted
+DNS fact or evidence. Exactly one execution attempt per accepted request,
+with no retry after any failure mode, including a response-write failure
+once the process has already run; a replayed request is rejected before
+readiness, admission, or the executor are ever reached. Default server
+construction still produces zero DNS execution. 65 new/updated tests,
+including AST-based structural tests proving no generic handler/executor
+registry/dynamic dispatcher exists and that the only real
+target-operation call reachable from RPC is the one hardcoded executor
+call site. Seven manual mutations (execute before replay accepted;
+execute HTTPS through the same path; execute twice/retry; SUCCESS on
+timeout/nonzero exit; stderr leak onto the wire; execute while readiness
+unavailable; replayed request executes) each proved caught, then
+reverted. Independent QA and security review both PASS, the latter
+proving all 30 required execution-authority invariants.
+`GuestAgentDnsExecutionAdapter`, `GuestAgentExecutionAdmission`,
+`GuestAgentInvocationPreparation`, `GuestAgentRuntimeReadiness`,
+`GuestAgentReplayProtector`, and `ResearchKaliOperationPreview` are all
+byte-for-byte unmodified. Bootstrap, CognitiveEngine, chat, and desktop
+callers of the DNS executor remain ZERO; HTTPS execution remains ZERO; no
+Guest-Agent daemon or production deployment exists. v0.3.471 is not
+started.
 
 Version v0.3.469 delivers the first bounded real Guest-Agent
 `DNS_RECORD_LOOKUP` executor adapter, gated by the exact
@@ -47,7 +91,8 @@ Independent QA and security review both PASS. `GuestAgentExecutionAdmission`,
 are all byte-for-byte unmodified; the new executor has zero RPC/
 Bootstrap/CognitiveEngine/chat/desktop callers. No real DNS query, no
 real Kali VM contact, no SSH/VMware/WSL, no production signing key or
-credential provisioned. v0.3.470 is not started.
+credential provisioned. RPC wiring for this executor is delivered
+separately in v0.3.470 above.
 
 Version v0.3.468 delivers the Guest-Agent typed execution-admission
 boundary and non-executing execution receipt/result contract. NO REAL

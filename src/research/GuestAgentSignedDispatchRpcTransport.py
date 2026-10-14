@@ -82,12 +82,61 @@ proof. No executor of any kind is introduced; this milestone still calls
 neither `subprocess.run`/`subprocess.Popen`/`os.system` nor any process
 adapter.
 
-WHY DECLINED REMAINS THE SUCCESSFUL FOUNDATION RESULT: `admit_guest_agent_request`
-never returns `SUCCESS` -- no capability executor exists anywhere this
-module reaches, by design (see `research.GuestAgentCore`'s own module
-docstring). A first-seen, valid, admitted signed dispatch therefore always
-produces a `DECLINED` wire response; this module does not, and must not,
-invent one that claims otherwise. `UNSUPPORTED_CAPABILITY`/
+v0.3.470 note: when `admit_guest_agent_execution` does produce a
+`GuestAgentExecutionBoundaryReceipt`, this server now reads only its
+`execution_admission.runtime_ready_invocation.prepared_invocation
+.operation_kind` and, ONLY for the one explicit, hardcoded comparison
+`is ResearchKaliOperationKind.DNS_RECORD_LOOKUP` (never built by
+enumerating that enum), calls the existing, unmodified
+`research.GuestAgentDnsExecutionAdapter.execute_guest_agent_dns_record_lookup`
+directly with that exact admission -- no generic handler, executor
+callback, process-adapter parameter, executor registry, or dynamic
+capability dispatcher exists anywhere in this module.
+`HTTPS_HEADER_LOOKUP` (and any future operation kind) never reaches that
+call; `final_response` simply stays the existing `DECLINED` value for
+those, byte-for-byte what v0.3.468 already produced. EXECUTION ADMISSION
+!= EXECUTION SUCCESS: the DNS executor's own bounded
+`GuestAgentDnsExecutionResult` is inspected exactly once, in-process,
+and never stored, logged, or passed anywhere else. `GuestAgentResponseStatus
+.SUCCESS` is reachable on the wire for the very first time starting this
+milestone, but ONLY when the real local `dig` process both started and
+exited `0` without timing out -- a nonzero exit, a timeout, or the
+executor's own `core.Exceptions.ResearchError` (a process that could not
+even start) all produce the existing `GuestAgentResponseStatus.FAILED`
+member instead, with empty `output_lines` and one fixed, code-owned
+detail sentence; raw `stderr` and raw exception text never cross the
+wire in either case. DNS PROCESS EXIT 0 != TRUSTED DNS FACT: a `SUCCESS`
+response means only "the reviewed DNS process completed with exit code
+0" -- never that a DNS answer exists, that the target exists or is
+reachable, that the output is correct, or that the output is evidence;
+`output_lines` carries only the executor's own already-bounded
+`stdout_lines`, `output_trust` remains the existing
+`research.ResearchKaliOperationExecution.KALI_OPERATION_OUTPUT_TRUST`
+label. No `research.ResearchDnsLookupResultParser` call, evidence
+record, claim, accepted source, or memory write exists anywhere in this
+module. RESPONSE DELIVERY FAILURE != RETRY AUTHORITY: the DNS executor
+call site sits strictly before `write_guest_agent_rpc_frame` below, and
+`serve_one_signed_dispatch` remains genuinely one-shot -- if the
+response write itself then fails, the server does not retry the
+executor call (there is no loop or second call site anywhere in this
+function), and the request's replay identity (already consumed earlier,
+before readiness ever ran) stays consumed regardless. No HTTPS executor,
+`/usr/bin/curl` reference, SSH/VMware/WSL call, or new subprocess
+capability beyond the one already-reviewed `dig` version probe
+(v0.3.467) and this one real DNS lookup attempt exists anywhere in this
+module; this executor still has zero `Bootstrap`/`CognitiveEngine`/
+chat/desktop callers.
+
+WHY DECLINED REMAINS THE DEFAULT FOUNDATION RESULT: `admit_guest_agent_request`
+never returns `SUCCESS` -- no generic capability executor exists
+anywhere this module reaches, by design (see `research.GuestAgentCore`'s
+own module docstring). A first-seen, valid, admitted signed dispatch
+therefore always produces a `DECLINED` wire response UNLESS it is the
+one reviewed `DNS_RECORD_LOOKUP` capability v0.3.470 added real
+execution for (see that note above) -- every other admitted operation
+kind, including `HTTPS_HEADER_LOOKUP`, still always produces `DECLINED`;
+this module does not, and must not, invent `SUCCESS` for any of those.
+`UNSUPPORTED_CAPABILITY`/
 `INVALID_REQUEST` admission outcomes are returned exactly as
 `admit_guest_agent_request` produced them, with zero replay-consumption
 call for either, since this milestone must not spend a request's one-time
@@ -106,11 +155,17 @@ non-overridable processing chain -- unlike the plain
 `research.GuestAgentRpcTransport.GuestAgentRpcServer`, it takes no
 injectable `handler` callback at all, because this milestone hardcodes
 exactly one chain: verify, then admit, then replay-consume, then respond.
-There is no capability executor anywhere in this module either: no
-`GuestAgentCapabilityExecutor`, no DNS/HTTPS executor, no subprocess/dig/
-curl/nmap adapter, and no call to
+There is no GENERIC capability executor anywhere in this module: no
+`GuestAgentCapabilityExecutor`, no executor registry, no dynamic
+capability dispatcher, and no call to
 `research.ResearchKaliOperationProcessAdapter.run` or
-`cognition.KaliToolGateway.run`.
+`cognition.KaliToolGateway.run`. The one real call this module makes
+to `research.GuestAgentDnsExecutionAdapter.execute_guest_agent_dns_record_lookup`
+(see the v0.3.470 note above) is hardcoded for exactly the one reviewed
+`DNS_RECORD_LOOKUP` capability, gated behind the full existing authority
+chain -- it is not a generic executor, handler, or callback, and there
+is still no HTTPS executor, curl/nmap adapter, SSH/vmrun/wsl.exe call,
+or arbitrary command channel anywhere in this module.
 
 Error hygiene mirrors `GuestAgentRpcTransportError` exactly: every
 exception this module raises carries a closed
@@ -156,6 +211,9 @@ from research.GuestAgentDispatchVerification import (
     GuestAgentDispatchVerificationError,
     verify_signed_dispatch_envelope,
 )
+from research.GuestAgentDnsExecutionAdapter import (
+    execute_guest_agent_dns_record_lookup,
+)
 from research.GuestAgentExecutionAdmission import admit_guest_agent_execution
 from research.GuestAgentInvocationPreparation import prepare_guest_agent_invocation
 from research.GuestAgentLocalReadiness import (
@@ -166,7 +224,7 @@ from research.GuestAgentMtlsTrustConfiguration import (
     GuestAgentMtlsTrustConfiguration,
     GuestAgentPeerRole,
 )
-from research.GuestAgentProtocol import GuestAgentResponse
+from research.GuestAgentProtocol import GuestAgentResponse, GuestAgentResponseStatus
 from research.GuestAgentReplayProtector import GuestAgentReplayProtector
 from research.GuestAgentRpcFraming import (
     GuestAgentRpcFramingError,
@@ -179,6 +237,7 @@ from research.GuestAgentRpcTransport import (
     _authenticate_tls_peer,
 )
 from research.GuestAgentRuntimeReadiness import check_guest_agent_runtime_readiness
+from research.ResearchKaliOperationPreview import ResearchKaliOperationKind
 
 #: Reusing the one shared default timeouts type, never a second one: this
 #: module's own timing needs (connect/handshake/read/write bounds) are
@@ -189,6 +248,16 @@ _DEFAULT_TIMEOUTS = GuestAgentRpcTransportTimeouts()
 #: explicitly injected -- mirrors `research.ResearchKaliRuntimeEnvironment
 #: .UnavailableResearchKaliRuntimeProbe`'s own default-instance pattern.
 _DEFAULT_LOCAL_RUNTIME_PROBE = UnavailableGuestAgentLocalReadinessProbe()
+
+#: Fixed, code-owned wire details for the one real executable capability
+#: this milestone introduces. Never built by interpolating process
+#: output, exception text, a hostname, or any other request/response
+#: fact -- exactly the discipline every other detail sentence in this
+#: module already keeps.
+_DETAIL_DNS_EXECUTION_SUCCESS = "Guest-agent DNS lookup process completed."
+_DETAIL_DNS_EXECUTION_FAILED = (
+    "Guest-agent DNS lookup process did not complete successfully."
+)
 
 
 class GuestAgentSignedDispatchRpcFailureKind(StrEnum):
@@ -555,10 +624,60 @@ class GuestAgentSignedDispatchRpcServer:
                     _boundary_receipt = admit_guest_agent_execution(
                         verified, _ready_invocation
                     )
+                    if _boundary_receipt is not None:
+                        _execution_admission = _boundary_receipt.execution_admission
+                        _dns_operation_kind = (
+                            _execution_admission.runtime_ready_invocation.prepared_invocation.operation_kind
+                        )
+                        if _dns_operation_kind is (
+                            ResearchKaliOperationKind.DNS_RECORD_LOOKUP
+                        ):
+                            try:
+                                _dns_result = execute_guest_agent_dns_record_lookup(
+                                    _execution_admission
+                                )
+                            except ResearchError:
+                                final_response = GuestAgentResponse(
+                                    protocol_version=final_response.protocol_version,
+                                    request_id=final_response.request_id,
+                                    status=GuestAgentResponseStatus.FAILED,
+                                    detail=_DETAIL_DNS_EXECUTION_FAILED,
+                                )
+                            else:
+                                if (
+                                    _dns_result.process_created
+                                    and not _dns_result.timed_out
+                                    and _dns_result.exit_code == 0
+                                ):
+                                    final_response = GuestAgentResponse(
+                                        protocol_version=(
+                                            final_response.protocol_version
+                                        ),
+                                        request_id=final_response.request_id,
+                                        status=GuestAgentResponseStatus.SUCCESS,
+                                        detail=_DETAIL_DNS_EXECUTION_SUCCESS,
+                                        output_lines=_dns_result.stdout_lines,
+                                    )
+                                else:
+                                    final_response = GuestAgentResponse(
+                                        protocol_version=(
+                                            final_response.protocol_version
+                                        ),
+                                        request_id=final_response.request_id,
+                                        status=GuestAgentResponseStatus.FAILED,
+                                        detail=_DETAIL_DNS_EXECUTION_FAILED,
+                                    )
+                        # `_dns_operation_kind` other than `DNS_RECORD_LOOKUP`
+                        # (today only `HTTPS_HEADER_LOOKUP`) never reaches
+                        # `execute_guest_agent_dns_record_lookup` at all --
+                        # `final_response` stays the existing `DECLINED`
+                        # value, byte-for-byte what v0.3.468 already
+                        # produced. See the module docstring's v0.3.470
+                        # note.
                     # `_boundary_receipt` (and the `GuestAgentExecutionAdmission`
-                    # it wraps, if any) is discarded unconditionally -- see
-                    # the module docstring's v0.3.468 note. No executor
-                    # consumes it; the wire response below is unaffected.
+                    # it wraps, if any) is discarded unconditionally beyond
+                    # the one DNS dispatch above -- see the module
+                    # docstring's v0.3.468/v0.3.470 notes.
                 # `_receipt`/`_ready_invocation` are discarded unconditionally,
                 # exactly like `_prepared_invocation` itself: this server
                 # holds no durable execution authority after the request
