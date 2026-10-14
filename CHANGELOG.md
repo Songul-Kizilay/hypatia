@@ -2,6 +2,99 @@
 
 All notable project changes are recorded here.
 
+## [0.3.469] - 2026-10-14
+
+### Added
+
+- First bounded real Guest-Agent `DNS_RECORD_LOOKUP` executor adapter,
+  gated by the exact execution-admission boundary (v0.3.468) and not yet
+  wired into RPC. This milestone introduces exactly ONE real
+  target-operation process capability:
+  `/usr/bin/dig +time=5 +tries=1 +short <hostname> <A|AAAA|CNAME>`. No
+  HTTPS execution, no generic executor, no RPC/Bootstrap/CognitiveEngine/
+  chat/desktop integration, and no real Guest-Agent daemon/deployment.
+  The new executor has ZERO production callers after this milestone --
+  RPC wiring remains separately authorized future work.
+- New module `research.GuestAgentDnsExecutionAdapter`:
+  `execute_guest_agent_dns_record_lookup(execution_admission)`, the one
+  entry point, accepts ONLY a real, unforgeable
+  `research.GuestAgentExecutionAdmission.GuestAgentExecutionAdmission` --
+  never a `GuestAgentRequest`, a `GuestAgentVerifiedDispatch` alone, a
+  `GuestAgentPreparedInvocation` alone, a `GuestAgentRuntimeReadyInvocation`
+  alone, or a hostname/record-type/executable/argv/timeout/callback/shell
+  string as a separate parameter. The executable path, argv, and timeout
+  are read exclusively from
+  `execution_admission.runtime_ready_invocation.prepared_invocation
+  .command_plan`/`.timeout_seconds` -- the same already-exact-bound,
+  already-capped facts v0.3.466-v0.3.468 produced and verified. Not built
+  by copying `research.WslKaliOperationProcessAdapter`/
+  `VmwareKaliOperationProcessAdapter`: both implement
+  `ResearchKaliOperationProcessAdapter`, whose `.run(command_plan, *,
+  timeout_seconds)` signature itself accepts a command plan and timeout
+  as separate caller-supplied parameters -- exactly the shape this
+  milestone forbids.
+- DNS ONLY: supports exactly `ResearchKaliOperationKind.DNS_RECORD_LOOKUP`;
+  `HTTPS_HEADER_LOOKUP` and any future operation kind fail closed before
+  `subprocess.run` is ever reached. Before every subprocess attempt,
+  `_validate_reviewed_dns_command_plan` independently re-proves operation
+  kind, transport, executable path, `shell is False`, `stdin == "closed"`,
+  exact argv length, exact argv prefix
+  (`"/usr/bin/dig"`, `"+time=5"`, `"+tries=1"`, `"+short"`), hostname
+  shape (reusing `MAX_KALI_OPERATION_HOSTNAME_CHARACTERS`), and
+  membership in a fixed literal record-type allowlist (`A`/`AAAA`/`CNAME`,
+  never built by enumerating `ResearchDnsRecordType`) -- defense in depth
+  against a hypothetical future bug, never trust-by-existence. Manual
+  mutation testing found this validation is redundantly layered: HTTPS
+  (a curl-shaped command plan) could not be made to reach a mocked
+  `subprocess.run` until FOUR independent checks were simultaneously
+  neutralized.
+- `subprocess.run` is called at most once, with `shell=False`,
+  `stdin=subprocess.DEVNULL`, `capture_output=True`, `text=True`,
+  `encoding="utf-8"`, `errors="replace"`, `check=False`, and the exact
+  admitted, already-capped `timeout_seconds` -- never a second,
+  caller-supplied timeout. No loop, no retry after timeout/nonzero-exit/
+  empty-output/malformed-output/`OSError`, no fallback executable, no
+  PATH search, no package installation.
+- New `GuestAgentDnsExecutionResult`: honestly distinguishes whether the
+  local `dig` process actually started (`process_created`), its exit
+  code (only when started and not timed out), whether it timed out, and
+  bounded/sanitized stdout and stderr (reusing the existing
+  `MAX_KALI_OPERATION_OUTPUT_LINES`/`MAX_KALI_OPERATION_OUTPUT_LINE_CHARACTERS`
+  ceilings and `KALI_OPERATION_OUTPUT_TRUST` label). DNS PROCESS STARTED
+  != DNS SUCCESS. DNS OUTPUT != TRUSTED EVIDENCE. NONZERO EXIT != SUCCESS.
+  TIMEOUT != SUCCESS. TARGET OPERATION ATTEMPTED != NETWORK OBSERVED: a
+  started `dig` process means the DNS lookup was attempted on this host,
+  never that a packet was observed leaving the machine, that the lookup
+  succeeded, or that its output is evidence. `evidence_recorded`,
+  `claim_created`, `source_accepted`, and `memory_written` are all
+  structurally forced `False` -- this milestone ends at a bounded,
+  untrusted process result; no `ResearchDnsLookupResultParser` call, no
+  claim, no accepted source, no memory write, no security finding, no
+  vulnerability correlation, no target classification.
+- If `subprocess.run` cannot even start the process (`OSError`), this
+  module raises `core.Exceptions.ResearchError` carrying only the bounded
+  exception type name (mirroring `WslKaliOperationProcessAdapter.run`'s
+  own existing OSError handling) -- never raw exception text, a path, or
+  other leaked detail. Exit code `0` is never fabricated.
+- 65 new tests. Five manual mutations proved caught, then reverted:
+  letting HTTPS through required neutralizing four independent checks at
+  once (6 failures); substituting a hardcoded argv for the reviewed one
+  (2 failures); substituting a hardcoded timeout (2 failures); removing
+  the argv-prefix check alone (1 failure); wrapping the one subprocess
+  call in a retry loop (1 failure, a structural no-loop proof). Independent
+  QA and independent security review both returned PASS.
+- `research.GuestAgentExecutionAdmission`, `GuestAgentRuntimeReadiness`,
+  `GuestAgentInvocationPreparation`, `GuestAgentDispatchVerification`,
+  `GuestAgentSignedDispatchRpcTransport`, `ResearchKaliOperationPreview`,
+  `ResearchKaliOperationExecution`, `WslKaliOperationProcessAdapter`, and
+  `VmwareKaliOperationProcessAdapter` are all byte-for-byte unmodified.
+  `GuestAgentSignedDispatchRpcTransport.py` contains zero references to
+  the new module; the executor has zero RPC/Bootstrap/CognitiveEngine/
+  chat/desktop callers. No real DNS query, no real Kali VM contact, no
+  SSH/VMware/WSL operation, no package installation, no production
+  signing key or credential provisioned, zero non-loopback network
+  activity during development and testing.
+
 ## [0.3.468] - 2026-10-14
 
 ### Added
