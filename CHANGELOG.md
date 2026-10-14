@@ -2,6 +2,98 @@
 
 All notable project changes are recorded here.
 
+## [0.3.467] - 2026-10-14
+
+### Added
+
+- Guest-Agent local runtime-readiness gate foundation for the two
+  reviewed capabilities. Takes an already-created, unforgeable
+  `research.GuestAgentInvocationPreparation.GuestAgentPreparedInvocation`
+  (v0.3.466) and determines whether the LOCAL guest runtime has the exact
+  reviewed executable a reviewed operation needs -- nothing about a
+  target host, no DNS/HTTP request, no execution of the operation's own
+  reviewed argv. PREPARED INVOCATION != RUNTIME READY.
+- Audited `research.ResearchKaliRuntimeEnvironment.ResearchKaliRuntimeReadiness`
+  (the existing WSL/VMware readiness contract): its `process_created`/
+  `network_used` fields are structurally forced to `False` by its own
+  `__post_init__`, even though the real adapters
+  (`research.WslKaliRuntimeProbe`,
+  `research.VmrunVMwareKaliHostReadinessProbe`,
+  `research.SshVMwareKaliGuestReadinessProbe`) genuinely spawn
+  subprocesses. Reusing that type here would force the same dishonest
+  telemetry, so this milestone defines a narrow, Guest-Agent-specific
+  type instead -- the shared WSL/VMware contract, every adapter, and
+  every existing test are completely untouched.
+- New module `research.GuestAgentLocalReadiness`:
+  `GuestAgentLocalReadinessReceipt` (whose `probe_process_started` field
+  honestly reflects whether the probe actually attempted a subprocess,
+  while `target_operation_executed`/`target_network_used` remain
+  structurally forced `False`), `GuestAgentLocalReadinessProbe` (abstract
+  contract accepting only a `GuestAgentPreparedInvocation`), and
+  `UnavailableGuestAgentLocalReadinessProbe` (default fail-closed
+  instance, zero subprocess attempts).
+- New module `research.GuestAgentLocalRuntimeProbe`:
+  `GuestAgentLocalRuntimeProbe`, the concrete local version-probe
+  adapter. Uses one fixed literal mapping (`DNS_RECORD_LOOKUP` ->
+  `/usr/bin/dig -v`, `HTTPS_HEADER_LOOKUP` -> `/usr/bin/curl --version`,
+  never built by enumerating `ResearchKaliOperationKind` -- a future
+  member fails closed) and cross-checks the prepared invocation's
+  `command_plan.transport`/`executable_path` before ever invoking
+  `subprocess.run` -- a mismatch fails closed with zero subprocess
+  attempts, as defense in depth. The readiness argv is always the fixed
+  tuple, never derived from the operation's own reviewed command plan.
+  `subprocess.run` is called with `shell=False`, `stdin=DEVNULL`, a hard
+  5-second ceiling (`GUEST_AGENT_READINESS_TIMEOUT_SECONDS`, rejecting
+  bool/non-finite/<=0/above-ceiling), and bounded/sanitized 500-character
+  output. READY requires exit code 0 and the expected version-prefix
+  identity in that bounded output.
+- New module `research.GuestAgentRuntimeReadiness`:
+  `GuestAgentRuntimeReadyInvocation` (unforgeable, via the same
+  module-private capability-token pattern
+  `GuestAgentPreparedInvocation` already uses) and
+  `check_guest_agent_runtime_readiness`, constructing one only after the
+  supplied probe's `check()` call returns `READY`; its own
+  `__post_init__` independently re-validates this even if a caller
+  reaches it with the real token and a non-`READY` receipt. RUNTIME
+  READY != EXECUTION AUTHORITY. VERSION MATCH != CAPABILITY PERMITTED.
+  VERSION MATCH != EXECUTION SUCCESS. No generic execution callback or
+  "run after ready" hook exists anywhere in this module.
+- `research.GuestAgentSignedDispatchRpcTransport.GuestAgentSignedDispatchRpcServer`
+  now composes this readiness check strictly after
+  `prepare_guest_agent_invocation` returns a non-`None` prepared
+  invocation -- structurally impossible for a V1 request (which never
+  produces one) or a replayed request (`ALREADY_CONSUMED` returns before
+  one is built) to reach it. A new `local_runtime_probe` constructor
+  parameter (default: `UnavailableGuestAgentLocalReadinessProbe`, fails
+  closed) is the only addition; the server gained no injectable generic
+  handler. The resulting readiness receipt and any
+  `GuestAgentRuntimeReadyInvocation` are discarded exactly like the
+  prepared invocation already is -- the wire response is identical
+  either way (`DECLINED` first-seen, `REPLAY_REJECTED` replayed,
+  `SUCCESS` still unreachable).
+- 73 new tests (51 probe-level, 14 readiness-composition, 8 RPC
+  integration/structural) plus two new structural ordering proofs on the
+  transport module. Three manual mutations proved caught: substituting
+  the operation's own command-plan argv for the fixed readiness tuple
+  (verified statically via AST, since live-executing that specific
+  mutation was blocked by this environment's own safety controls as an
+  RCE-surface risk); bypassing the composition function's `READY` check
+  (caught independently by `GuestAgentRuntimeReadyInvocation`'s own
+  constructor guard); and removing the RPC server's
+  prepared-invocation-`None` guard (caught both structurally and by a
+  broken V1 round-trip test) -- each mutation applied, proven caught,
+  then reverted. Independent QA and independent security review both
+  returned PASS.
+- `research.GuestAgentCore`, `GuestAgentReplayProtector`,
+  `GuestAgentDispatchProof`, `GuestAgentDispatchSigning`,
+  `GuestAgentDispatchVerification`,
+  `GuestAgentAuthenticatedSignedDispatchChannel`, `GuestAgentRpcTransport`,
+  `GuestAgentInvocationPreparation`, and every WSL/VMware readiness
+  module/test are all byte-for-byte unmodified. No target DNS query, no
+  HTTP request, no SSH/VMware/WSL operation, no capability executor, no
+  real Kali Guest Agent deployment, no production signing key or
+  credential provisioned, zero non-loopback network activity.
+
 ## [0.3.466] - 2026-10-14
 
 ### Added

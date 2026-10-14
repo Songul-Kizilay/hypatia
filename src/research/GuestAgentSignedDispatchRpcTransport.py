@@ -45,12 +45,26 @@ convention here: `serve_one_signed_dispatch` below calls
 v0.3.466 note: step 8 may also produce a `GuestAgentPreparedInvocation`
 for a `GuestAgentProtocolVersion.V2` request once replay is
 `ACCEPTED` -- PREPARED INVOCATION != EXECUTION AUTHORITY, != RUNTIME
-READINESS, != PROCESS CREATION, != EXECUTION SUCCESS. This server never
-uses it for anything: it is constructed, immediately discarded (never
-stored as instance state, never logged, never passed anywhere else), and
-the wire response remains exactly what v0.3.465 already sent --
-`DECLINED` for a first-seen admitted dispatch, `REPLAY_REJECTED` for a
-replay. No process is spawned by preparing one.
+READINESS, != PROCESS CREATION, != EXECUTION SUCCESS. No process is
+spawned by preparing one.
+
+v0.3.467 note: when step 8 does produce a prepared invocation, this
+server now also calls `research.GuestAgentRuntimeReadiness
+.check_guest_agent_runtime_readiness` with it and its own injected
+`research.GuestAgentLocalReadiness.GuestAgentLocalReadinessProbe`
+-- strictly after replay `ACCEPTED`, strictly before responding. RUNTIME
+READY != EXECUTION AUTHORITY: both the resulting readiness receipt and any
+`GuestAgentRuntimeReadyInvocation` are discarded exactly like the prepared
+invocation already was -- never stored as instance state, never logged,
+never passed anywhere else -- and the wire response is unaffected either
+way: still `DECLINED` for a first-seen admitted dispatch, regardless of
+whether the local probe reports `READY` or `UNAVAILABLE`. This server
+holds no "run after ready" callback and gains no generic execution
+hook; the default `local_runtime_probe`
+(`research.GuestAgentLocalReadiness.UnavailableGuestAgentLocalReadinessProbe`)
+fails closed with zero subprocess attempts, exactly like the default
+`research.ResearchKaliRuntimeEnvironment.UnavailableResearchKaliRuntimeProbe`
+used elsewhere in this repository.
 
 WHY DECLINED REMAINS THE SUCCESSFUL FOUNDATION RESULT: `admit_guest_agent_request`
 never returns `SUCCESS` -- no capability executor exists anywhere this
@@ -127,6 +141,10 @@ from research.GuestAgentDispatchVerification import (
     verify_signed_dispatch_envelope,
 )
 from research.GuestAgentInvocationPreparation import prepare_guest_agent_invocation
+from research.GuestAgentLocalReadiness import (
+    GuestAgentLocalReadinessProbe,
+    UnavailableGuestAgentLocalReadinessProbe,
+)
 from research.GuestAgentMtlsTrustConfiguration import (
     GuestAgentMtlsTrustConfiguration,
     GuestAgentPeerRole,
@@ -143,11 +161,17 @@ from research.GuestAgentRpcTransport import (
     GuestAgentRpcTransportTimeouts,
     _authenticate_tls_peer,
 )
+from research.GuestAgentRuntimeReadiness import check_guest_agent_runtime_readiness
 
 #: Reusing the one shared default timeouts type, never a second one: this
 #: module's own timing needs (connect/handshake/read/write bounds) are
 #: identical in kind to the plain transport's.
 _DEFAULT_TIMEOUTS = GuestAgentRpcTransportTimeouts()
+
+#: Fails closed with zero subprocess attempts until a real local adapter is
+#: explicitly injected -- mirrors `research.ResearchKaliRuntimeEnvironment
+#: .UnavailableResearchKaliRuntimeProbe`'s own default-instance pattern.
+_DEFAULT_LOCAL_RUNTIME_PROBE = UnavailableGuestAgentLocalReadinessProbe()
 
 
 class GuestAgentSignedDispatchRpcFailureKind(StrEnum):
@@ -361,6 +385,9 @@ class GuestAgentSignedDispatchRpcServer:
         replay_protector: GuestAgentReplayProtector,
         timeouts: GuestAgentRpcTransportTimeouts = _DEFAULT_TIMEOUTS,
         clock: Callable[[], datetime] | None = None,
+        local_runtime_probe: (
+            GuestAgentLocalReadinessProbe
+        ) = _DEFAULT_LOCAL_RUNTIME_PROBE,
     ) -> None:
         if not isinstance(tls_context, ssl.SSLContext):
             raise ResearchError(
@@ -391,12 +418,18 @@ class GuestAgentSignedDispatchRpcServer:
             raise ResearchError(
                 "Guest-agent signed dispatch RPC server timeouts are invalid."
             )
+        if not isinstance(local_runtime_probe, GuestAgentLocalReadinessProbe):
+            raise ResearchError(
+                "Guest-agent signed dispatch RPC server requires a bounded "
+                "local runtime readiness probe."
+            )
         self._tls_context = tls_context
         self._trust_configuration = trust_configuration
         self._verification_key = verification_key
         self._replay_protector = replay_protector
         self._timeouts = timeouts
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._local_runtime_probe = local_runtime_probe
         self._listen_sock: socket.socket | None = None
         self._has_bound = False
 
@@ -497,6 +530,16 @@ class GuestAgentSignedDispatchRpcServer:
                 raise GuestAgentSignedDispatchRpcTransportError(
                     GuestAgentSignedDispatchRpcFailureKind.REPLAY_CONSUMPTION_FAILED
                 ) from error
+            if _prepared_invocation is not None:
+                _receipt, _ready_invocation = check_guest_agent_runtime_readiness(
+                    _prepared_invocation, self._local_runtime_probe
+                )
+                # `_receipt`/`_ready_invocation` are discarded unconditionally,
+                # exactly like `_prepared_invocation` itself: this server
+                # holds no durable execution authority after the request
+                # ends and never invokes a process from either. See the
+                # module docstring's v0.3.467 note -- the wire response
+                # below is unaffected by readiness either way.
             # `_prepared_invocation` is discarded unconditionally: this
             # server holds no durable execution authority after the
             # request ends and never invokes a process. See the module
