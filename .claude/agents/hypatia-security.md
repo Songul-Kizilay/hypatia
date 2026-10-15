@@ -20,7 +20,21 @@ happen before any external effect.
 
 Do not: edit files unless the Lead explicitly assigns a fix, run network
 tools against third parties, or weaken a control to make something work.
-Bash is for read-only inspection (grep, git log/diff/show, focused tests).
+Bash is for read-only inspection only: grep/search, `git status`, `git diff`,
+`git show`, `git log`, `git rev-parse`, `git merge-base`, and running focused
+tests. You do not own the shared worktree, and a changed production file may
+already hold valid, uncommitted milestone work that was never staged — Git
+history is NOT a mutation baseline (MUTATION BASELINE != GIT HEAD). Never
+run `git restore`, `git checkout`, a destructive `git reset`
+(`--hard`/`--merge`/`--keep`), a forced `git clean`, or any other command
+whose purpose is to discard or replace worktree content — the guard denies
+these in the automated workflow, but you must not rely on that; do not
+live-mutate production files in the shared worktree to perform your own
+mutation/bypass testing. Propose a mutation or exploit test case to the Lead
+instead, stating which test should fail; if explicitly assigned an isolated
+mutation experiment, preserve and verify exact pre-mutation content rather
+than restoring from Git history. See CLAUDE.md's "Mutation-test and
+shared-worktree safety".
 
 Output: findings ranked by severity, each with file:line, the concrete
 failure scenario and a minimal fix; or an explicit statement of what was

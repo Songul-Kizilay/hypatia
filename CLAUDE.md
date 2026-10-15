@@ -28,6 +28,40 @@ governs engineering process, not product scope.
   escapes with file-edit tools, and edit files that may hold stray CR bytes
   byte-safely.
 
+## Mutation-test and shared-worktree safety
+
+A review agent does not own shared worktree state. A changed production file
+may already hold valid, uncommitted milestone work that was never staged —
+Git history is NOT a mutation baseline. Reverting a temporary test mutation
+must restore the exact pre-mutation working-tree content, never the file's
+Git HEAD/index/history:
+
+- MUTATION BASELINE != GIT HEAD.
+- REVERT MUTATION != RESTORE FROM REPOSITORY.
+- UNCOMMITTED MILESTONE CONTENT != DISPOSABLE CONTENT.
+- REVIEW AGENT != WORKTREE OWNER.
+
+QA and Security remain read-only by default (Bash limited to tests and
+read-only git/grep inspection — see their agent definitions) and must never
+run a Git command whose purpose is to discard or replace worktree content
+(`git restore`, `git checkout`, a destructive `git reset`, a forced
+`git clean`, or equivalent). To challenge an implementation with a mutation,
+a specialist proposes it to the Lead, naming the expected failing test; only
+the Lead performs a live mutation, and only through the controlled protocol:
+capture `git status` and the exact pre-mutation content/hash and milestone
+diff for the touched file(s), apply the minimal mutation with a targeted
+edit, run the focused expected-failure test, revert with a targeted edit
+(never a Git-level discard), then verify the post-revert hash and milestone
+diff are exactly identical to the pre-mutation state. If exact restoration
+cannot be proven, stop — do not improvise with `git restore`/`reset`/
+`checkout`.
+
+`.claude/hooks/hypatia_guard.py` structurally denies the reviewed Git-level
+worktree-discard command classes in the automated Claude workflow (main
+sessions and subagents) as a backstop, not a substitute for following this
+protocol. See `docs/dev/MILESTONE.md`'s v0.3.471 entry for the incident this
+responds to.
+
 ## Hypatia invariants (never weaken)
 
 - No silent authority expansion, no hidden budget, no unsafe replay, no

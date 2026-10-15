@@ -2,6 +2,87 @@
 
 All notable project changes are recorded here.
 
+## [0.3.471] - 2026-10-14
+
+### Added
+
+- Claude development-workflow hardening for shared-worktree mutation
+  safety: review agents remain read-only, temporary mutations must
+  restore exact pre-mutation content, and reviewed destructive Git
+  worktree-discard commands are structurally denied by the Claude guard.
+  Developer-infrastructure only -- no Hypatia runtime/product capability
+  changed; no `src/` file was touched.
+- Responds to a real v0.3.470 incident: two independent review subagents
+  each used `git checkout --`/`git restore` to try to undo their own
+  temporary test mutation. Since the production file's milestone changes
+  were never staged, the discard replaced the entire file with HEAD's
+  content instead of reverting only the mutation. The file was recovered
+  both times and final delivery was verified correct, but this class of
+  mistake is now denied structurally rather than relying on reviewer care.
+- New permanent invariant (`CLAUDE.md`, "Mutation-test and shared-worktree
+  safety"): MUTATION BASELINE != GIT HEAD; REVERT MUTATION != RESTORE FROM
+  REPOSITORY; UNCOMMITTED MILESTONE CONTENT != DISPOSABLE CONTENT; REVIEW
+  AGENT != WORKTREE OWNER. A reviewer must never assume a changed
+  production file was clean before its mutation.
+- `.claude/hooks/hypatia_guard.py`'s `command` mode now unconditionally
+  denies, regardless of arguments, a `-C`/global-option prefix, or
+  position in a chained command: `git restore` (every form); `git
+  checkout`/`git checkout-index` (every form -- deliberately not
+  distinguishing safe branch checkout from destructive path checkout;
+  `git switch` is the recommended replacement for branch changes); `git
+  reset --hard`/`--merge`/`--keep` (plain `git reset` remains allowed,
+  since mixed/soft reset never discards working-tree file content); `git
+  switch --force`/`-f`/`--discard-changes` (plain `git switch <branch>`
+  remains allowed); and `git clean` with any force flag, in any
+  combined-short-flag order (`-f`, `-fd`, `-df`, `-fx`, `--force`) --
+  `git clean -n`/`--dry-run` remains allowed. Unparseable shell quoting
+  falls back to a conservative substring check for the same classes,
+  rather than silently allowing, without turning an unrelated parser
+  failure into a global denial of all commands.
+- `.claude/settings.json` gained literal `deny` entries for the simple
+  forms of the same commands (Bash and PowerShell) as a second
+  defense-in-depth layer; the stale `"ask": ["Bash(git reset --hard *)"]`
+  entry was removed since the operation is now an absolute deny. The
+  deterministic Python guard remains authoritative for combined-flag and
+  global-option forms a settings wildcard cannot safely express.
+- `.claude/agents/hypatia-qa.md` and `.claude/agents/hypatia-security.md`
+  now explicitly restrict Bash to read-only inspection (tests, `git
+  status`/`diff`/`show`/`log`/`rev-parse`/`merge-base`, grep) and forbid
+  ever running `git restore`/`checkout`/a destructive `reset`/a forced
+  `clean` to "revert" a mutation; they must propose a mutation to the Lead
+  instead. `.claude/agents/hypatia-lead.md` documents the controlled
+  mutation/revert protocol: capture pre-mutation content/hash and the
+  milestone diff, mutate and revert with targeted edits only, verify exact
+  hash and diff equality, stop if exact restoration cannot be proven.
+- New `tests/dev/test_hypatia_guard.py` (17 tests) invokes the real guard
+  script as a subprocess with synthetic PreToolUse JSON, exactly as Claude
+  Code's own hook does, rather than reimplementing its parser. Includes an
+  `IncidentRegressionTests` class that characterizes the actual incident
+  mechanism in a disposable temporary Git repository (never the real
+  repository worktree): proves the denied command really would discard
+  milestone content beyond the mutation, that the guard denies it, and
+  that the documented workflow restores exact pre-mutation content via
+  SHA-256 hash and `git diff` equality.
+- Five manual mutations against the guard itself (remove `git restore`
+  denial; allow `git checkout -- file`; allow `git reset --hard`; break
+  `-C`/global-option value parsing; accidentally over-broaden force-push
+  detection to block normal pushes) each proved caught by the new test
+  suite, then reverted via targeted edit with exact post-revert hash
+  equality to the guard script proven each time -- never via `git
+  restore`/`checkout`/`reset`.
+- Existing protections (force-push denial in all forms, `gh repo delete`
+  denial, `claude --dangerously-skip-permissions` denial, and the
+  exact-shape `gh pr merge <number> --merge` allowlist with every other
+  shape denied) are unchanged and re-confirmed intact.
+- Runtime authority widened: NO. No DNS/HTTPS/RPC execution capability,
+  authorization, replay semantics, scope, network capability, subprocess
+  capability, or credential handling changed. This guard does not claim to
+  catch every destructive shell command in existence, does not govern a
+  human's own manual terminal use outside Claude Code, and does not claim
+  file loss is impossible under all circumstances -- only that it
+  structurally denies the reviewed Git-level worktree-discard commands
+  that caused, or are close variants of, the v0.3.470 incident.
+
 ## [0.3.470] - 2026-10-14
 
 ### Added

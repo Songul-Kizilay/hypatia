@@ -2,10 +2,51 @@
 
 ## Runtime Version
 
-`v0.3.470 (Genesis)`
+`v0.3.471 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.471 is Claude development-workflow hardening for
+shared-worktree mutation safety -- developer infrastructure only, NOT a
+Hypatia runtime/product capability. No `src/` file was touched; runtime
+authority widened: NO. It responds to a real v0.3.470 incident: two
+independent review subagents each used `git checkout --`/`git restore` to
+try to undo their own temporary test mutation, which instead discarded an
+entire production file's uncommitted milestone content (never staged),
+not merely the mutation -- recovered both times, with final delivery
+verified correct, but now denied structurally. New permanent invariant
+(`CLAUDE.md`, "Mutation-test and shared-worktree safety"): MUTATION
+BASELINE != GIT HEAD; REVERT MUTATION != RESTORE FROM REPOSITORY;
+UNCOMMITTED MILESTONE CONTENT != DISPOSABLE CONTENT; REVIEW AGENT !=
+WORKTREE OWNER. `.claude/hooks/hypatia_guard.py`'s `command` mode now
+unconditionally denies -- any arguments, any `-C`/global-option prefix,
+any chain position -- `git restore`, `git checkout`/`git checkout-index`,
+`git reset --hard`/`--merge`/`--keep`, `git switch --force`/`-f`/
+`--discard-changes`, and `git clean` with any force flag in any
+combined-flag order; `git clean -n`/`--dry-run` and plain `git reset`/
+`git switch <branch>` remain allowed. Unparseable quoting falls back to a
+conservative substring check for the same classes, never a global denial.
+`.claude/settings.json` gained matching literal `deny` entries as a second
+layer (the Python guard remains authoritative for combined-flag/
+global-option forms a wildcard cannot express); the stale `git reset
+--hard` "ask" entry was removed. QA/Security agent definitions now
+explicitly restrict Bash to read-only inspection and forbid ever running
+a worktree-discard command to "revert" a mutation, proposing one to the
+Lead instead; the Lead's controlled mutation/revert protocol captures
+pre-mutation hash/diff, mutates and reverts via targeted edit only, and
+verifies exact hash/diff equality, stopping if exact restoration cannot be
+proven. New `tests/dev/test_hypatia_guard.py` (17 tests) invokes the real
+guard script as a subprocess with synthetic PreToolUse JSON, including an
+`IncidentRegressionTests` class characterizing the exact incident
+mechanism in a disposable temporary repository (never the real worktree).
+Five manual mutations against the guard itself each proved caught, then
+reverted via targeted edit with exact hash equality proven each time.
+Existing force-push, repo-delete, permission-bypass, and PR-merge-allowlist
+protections are unchanged and re-confirmed intact. This guard does not
+claim to catch every destructive shell command in existence, does not
+govern a human's manual terminal use outside Claude Code, and does not
+claim file loss is impossible under all circumstances.
 
 Version v0.3.470 delivers the first executable signed-dispatch RPC path
 for the bounded `DNS_RECORD_LOOKUP` Guest-Agent capability: the existing,

@@ -15,7 +15,14 @@ Process:
    authority, data, replay and provenance risks.
 3. Delegate only independent or isolation-worthy work. Give each specialist
    the task, the files it owns, the invariants that apply and the expected
-   report. Never let two writers touch the same files.
+   report. Never let two writers touch the same files. QA and Security are
+   read-only: they may propose a mutation or exploit test case, but only the
+   Lead performs a live mutation, following CLAUDE.md's "Mutation-test and
+   shared-worktree safety" controlled mutation/revert protocol exactly —
+   capture pre-mutation content/hash and the milestone diff first, revert
+   with a targeted edit (never `git restore`/`checkout`/a destructive
+   `reset`/a forced `clean`), then verify exact hash and diff equality
+   before continuing. Stop if exact restoration cannot be proven.
 4. Integrate, require Security review of boundary changes and independent QA,
    run the gates, then hand to Release.
 5. After Release's exact-SHA CI is green on the development branch, carry

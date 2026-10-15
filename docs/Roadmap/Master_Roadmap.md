@@ -2008,6 +2008,16 @@ operating model):
       QA, dedicated release flow
 - [x] CLAUDE.md development constitution, safety hooks, force-push
       protection, `start_hypatia_team.bat`, Context7 MCP
+- [x] Shared-worktree mutation safety (v0.3.471): the Claude guard
+      (`.claude/hooks/hypatia_guard.py`) structurally denies Git-level
+      worktree-discard commands (`git restore`, `git checkout`/
+      `checkout-index`, destructive `git reset`, forced `git switch`/
+      `clean`) so a review agent can never "revert" its own temporary test
+      mutation by discarding a production file's uncommitted milestone
+      work; QA/Security agent definitions are explicit that Bash is
+      read-only inspection only, and the Lead's controlled mutation/revert
+      protocol restores exact pre-mutation content via targeted edit, not
+      Git history. Developer infrastructure only — no product capability.
 
 - [ ] GitHub MCP authentication (`.mcp.json` needs `HYPATIA_GITHUB_MCP_PAT`,
       currently unset in the working shell; the `gh` CLI itself is
