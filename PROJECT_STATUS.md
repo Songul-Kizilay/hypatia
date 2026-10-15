@@ -2,10 +2,57 @@
 
 ## Runtime Version
 
-`v0.3.471 (Genesis)`
+`v0.3.472 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.472 delivers the first bounded real Guest-Agent
+`HTTPS_HEADER_LOOKUP` executor adapter
+(`research.GuestAgentHttpsHeaderExecutionAdapter`), mirroring the existing
+v0.3.469 DNS executor adapter's shape exactly -- one entry point accepting
+ONLY a real, unforgeable `GuestAgentExecutionAdmission`, never a hostname,
+URL, argv, timeout, header, proxy value, or TLS option as a separate
+parameter. NOT yet wired into RPC: `GuestAgentSignedDispatchRpcServer` is
+untouched, `HTTPS_HEADER_LOOKUP` over signed RPC remains non-executing, and
+the existing v0.3.470 DNS RPC execution path is unchanged. Before this
+executor could exist, a curl-specific safety audit (reviewing documented
+default `.curlrc` config loading and proxy-environment behavior, performing
+no real HTTPS traffic) found and closed two real gaps as a SECURITY
+TIGHTENING to the one shared, reviewed `HTTPS_HEADER_LOOKUP` command-plan
+builder (`ResearchKaliOperationPreview.kali_operation_command_plan`,
+serving WSL, VMware, and Guest-Agent transports alike): `-q` (disable
+default curl config loading) and `--noproxy "*"` (bypass any proxy
+environment configuration) are now part of the one fixed, code-owned argv.
+Protocol restriction, no-redirect, and TLS verification were already
+correct and are now explicitly documented and tested. The hostname
+embedded in both curl's `--resolve` binding and the request URL is now
+independently proven safe by reusing the existing, already-reviewed
+`ResearchTargetScope.canonical_dns_hostname` validator -- never a new
+hostname grammar -- both in the shared builder and a second time inside
+the new executor itself immediately before `subprocess.run`, via
+`urllib.parse.urlsplit`. This changes the command plan's argv and
+therefore its `operation_digest`; no persisted production authorization
+depended on the old digest (zero real HTTPS target traffic has ever
+occurred), so no compatibility shim was added -- an old digest fails
+closed. The executor consumes only the already-bound resolved address, never
+passes this process's own environment to `subprocess.run`, calls it at
+most once with the exact admitted timeout, and structurally forces
+`evidence_recorded`/`claim_created`/`source_accepted`/`memory_written` to
+`False`. 99 new tests cover authority preconditions, environment
+isolation, reviewed-argv safety properties, hostname/URL-authority
+injection rejection (userinfo, path, query, fragment, colon/port
+injection, unsafe delimiters), AST-level structural security, and
+RPC-integration absence; the existing WSL/VMware-path
+`ResearchHttpsHeaderLookupResultParser` and every other existing test
+asserting the previous 11-element HTTPS argv were updated to the new
+14-element hardened shape. Seven manual mutations were tested; six were
+caught by the test suite, and the seventh (permitting a DNS admission's
+plan through the HTTPS executor) is independently closed by the existing
+command-plan executable-path cross-check -- a structurally redundant,
+documented defense-in-depth property, not a gap. No real HTTPS or DNS
+target traffic occurred during development or testing. Runtime authority
+widened: NO.
 
 Version v0.3.471 is Claude development-workflow hardening for
 shared-worktree mutation safety -- developer infrastructure only, NOT a

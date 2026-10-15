@@ -1165,6 +1165,35 @@ Recorded priority order:
    CognitiveEngine, chat, and desktop callers of the DNS executor remain
    ZERO; no HTTPS execution, no Guest-Agent daemon, and no production
    deployment exist after this milestone either.
+
+   **v0.3.472 added the second real Guest-Agent executor,
+   `HTTPS_HEADER_LOOKUP`, still NOT wired into RPC** -- a bounded,
+   independently-admission-gated adapter
+   (`research.GuestAgentHttpsHeaderExecutionAdapter`) mirroring
+   v0.3.469's DNS executor shape exactly. Before this executor could
+   exist, a curl-specific safety audit (no real HTTPS traffic performed)
+   found and closed two real gaps absent from the DNS case -- curl's
+   default `.curlrc` config-file loading and ambient proxy-environment
+   variables, either of which could have redirected the actual network
+   destination away from the already-authorized, `--resolve`-pinned
+   address -- as a SECURITY TIGHTENING to the one shared
+   `kali_operation_command_plan` builder (`-q` and `--noproxy "*"`,
+   serving WSL, VMware, and Guest-Agent transports alike). The hostname
+   embedded in curl's `--resolve` binding and the request URL is now
+   independently proven safe by reusing the existing, already-reviewed
+   `ResearchTargetScope.canonical_dns_hostname` validator, both in the
+   shared builder and a second, independent time inside the executor via
+   `urllib.parse.urlsplit` immediately before `subprocess.run` --
+   HOSTNAME TEXT != URL AUTHORITY UNTIL VALIDATED. The executor consumes
+   only the already-bound resolved address, never passes this process's
+   own environment to `subprocess.run`, calls it at most once with the
+   exact admitted timeout, and structurally forces
+   `evidence_recorded`/`claim_created`/`source_accepted`/
+   `memory_written` to `False`. `GuestAgentSignedDispatchRpcServer`
+   remains completely untouched: `HTTPS_HEADER_LOOKUP` over signed RPC
+   stays exactly `DECLINED`, and the v0.3.470 DNS RPC execution path is
+   unchanged. RPC wiring for this executor is a separately authorized
+   future milestone's decision, not this one's.
 7. Retiring the SSH-based VMware guest path once the guest-agent transport
    is proven equivalent or stronger, not before.
 

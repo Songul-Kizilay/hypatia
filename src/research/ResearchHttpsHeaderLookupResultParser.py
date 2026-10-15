@@ -10,10 +10,11 @@ v0.3.408 DNS parser used.
 
 The reviewed `HTTPS_HEADER_LOOKUP` command plan
 (`ResearchKaliOperationPreview.kali_operation_command_plan`) is always exactly
-`curl --head --silent --show-error --max-time 10 --proto =https --resolve
-<hostname>:443:<address> https://<hostname>/` — 11 argv elements, never
-operator-influenceable beyond the hostname/address already bound by the
-reviewed preview.
+`curl -q --head --silent --show-error --noproxy "*" --max-time 10 --proto
+=https --resolve <hostname>:443:<address> https://<hostname>/` — 14 argv
+elements (v0.3.472 hardened `-q`/`--noproxy` curl config/proxy isolation),
+never operator-influenceable beyond the hostname/address already bound by
+the reviewed preview.
 
 On a nonzero exit code or `timed_out=True`: zero headers, `None` status, one
 bounded rejection reason — never a guessed status. On success: a real
@@ -43,9 +44,9 @@ from research.ResearchTargetScope import canonical_dns_hostname
 MAX_HTTPS_HEADER_LOOKUP_RAW_LINE_CHARACTERS = 500
 MAX_HTTPS_HEADER_LOOKUP_REASON_CHARACTERS = 200
 
-_EXPECTED_ARGV_LENGTH = 11
-_RESOLVE_ARGV_INDEX = 9
-_URL_ARGV_INDEX = 10
+_EXPECTED_ARGV_LENGTH = 14
+_RESOLVE_ARGV_INDEX = 12
+_URL_ARGV_INDEX = 13
 _ALLOWED_PORT = 443
 
 _STATUS_LINE_PATTERN = re.compile(
