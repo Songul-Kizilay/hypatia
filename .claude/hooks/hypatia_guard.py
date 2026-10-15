@@ -6,16 +6,40 @@ Modes (argv[1]):
            workflow (force-push, remote ref deletion, repo deletion,
            permission bypass), including forms permission rules cannot match
            (``git -C . push -f``, ``+refspec``, combined short flags).
-           Merge, rebase, tag, hard reset and releases are "ask" rules in
-           settings.json: each needs the user's explicit approval. `gh pr
-           merge` is NOT an "ask" rule (see _pr_merge_auto_allow/
-           _pr_merge_denial below for why): this guard allows only the one
-           exact routine shape - a lone ``gh pr merge <number> --merge``
-           (optionally with exactly one ``--subject <text>``) as the entire
-           command, nothing chained before or after it - and explicitly
-           denies every other ``gh pr merge`` shape outright. That allowed
-           shape is the one step of CLAUDE.md's "Default-branch integration"
-           a standing milestone authorization covers without a fresh prompt.
+           Merge, rebase, tag and releases are "ask" rules in settings.json:
+           each needs the user's explicit approval. `gh pr merge` is NOT an
+           "ask" rule (see _pr_merge_auto_allow/_pr_merge_denial below for
+           why): this guard allows only the one exact routine shape - a lone
+           ``gh pr merge <number> --merge`` (optionally with exactly one
+           ``--subject <text>``) as the entire command, nothing chained
+           before or after it - and explicitly denies every other
+           ``gh pr merge`` shape outright. That allowed shape is the one
+           step of CLAUDE.md's "Default-branch integration" a standing
+           milestone authorization covers without a fresh prompt.
+
+           v0.3.471 hardening (see CLAUDE.md's "Mutation-test and
+           shared-worktree safety"): this guard unconditionally denies the
+           Git-level worktree-discard commands that caused the v0.3.470
+           mutation-revert incident - a review agent used one of these to
+           undo its own temporary test mutation, and because the production
+           file already held uncommitted milestone work (never staged),
+           the discard replaced the entire file with HEAD's content instead
+           of reverting only the mutation. Denied unconditionally, any
+           arguments, any ``-C``/global-option prefix, any chain position:
+           ``git restore`` (every form), ``git checkout``/
+           ``git checkout-index`` (every form - this guard does not
+           distinguish safe branch checkout from destructive path checkout;
+           use ``git switch`` for branch changes instead), ``git reset
+           --hard``/``--merge``/``--keep``, ``git switch --force``/``-f``/
+           ``--discard-changes``, and ``git clean`` with any force flag
+           (``-f``, combined short flags containing ``f`` such as ``-fd``/
+           ``-df``/``-fx``, or ``--force``) - ``git clean -n``/``--dry-run``
+           remains allowed. This denies the reviewed Git-level
+           worktree-discard commands that caused, or are close variants of,
+           the v0.3.470 incident; it is not a general shell-security
+           framework, does not claim to catch every destructive command in
+           existence, and does not govern a human's own manual terminal use
+           outside Claude Code.
   lint     PostToolUse (Edit/Write): run Ruff on one edited Python file.
 
 Standard library only. Hook input is parsed, never executed: no text from the
@@ -34,7 +58,15 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[2]
 SEPARATORS = {";", "&&", "||", "|", "|&", "&", "\n", "(", ")"}
-GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+GIT_OPTIONS_WITH_VALUE = {
+    "-C",
+    "-c",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--config-env",
+    "--super-prefix",
+}
 GH_OPTIONS_WITH_VALUE = {"-R", "--repo"}
 
 
@@ -108,8 +140,8 @@ def session() -> None:
     print("\n".join(lines))
 
 
-def _segments(command: str) -> list[list[str]]:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
+def _line_segments(line: str) -> list[list[str]]:
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()")
     lexer.whitespace_split = True
     lexer.commenters = ""
     segments: list[list[str]] = [[]]
@@ -119,6 +151,29 @@ def _segments(command: str) -> list[list[str]]:
         else:
             segments[-1].append(token)
     return [segment for segment in segments if segment]
+
+
+def _segments(command: str) -> list[list[str]]:
+    """Split `command` into chained-command segments.
+
+    A literal newline is a command separator in both Bash and PowerShell,
+    but ``shlex``'s default ``whitespace`` already includes ``\\n`` -- so
+    it is silently consumed as whitespace between tokens before the
+    ``token in SEPARATORS`` check below ever sees it as a token, and a
+    multi-line command would otherwise collapse into a single segment
+    (the second line parsed only as extra arguments to the first word).
+    Splitting into physical lines first, and segmenting each line
+    independently, keeps a destructive command on any later line from
+    ever hiding behind an earlier, harmless one. A quoted argument that
+    genuinely spans multiple physical lines will fail to tokenize on its
+    own half and fall through to the caller's conservative fallback
+    instead of parsing cleanly -- an acceptable, fail-closed trade-off
+    for a shape this workflow does not use (``git commit -F <file>`` is
+    required instead of an inline multi-line ``-m`` message)."""
+    segments: list[list[str]] = []
+    for line in command.split("\n"):
+        segments.extend(_line_segments(line))
+    return segments
 
 
 def _program(token: str) -> str:
@@ -143,11 +198,46 @@ def _git_subcommand(tokens: list[str]) -> tuple[str, list[str]]:
     return tokens[index], tokens[index + 1 :]
 
 
+def _short_flag_contains(argument: str, letter: str) -> bool:
+    """True for a short-option (``-f``, combined ``-fd``/``-df``) that
+    contains ``letter`` anywhere - deliberately order-independent, so a
+    settings.json wildcard (which can only match a fixed literal prefix)
+    cannot be mistaken for full coverage of every flag permutation."""
+    return (
+        argument.startswith("-")
+        and not argument.startswith("--")
+        and len(argument) > 1
+        and letter in argument[1:]
+    )
+
+
+def _is_abbreviated_long_option(argument: str, *full_spellings: str) -> bool:
+    """True if `argument` is `--` plus a non-empty prefix of any of
+    `full_spellings` - real git accepts an unambiguous prefix of its own
+    long option names (``git reset --har`` really does run as
+    ``--hard``), so an exact-string check alone is bypassable. Checking
+    "is this a prefix of one of our OWN denied spellings" - never the
+    reverse - is deliberately over-inclusive rather than reproducing
+    git's own ambiguity resolution: a short, technically-ambiguous
+    prefix among git's full option set (e.g. ``--d`` for both
+    ``--delete`` and ``--dry-run``) still matches here, but denying it
+    costs nothing since real git would refuse it as ambiguous anyway -
+    only under-matching an abbreviation git genuinely accepts would be a
+    real gap. ``len(argument) <= 2`` excludes bare ``--`` (git's
+    "end of options" marker, used idiomatically and never itself
+    destructive)."""
+    if not argument.startswith("--") or len(argument) <= 2:
+        return False
+    return any(spelling.startswith(argument) for spelling in full_spellings)
+
+
 def _force_push(arguments: list[str]) -> bool:
     for argument in arguments:
-        if argument in {"--force", "--mirror", "--delete", "--force-if-includes"}:
-            return True
         if argument.startswith("--force-with-lease"):
+            return True
+        if _is_abbreviated_long_option(
+            argument, "--force", "--mirror", "--delete", "--force-if-includes"
+        ):
             return True
         if argument.startswith("-") and not argument.startswith("--"):
             if "f" in argument[1:] or "d" in argument[1:]:
@@ -155,6 +245,79 @@ def _force_push(arguments: list[str]) -> bool:
         if argument.startswith("+") or argument.startswith(":"):
             return True
     return False
+
+
+def _git_reset_discards(arguments: list[str]) -> bool:
+    """``--hard``/``--merge``/``--keep`` replace working-tree content from
+    HEAD/a stash/the index; plain (``--mixed``/``--soft``) reset never
+    touches working-tree file content and is intentionally not denied."""
+    return any(
+        _is_abbreviated_long_option(argument, "--hard", "--merge", "--keep")
+        for argument in arguments
+    )
+
+
+def _git_switch_discards(arguments: list[str]) -> bool:
+    """``-f``/``--force`` is a documented alias for ``--discard-changes``."""
+    for argument in arguments:
+        if _short_flag_contains(argument, "f"):
+            return True
+        if _is_abbreviated_long_option(argument, "--force", "--discard-changes"):
+            return True
+    return False
+
+
+def _git_clean_forces(arguments: list[str]) -> bool:
+    """Any force flag, in any position/combination; ``-n``/``--dry-run``
+    alone (no force flag) is deliberately left allowed."""
+    for argument in arguments:
+        if _short_flag_contains(argument, "f"):
+            return True
+        if _is_abbreviated_long_option(argument, "--force"):
+            return True
+    return False
+
+
+#: v0.3.471: the reviewed Git-level worktree-discard command classes that
+#: caused, or are close variants of, the v0.3.470 mutation-revert incident
+#: (see CLAUDE.md's "Mutation-test and shared-worktree safety"). Denied
+#: unconditionally - not merely when "dangerous-looking" arguments are
+#: present - because MUTATION BASELINE != GIT HEAD: a reviewer can never
+#: safely assume a changed production file was clean before its own
+#: temporary mutation, so no Git-level discard of that file is ever part of
+#: this automated workflow, regardless of its arguments.
+_RESTORE_DENIAL = (
+    "`git restore` can silently replace uncommitted file content with "
+    "HEAD/index/source content and must never be used to revert a "
+    "temporary mutation (MUTATION BASELINE != GIT HEAD). Use a targeted "
+    "edit to restore exact pre-mutation content instead."
+)
+_CHECKOUT_DENIAL = (
+    "`git checkout`/`git checkout-index` are denied entirely in this "
+    "automated workflow: their path-restoring forms (`git checkout -- "
+    "file`, `git checkout HEAD -- file`, `git checkout .`, "
+    "`git checkout-index`) can silently discard or overwrite uncommitted "
+    "milestone content, and this guard does not distinguish that from "
+    "safe branch checkout. Use `git switch` for branch changes and a "
+    "targeted edit, never a Git-level discard, to revert file content."
+)
+_RESET_DENIAL = (
+    "`git reset --hard`/`--merge`/`--keep` discards uncommitted "
+    "working-tree content and must never be used to revert a temporary "
+    "mutation (MUTATION BASELINE != GIT HEAD). Use a targeted edit "
+    "instead."
+)
+_SWITCH_DENIAL = (
+    "`git switch --force`/`-f`/`--discard-changes` can silently discard "
+    "uncommitted changes when switching branches. Use a plain "
+    "`git switch <branch>` with a clean tree instead."
+)
+_CLEAN_DENIAL = (
+    "`git clean` with a force flag (`-f`, a combined short flag "
+    "containing `f`, or `--force`) permanently deletes untracked files "
+    "and is never part of the automated workflow; `git clean -n`/"
+    "`--dry-run` remains available."
+)
 
 
 def _denial(tokens: list[str]) -> str | None:
@@ -167,6 +330,16 @@ def _denial(tokens: list[str]) -> str | None:
         subcommand, arguments = _git_subcommand(tokens)
         if subcommand == "push" and _force_push(arguments):
             return "Force-push or remote ref deletion is never part of the workflow."
+        if subcommand == "restore":
+            return _RESTORE_DENIAL
+        if subcommand in {"checkout", "checkout-index"}:
+            return _CHECKOUT_DENIAL
+        if subcommand == "reset" and _git_reset_discards(arguments):
+            return _RESET_DENIAL
+        if subcommand == "switch" and _git_switch_discards(arguments):
+            return _SWITCH_DENIAL
+        if subcommand == "clean" and _git_clean_forces(arguments):
+            return _CLEAN_DENIAL
     if program == "gh" and tokens[1:3] == ["repo", "delete"]:
         return "Deleting the repository is never part of the workflow."
     if program == "claude" and any(
@@ -174,6 +347,37 @@ def _denial(tokens: list[str]) -> str | None:
         for token in tokens
     ):
         return "Bypassing permissions is not part of the Hypatia workflow."
+    return None
+
+
+def _conservative_fallback_denial(text: str) -> str | None:
+    """Best-effort denial when `_segments` cannot tokenize the command
+    (unparseable quoting). Approximates tokens with a plain whitespace
+    split and reuses the exact same per-class detection helpers as the
+    primary tokenized path (`_force_push`/`_git_reset_discards`/
+    `_git_switch_discards`/`_git_clean_forces`) against that rough token
+    list, rather than duplicating separate raw-substring heuristics -
+    duplicated heuristics drift (a raw ``"-f" in text`` substring check,
+    for example, misses a combined flag like ``-df`` where ``f`` is not
+    first, something `_short_flag_contains` already handles correctly).
+    Only matches the specific destructive classes this guard denies, so
+    an unrelated parser failure never becomes a global denial of all
+    commands."""
+    if "git" not in text:
+        return None
+    rough_tokens = text.replace("\n", " ").split()
+    if "restore" in rough_tokens:
+        return _RESTORE_DENIAL
+    if "checkout" in rough_tokens or "checkout-index" in rough_tokens:
+        return _CHECKOUT_DENIAL
+    if "push" in rough_tokens and _force_push(rough_tokens):
+        return "Force-push is never part of the workflow."
+    if "reset" in rough_tokens and _git_reset_discards(rough_tokens):
+        return _RESET_DENIAL
+    if "switch" in rough_tokens and _git_switch_discards(rough_tokens):
+        return _SWITCH_DENIAL
+    if "clean" in rough_tokens and _git_clean_forces(rough_tokens):
+        return _CLEAN_DENIAL
     return None
 
 
@@ -265,10 +469,13 @@ def command(payload: dict[str, object]) -> None:
     try:
         segments = _segments(text)
     except ValueError:
-        # Unparseable quoting: fall back to a conservative force-push check.
-        segments = [text.split()] if "push" in text and "--force" in text else []
-        if segments:
-            _deny("Force-push is never part of the workflow.")
+        # Unparseable quoting: fall back to a conservative, substring-based
+        # check for the specific destructive classes this guard denies.
+        # An unrelated parser failure must not become a global denial of
+        # all commands, so this only ever matches those specific classes.
+        reason = _conservative_fallback_denial(text)
+        if reason is not None:
+            _deny(reason)
         return
     for tokens in segments:
         reason = _denial(tokens)
