@@ -3,6 +3,40 @@
 This module deliberately contains no runner, process adapter, command string or
 terminal affordance.  It records the exact operation facts a later
 authorization layer must bind before any child process can be considered.
+
+v0.3.472 HTTPS command-plan hardening: the `HTTPS_HEADER_LOOKUP` branch of
+`kali_operation_command_plan` now reuses the existing, already-reviewed
+`research.ResearchTargetScope.canonical_dns_hostname` -- never a second,
+independently invented hostname grammar -- to independently prove the
+hostname is safe to embed in BOTH curl's `--resolve <hostname>:443:<address>`
+and the request URL `https://<hostname>/` before either string is ever built.
+HOSTNAME TEXT != URL AUTHORITY UNTIL VALIDATED: a hostname containing `/`,
+`\\`, `@`, `:`, `#`, `?`, `[`, `]`, whitespace/control data, a single label,
+or a non-ASCII/digit-only trailing label is rejected here, before any
+`ResearchKaliOperationCommandPlan` (and therefore before any operation
+digest, authorization, prepared invocation, or execution admission) can ever
+be constructed for it. This is a SECURITY TIGHTENING, never an authority
+expansion: it can only ever cause a preview that would previously have been
+constructed to now be refused -- see this module's `kali_operation_command_plan`
+docstring for the exact digest-compatibility consequence. DNS_RECORD_LOOKUP
+is untouched: `/usr/bin/dig` receives its hostname argument as a plain argv
+element with no URL-parsing exposure, so this milestone does not change its
+existing, narrower (non-empty, length-bounded) validation.
+
+The reviewed curl argv itself is also hardened here, for the same reason:
+`-q` (curl's own "disable `.curlrc`" switch, which curl requires to be the
+very first parameter to take effect) and `--noproxy "*"` (bypass any
+`HTTPS_PROXY`/`https_proxy`/`ALL_PROXY`/equivalent proxy configuration,
+regardless of the ambient process environment) are now part of the one
+fixed, reviewed, code-owned argv -- never left to ambient curl
+configuration or environment variables. CURL CONFIG FILE != EXECUTION
+AUTHORITY. PROXY CONFIGURATION != TARGET AUTHORITY. `--proto =https` (no
+protocol switching), the absence of `-L`/`--location`/`--location-trusted`
+(no redirect following), and the absence of `-k`/`--insecure`/
+`--proxy-insecure` (normal TLS certificate and hostname verification stays
+enabled) are unchanged from the inert plan this module already produced --
+this milestone's audit found them already correct, and documents that
+finding rather than silently relying on it.
 """
 
 from __future__ import annotations
@@ -19,6 +53,7 @@ from core.Exceptions import ResearchError
 from research.ResearchProgramScopeExecutionPolicy import (
     ResearchProgramScopeCheckClass,
 )
+from research.ResearchTargetScope import canonical_dns_hostname
 
 MAX_KALI_OPERATION_HOSTNAME_CHARACTERS = 253
 _KALI_OPERATION_DIGEST_SCHEMA = "hypatia:kali-operation-preview:v2"
@@ -345,21 +380,31 @@ def kali_operation_command_plan(
             if isinstance(parsed_address, ipaddress.IPv6Address)
             else parsed_address.compressed
         )
+        try:
+            safe_hostname = canonical_dns_hostname(normalized_hostname)
+        except ResearchError as error:
+            raise ResearchError(
+                "Kali operation command plan hostname is not a safe DNS "
+                "name for HTTPS execution."
+            ) from error
         return ResearchKaliOperationCommandPlan(
             transport=transport,
             executable_path="/usr/bin/curl",
             argv=(
                 "/usr/bin/curl",
+                "-q",
                 "--head",
                 "--silent",
                 "--show-error",
+                "--noproxy",
+                "*",
                 "--max-time",
                 "10",
                 "--proto",
                 "=https",
                 "--resolve",
-                f"{normalized_hostname}:443:{resolve_address}",
-                f"https://{normalized_hostname}/",
+                f"{safe_hostname}:443:{resolve_address}",
+                f"https://{safe_hostname}/",
             ),
         )
     raise ResearchError("Kali operation command plan kind is not supported.")

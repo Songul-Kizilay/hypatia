@@ -195,9 +195,12 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
             preview.command_plan.argv,
             (
                 "/usr/bin/curl",
+                "-q",
                 "--head",
                 "--silent",
                 "--show-error",
+                "--noproxy",
+                "*",
                 "--max-time",
                 "10",
                 "--proto",

@@ -68,9 +68,12 @@ class KaliOperationCommandPlanResolvedAddressTests(unittest.TestCase):
             plan.argv,
             (
                 "/usr/bin/curl",
+                "-q",
                 "--head",
                 "--silent",
                 "--show-error",
+                "--noproxy",
+                "*",
                 "--max-time",
                 "10",
                 "--proto",
@@ -80,6 +83,65 @@ class KaliOperationCommandPlanResolvedAddressTests(unittest.TestCase):
                 "https://www.example.test/",
             ),
         )
+
+    def test_https_header_lookup_disables_default_curl_config_first(self) -> None:
+        """v0.3.472 hardening: `-q` must be `argv[1]`, immediately after
+        the executable path, for curl to honor it as "disable default
+        config file loading"."""
+        plan = kali_operation_command_plan(
+            operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
+            hostname="www.example.test",
+            resolved_address="93.184.216.34",
+        )
+        self.assertEqual(plan.argv[0], "/usr/bin/curl")
+        self.assertEqual(plan.argv[1], "-q")
+
+    def test_https_header_lookup_bypasses_proxy_configuration(self) -> None:
+        """v0.3.472 hardening: `--noproxy "*"` forces curl to ignore any
+        ambient proxy environment variable for this request."""
+        plan = kali_operation_command_plan(
+            operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
+            hostname="www.example.test",
+            resolved_address="93.184.216.34",
+        )
+        index = plan.argv.index("--noproxy")
+        self.assertEqual(plan.argv[index + 1], "*")
+
+    def test_https_header_lookup_rejects_unsafe_hostname_delimiters(self) -> None:
+        """v0.3.472 hardening: the hostname must be safe to embed in both
+        `--resolve` and the request URL -- proven by reusing the existing
+        `research.ResearchTargetScope.canonical_dns_hostname` validator,
+        never a second, independently invented grammar."""
+        for bad_hostname in (
+            "example.com/evil",
+            "example.com\\evil",
+            "attacker.example@example.com",
+            "example.com#frag",
+            "example.com?query",
+            "example.com[1]",
+            "exa mple.com",
+            "localhost",
+        ):
+            with self.subTest(bad_hostname=bad_hostname):
+                with self.assertRaises(ResearchError):
+                    kali_operation_command_plan(
+                        operation_kind=(ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP),
+                        hostname=bad_hostname,
+                        resolved_address="93.184.216.34",
+                    )
+
+    def test_dns_lookup_hostname_validation_is_unchanged(self) -> None:
+        """v0.3.472's HTTPS-only hostname-authority tightening must not
+        affect DNS_RECORD_LOOKUP: `dig` receives its hostname as a plain
+        argv element with no URL-parsing exposure, so a hostname shape
+        that would now be rejected for HTTPS (but was never previously
+        rejected for DNS either) still succeeds for DNS."""
+        plan = kali_operation_command_plan(
+            operation_kind=ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
+            hostname="www.example.test",
+            dns_record_type=ResearchDnsRecordType.A,
+        )
+        self.assertEqual(plan.argv[4], "www.example.test")
 
     def test_https_header_lookup_brackets_an_ipv6_resolved_address(self) -> None:
         plan = kali_operation_command_plan(

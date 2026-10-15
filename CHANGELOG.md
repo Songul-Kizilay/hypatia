@@ -2,6 +2,113 @@
 
 All notable project changes are recorded here.
 
+## [0.3.472] - 2026-10-15
+
+### Added
+
+- First bounded real Guest-Agent `HTTPS_HEADER_LOOKUP` executor adapter
+  (`research.GuestAgentHttpsHeaderExecutionAdapter`), including the
+  minimum deterministic curl target-binding hardening required before
+  real HTTPS execution -- not yet wired into RPC. Mirrors the existing
+  v0.3.469 DNS executor adapter's shape exactly: one entry point,
+  `execute_guest_agent_https_header_lookup(execution_admission)`, accepts
+  ONLY a real, unforgeable `GuestAgentExecutionAdmission` -- never a
+  hostname, resolved address, URL, executable, argv, timeout, header,
+  proxy value, TLS option, or callback as a separate parameter.
+- Pre-execution curl safety audit (no real HTTPS traffic performed):
+  reviewed curl's documented default `.curlrc` config-file loading and
+  proxy-environment-variable behavior against the existing, previously
+  inert `HTTPS_HEADER_LOOKUP` command plan. Found two real gaps and
+  closed both as a SECURITY TIGHTENING to the one shared, reviewed
+  command-plan builder
+  (`ResearchKaliOperationPreview.kali_operation_command_plan`): `-q`
+  (curl's own first-parameter "disable default config" switch) and
+  `--noproxy "*"` (bypass any `HTTPS_PROXY`/`https_proxy`/`ALL_PROXY`/
+  equivalent proxy configuration) are now part of the one fixed,
+  code-owned argv for every `HTTPS_HEADER_LOOKUP` command plan (WSL,
+  VMware, and Guest-Agent transports alike -- the shared builder serves
+  all three). Protocol restriction (`--proto =https`), the absence of
+  any redirect-following option, and unmodified TLS certificate/hostname
+  verification were already correct and are now explicitly documented
+  and tested rather than merely relied upon.
+- HOSTNAME TEXT != URL AUTHORITY UNTIL VALIDATED: the same command-plan
+  builder now independently proves the hostname is safe to embed in both
+  curl's `--resolve <hostname>:443:<address>` and the request URL
+  `https://<hostname>/` before either string is built, by reusing the
+  existing, already-reviewed `ResearchTargetScope.canonical_dns_hostname`
+  validator -- never a second, independently invented hostname grammar.
+  The new HTTPS executor independently re-proves this a second time,
+  immediately before `subprocess.run`, via `urllib.parse.urlsplit`,
+  proving no userinfo/port/path/query/fragment component was smuggled
+  into either string. `DNS_RECORD_LOOKUP`'s own hostname validation is
+  completely unchanged: `dig` receives its hostname as a plain,
+  URL-parsing-free argv element.
+- SECURITY TIGHTENING, not authority expansion: this changes the
+  `HTTPS_HEADER_LOOKUP` command plan's exact argv and therefore its
+  `operation_digest` for every future preview. No persisted production
+  authorization record depended on the old digest (no real HTTPS target
+  traffic has ever occurred); any such record would fail closed rather
+  than silently match the new, hardened plan. No compatibility shim was
+  added.
+- The executor consumes ONLY the resolved address already bound through
+  verified dispatch -> prepared invocation -> runtime-ready invocation ->
+  exact `GuestAgentExecutionAdmission`; independently re-validates the
+  `--resolve` binding's IPv4/bracketed-IPv6 shape via the stdlib
+  `ipaddress` parser; never passes this process's own environment (or
+  any caller-supplied mapping) to `subprocess.run`, using instead a
+  fixed, minimal, code-owned `env` so ambient proxy environment
+  variables can never reach the curl process; calls `subprocess.run` at
+  most once, with the exact admitted, already-capped timeout (curl's own
+  separate, fixed `--max-time 10` is never conflated with it); and
+  structurally forces `evidence_recorded`/`claim_created`/
+  `source_accepted`/`memory_written` to `False` -- this milestone ends at
+  a bounded, untrusted process result, with no header parsing or
+  evidence/claim/source/memory integration anywhere.
+- New `tests/research/test_guest_agent_https_header_execution_adapter.py`
+  (99 tests): authority preconditions, no-separate-parameter proofs,
+  timeout binding, subprocess invocation shape, environment isolation
+  (ambient proxy variables proven absent from the subprocess
+  environment), reviewed-argv safety properties, result outcomes, output
+  bounding, untrusted-output semantics, command-plan defense-in-depth
+  (hostname/URL-authority injection -- userinfo, path, query, fragment,
+  colon/port injection, unsafe delimiters, single-label hostnames -- all
+  proven rejected before any subprocess attempt), AST-level structural
+  security proofs (no socket/requests/httpx/ssh/vmware/wsl, exactly one
+  `subprocess.run` call site not nested in any loop, a fixed `env`
+  keyword), and RPC-integration-absence proofs. Existing
+  `ResearchHttpsHeaderLookupResultParser` (the existing WSL/VMware-path
+  HTTPS result parser, which independently re-derives and
+  re-canonicalizes the hostname the same way) and its own test suite,
+  plus every other existing test asserting the previous 11-element HTTPS
+  argv, were updated to the new 14-element hardened shape -- no new
+  behavior was introduced in that parser.
+- Seven manual mutations against the new executor and the shared
+  command-plan builder (permit a DNS admission's plan through the HTTPS
+  executor; remove hostname/URL-authority validation; allow redirect
+  following; remove the curl config/proxy hardening; allow `-k`/insecure
+  TLS; accept a caller-supplied timeout override parameter; add a
+  retry/second `subprocess.run` call) each proved caught by the test
+  suite except the first, which the existing command-plan
+  executable-path cross-check already closes independently (the same
+  "structurally unreachable through the real admission chain" property
+  the existing DNS executor's own defense-in-depth checks document about
+  themselves) -- documented honestly rather than claimed as a unique
+  test-suite catch. Each mutation was reverted via targeted edit with
+  exact SHA-256 hash equality to the affected file proven before and
+  after.
+- `HTTPS_HEADER_LOOKUP` over signed Guest-Agent RPC remains entirely
+  non-executing: `GuestAgentSignedDispatchRpcServer` is untouched by this
+  milestone, and the existing v0.3.470 DNS RPC execution path remains
+  exactly operational and unchanged. The new HTTPS executor has zero
+  RPC/Bootstrap/CognitiveEngine/chat/desktop callers -- proved by an
+  AST-based repository-wide scan, mirroring the DNS executor's own
+  v0.3.469 proof. A future, separately authorized milestone will review
+  and decide RPC wiring for this executor.
+- No real HTTPS or DNS target traffic occurred during development,
+  testing, or review; every `subprocess.run` call in the new test file is
+  mocked/patched deterministically, and no test depends on `/usr/bin/curl`
+  existing on the CI runner. Runtime authority widened: NO.
+
 ## [0.3.471] - 2026-10-14
 
 ### Added

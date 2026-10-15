@@ -258,19 +258,19 @@ class MalformedAndUnsupportedInputTests(unittest.TestCase):
         return https_run(command_plan=mutated_plan)
 
     def test_a_resolve_argument_missing_the_address_segment_is_rejected(self) -> None:
-        run = self._run_with_mutated_argv(9, "www.example.test:443")
+        run = self._run_with_mutated_argv(12, "www.example.test:443")
 
         with self.assertRaisesRegex(ResearchError, "resolve argument shape"):
             parse_https_header_lookup_result(run)
 
     def test_a_resolve_argument_with_the_wrong_port_is_rejected(self) -> None:
-        run = self._run_with_mutated_argv(9, "www.example.test:8443:93.184.216.34")
+        run = self._run_with_mutated_argv(12, "www.example.test:8443:93.184.216.34")
 
         with self.assertRaisesRegex(ResearchError, "port"):
             parse_https_header_lookup_result(run)
 
     def test_a_url_argument_that_does_not_match_the_hostname_is_rejected(self) -> None:
-        run = self._run_with_mutated_argv(10, "https://different.example.test/")
+        run = self._run_with_mutated_argv(13, "https://different.example.test/")
 
         with self.assertRaisesRegex(ResearchError, "does not match"):
             parse_https_header_lookup_result(run)
