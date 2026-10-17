@@ -127,16 +127,56 @@ capability beyond the one already-reviewed `dig` version probe
 module; this executor still has zero `Bootstrap`/`CognitiveEngine`/
 chat/desktop callers.
 
+v0.3.473 note: this server now also reads the same
+`_execution_admission.runtime_ready_invocation.prepared_invocation
+.operation_kind`, and ONLY for the one additional explicit, hardcoded
+comparison `is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP` (an
+`elif` sibling of the existing `DNS_RECORD_LOOKUP` branch above, never
+built by enumerating the enum, never a dictionary/registry keyed by
+operation kind), calls the existing, unmodified, separately-reviewed
+`research.GuestAgentHttpsHeaderExecutionAdapter
+.execute_guest_agent_https_header_lookup` directly with that exact
+admission -- still no generic handler, executor callback, process-
+adapter parameter, executor registry, or dynamic capability dispatcher
+anywhere in this module. This server never reconstructs curl argv, a
+URL, a hostname, a resolved address, or a timeout itself: it passes only
+the exact `GuestAgentExecutionAdmission` the existing chain already
+produced, exactly as it already does for DNS. A third operation kind
+still reaches neither branch; `final_response` stays the existing
+`DECLINED` value for it, byte-for-byte what v0.3.468 already produced.
+`GuestAgentResponseStatus.SUCCESS` is reachable for HTTPS for the first
+time starting this milestone, but ONLY when the real local `curl`
+process both started and exited `0` without timing out -- CURL EXIT 0
+!= HTTP APPLICATION SUCCESS: this server never inspects, parses, or
+interprets the HTTP status line or any header inside the executor's
+`stdout_lines`; a 3xx/4xx/5xx HTTP response still corresponds to curl
+exit code `0` and therefore still maps to `SUCCESS` here, exactly like
+any other curl exit-`0` output. A nonzero exit, a timeout, or the
+executor's own `core.Exceptions.ResearchError` all produce the existing
+`GuestAgentResponseStatus.FAILED` member instead, with empty
+`output_lines` and one fixed, code-owned detail sentence; raw `stderr`
+and raw exception text never cross the wire in either case -- the HTTPS
+executor's own bounded `stderr_lines` are never read by this server at
+all. The HTTPS executor call site sits strictly before
+`write_guest_agent_rpc_frame`, exactly like the DNS call site, so the
+same RESPONSE DELIVERY FAILURE != RETRY AUTHORITY property holds for
+HTTPS too: a response-write failure after a successful HTTPS execution
+never triggers a second execution attempt. No
+`research.ResearchHttpsHeaderLookupResultParser` call, header-parsing,
+evidence record, claim, accepted source, or memory write exists anywhere
+in this module for HTTPS either. This executor still has zero
+`Bootstrap`/`CognitiveEngine`/chat/desktop callers.
+
 WHY DECLINED REMAINS THE DEFAULT FOUNDATION RESULT: `admit_guest_agent_request`
 never returns `SUCCESS` -- no generic capability executor exists
 anywhere this module reaches, by design (see `research.GuestAgentCore`'s
 own module docstring). A first-seen, valid, admitted signed dispatch
-therefore always produces a `DECLINED` wire response UNLESS it is the
-one reviewed `DNS_RECORD_LOOKUP` capability v0.3.470 added real
-execution for (see that note above) -- every other admitted operation
-kind, including `HTTPS_HEADER_LOOKUP`, still always produces `DECLINED`;
-this module does not, and must not, invent `SUCCESS` for any of those.
-`UNSUPPORTED_CAPABILITY`/
+therefore always produces a `DECLINED` wire response UNLESS it is one of
+the two reviewed capabilities (`DNS_RECORD_LOOKUP` since v0.3.470,
+`HTTPS_HEADER_LOOKUP` since v0.3.473) this module added real execution
+for (see those notes above) -- every other admitted operation kind still
+always produces `DECLINED`, and this module does not, and must not,
+invent `SUCCESS` for a third one. `UNSUPPORTED_CAPABILITY`/
 `INVALID_REQUEST` admission outcomes are returned exactly as
 `admit_guest_agent_request` produced them, with zero replay-consumption
 call for either, since this milestone must not spend a request's one-time
@@ -159,13 +199,20 @@ There is no GENERIC capability executor anywhere in this module: no
 `GuestAgentCapabilityExecutor`, no executor registry, no dynamic
 capability dispatcher, and no call to
 `research.ResearchKaliOperationProcessAdapter.run` or
-`cognition.KaliToolGateway.run`. The one real call this module makes
+`cognition.KaliToolGateway.run`. The two real calls this module makes --
 to `research.GuestAgentDnsExecutionAdapter.execute_guest_agent_dns_record_lookup`
-(see the v0.3.470 note above) is hardcoded for exactly the one reviewed
-`DNS_RECORD_LOOKUP` capability, gated behind the full existing authority
-chain -- it is not a generic executor, handler, or callback, and there
-is still no HTTPS executor, curl/nmap adapter, SSH/vmrun/wsl.exe call,
-or arbitrary command channel anywhere in this module.
+(see the v0.3.470 note above) and to `research
+.GuestAgentHttpsHeaderExecutionAdapter.execute_guest_agent_https_header_lookup`
+(see the v0.3.473 note above) -- are each hardcoded for exactly their
+one reviewed capability, as two explicit sibling `if`/`elif` branches
+over `operation_kind`, gated behind the full existing authority chain.
+Neither is a generic executor, handler, or callback; there is no
+dictionary or registry mapping an operation kind to either, no
+enumeration of `ResearchKaliOperationKind` to build an allowlist, and no
+third executable capability, nmap adapter, SSH/vmrun/wsl.exe call, or
+arbitrary command channel anywhere in this module. This module itself
+still never constructs curl argv, a URL, or a hostname string -- those
+facts exist only inside the separately reviewed executor it calls.
 
 Error hygiene mirrors `GuestAgentRpcTransportError` exactly: every
 exception this module raises carries a closed
@@ -215,6 +262,9 @@ from research.GuestAgentDnsExecutionAdapter import (
     execute_guest_agent_dns_record_lookup,
 )
 from research.GuestAgentExecutionAdmission import admit_guest_agent_execution
+from research.GuestAgentHttpsHeaderExecutionAdapter import (
+    execute_guest_agent_https_header_lookup,
+)
 from research.GuestAgentInvocationPreparation import prepare_guest_agent_invocation
 from research.GuestAgentLocalReadiness import (
     GuestAgentLocalReadinessProbe,
@@ -257,6 +307,10 @@ _DEFAULT_LOCAL_RUNTIME_PROBE = UnavailableGuestAgentLocalReadinessProbe()
 _DETAIL_DNS_EXECUTION_SUCCESS = "Guest-agent DNS lookup process completed."
 _DETAIL_DNS_EXECUTION_FAILED = (
     "Guest-agent DNS lookup process did not complete successfully."
+)
+_DETAIL_HTTPS_EXECUTION_SUCCESS = "Guest-agent HTTPS header lookup process completed."
+_DETAIL_HTTPS_EXECUTION_FAILED = (
+    "Guest-agent HTTPS header lookup process did not complete successfully."
 )
 
 
@@ -626,10 +680,10 @@ class GuestAgentSignedDispatchRpcServer:
                     )
                     if _boundary_receipt is not None:
                         _execution_admission = _boundary_receipt.execution_admission
-                        _dns_operation_kind = (
+                        _operation_kind = (
                             _execution_admission.runtime_ready_invocation.prepared_invocation.operation_kind
                         )
-                        if _dns_operation_kind is (
+                        if _operation_kind is (
                             ResearchKaliOperationKind.DNS_RECORD_LOOKUP
                         ):
                             try:
@@ -667,17 +721,55 @@ class GuestAgentSignedDispatchRpcServer:
                                         status=GuestAgentResponseStatus.FAILED,
                                         detail=_DETAIL_DNS_EXECUTION_FAILED,
                                     )
-                        # `_dns_operation_kind` other than `DNS_RECORD_LOOKUP`
-                        # (today only `HTTPS_HEADER_LOOKUP`) never reaches
-                        # `execute_guest_agent_dns_record_lookup` at all --
+                        elif _operation_kind is (
+                            ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP
+                        ):
+                            try:
+                                _https_result = execute_guest_agent_https_header_lookup(
+                                    _execution_admission
+                                )
+                            except ResearchError:
+                                final_response = GuestAgentResponse(
+                                    protocol_version=final_response.protocol_version,
+                                    request_id=final_response.request_id,
+                                    status=GuestAgentResponseStatus.FAILED,
+                                    detail=_DETAIL_HTTPS_EXECUTION_FAILED,
+                                )
+                            else:
+                                if (
+                                    _https_result.process_created
+                                    and not _https_result.timed_out
+                                    and _https_result.exit_code == 0
+                                ):
+                                    final_response = GuestAgentResponse(
+                                        protocol_version=(
+                                            final_response.protocol_version
+                                        ),
+                                        request_id=final_response.request_id,
+                                        status=GuestAgentResponseStatus.SUCCESS,
+                                        detail=_DETAIL_HTTPS_EXECUTION_SUCCESS,
+                                        output_lines=_https_result.stdout_lines,
+                                    )
+                                else:
+                                    final_response = GuestAgentResponse(
+                                        protocol_version=(
+                                            final_response.protocol_version
+                                        ),
+                                        request_id=final_response.request_id,
+                                        status=GuestAgentResponseStatus.FAILED,
+                                        detail=_DETAIL_HTTPS_EXECUTION_FAILED,
+                                    )
+                        # `_operation_kind` other than `DNS_RECORD_LOOKUP`/
+                        # `HTTPS_HEADER_LOOKUP` (no third member exists
+                        # today) never reaches either executor call --
                         # `final_response` stays the existing `DECLINED`
                         # value, byte-for-byte what v0.3.468 already
-                        # produced. See the module docstring's v0.3.470
-                        # note.
+                        # produced. See the module docstring's v0.3.470/
+                        # v0.3.473 notes.
                     # `_boundary_receipt` (and the `GuestAgentExecutionAdmission`
                     # it wraps, if any) is discarded unconditionally beyond
-                    # the one DNS dispatch above -- see the module
-                    # docstring's v0.3.468/v0.3.470 notes.
+                    # the one DNS/HTTPS dispatch above -- see the module
+                    # docstring's v0.3.468/v0.3.470/v0.3.473 notes.
                 # `_receipt`/`_ready_invocation` are discarded unconditionally,
                 # exactly like `_prepared_invocation` itself: this server
                 # holds no durable execution authority after the request

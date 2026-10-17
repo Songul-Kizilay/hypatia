@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.473] - 2026-10-17
+
+### Added
+
+- First executable signed-dispatch RPC path for the hardened bounded
+  HTTPS_HEADER_LOOKUP Guest-Agent capability. An explicit HTTPS sibling of the
+  existing DNS branch calls only the unchanged v0.3.472 executor, with the exact
+  execution admission after all existing authentication, signature, admission,
+  replay, preparation and readiness gates.
+- Regression coverage for one-attempt HTTPS dispatch, exit/timeout semantics,
+  bounded untrusted stdout, empty failure output, stderr/exception hygiene,
+  unavailable readiness, rejected signatures/admissions/replays, response-write
+  failure, exact hardened command-plan binding, stale HTTPS digest rejection,
+  fixed two-capability dispatch and absence of generic execution/evidence paths.
+
+### Boundaries and validation
+
+- Exactly DNS_RECORD_LOOKUP and HTTPS_HEADER_LOOKUP are executable through the
+  signed RPC chain. Default readiness remains unavailable. HTTP status text
+  is not interpreted as execution success or trusted evidence; exit zero only
+  reports process completion. No retry, redirect, proxy, insecure TLS, generic
+  command channel, third capability or chat/desktop wiring was added.
+- The HTTPS/DNS adapters, authorization/signing, replay and admission modules
+  retain their prior contents. Old HTTPS operation digests fail closed in the
+  normal host authorization path; no compatibility shim was introduced.
+- Inherited full-suite result: 9467 tests, OK (2026-10-15). Nine manual mutations
+  were exercised and reverted with recorded exact hash equality before that
+  run. Takeover verified all three inherited changed files byte-for-byte against
+  Claude's final saved snapshots. Black, Ruff, MyPy (669 source files) and
+  git diff --check were rerun successfully on 2026-10-17.
+- Development/test target HTTPS/DNS requests, Kali/SSH/VMware/WSL contact,
+  production credential changes and package installation: zero. Runtime
+  authority expands only by the explicitly authorized bounded HTTPS RPC path.
+
 ## [0.3.472] - 2026-10-15
 
 ### Added

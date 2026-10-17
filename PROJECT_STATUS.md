@@ -2,10 +2,31 @@
 
 ## Runtime Version
 
-`v0.3.472 (Genesis)`
+`v0.3.473 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.473 delivers the first executable signed-dispatch RPC path for
+the hardened bounded HTTPS_HEADER_LOOKUP Guest-Agent capability. Exactly two
+explicit operation-kind branches can execute: DNS_RECORD_LOOKUP and
+HTTPS_HEADER_LOOKUP. Both remain behind mTLS, expected-peer authentication,
+bounded decoding, Ed25519 verification, logical admission, replay consumption,
+prepared invocation, runtime readiness and exact execution admission. The
+v0.3.472 HTTPS executor and hardened command plan are unchanged. The normal
+host authorization/signing path rejects an old pre-hardening operation digest;
+no compatibility alias exists. The default unavailable readiness probe keeps
+the default server non-executing.
+
+SUCCESS means a process was created, did not time out and exited zero. HTTP
+status text is not interpreted; only bounded stdout crosses the wire, retaining
+untrusted output semantics. Failures return fixed detail and empty output;
+stderr and exception text are withheld. Response delivery failure cannot grant
+a retry, and replay remains consumed. No generic executor, third capability,
+header parser, evidence/claim/source/memory write, Bootstrap/CognitiveEngine/
+chat/desktop execution caller or production daemon deployment is added. No
+real target HTTPS/DNS traffic was performed during development or testing.
+The earlier version narratives below describe their historical boundaries.
 
 Version v0.3.472 delivers the first bounded real Guest-Agent
 `HTTPS_HEADER_LOOKUP` executor adapter

@@ -1102,32 +1102,51 @@ class StructuralSecurityTests(unittest.TestCase):
             self.assertNotIsInstance(node, (ast.For, ast.While))
 
 
-class RpcIntegrationAbsenceTests(unittest.TestCase):
-    """This milestone deliberately does not wire this executor into
-    `GuestAgentSignedDispatchRpcServer` -- `HTTPS_HEADER_LOOKUP` over
-    signed RPC must remain non-executing, and the existing v0.3.470 DNS
-    RPC execution path must remain exactly unchanged. See
-    `tests.research.test_guest_agent_signed_dispatch_rpc_transport` for
-    the proof the transport module itself is untouched."""
+class RpcIntegrationTests(unittest.TestCase):
+    """v0.3.472 note: this milestone deliberately did not wire this
+    executor into `GuestAgentSignedDispatchRpcServer`.
 
-    def test_executor_has_zero_bootstrap_chat_desktop_rpc_callers(self) -> None:
+    v0.3.473 note: a separately authorized later milestone (v0.3.473)
+    deliberately wired this exact executor into
+    `GuestAgentSignedDispatchRpcServer`, strictly behind the full
+    existing authority chain, as an explicit sibling branch of the
+    existing DNS dispatch -- see
+    `research.GuestAgentSignedDispatchRpcTransport`'s own module
+    docstring and
+    `tests.research.test_guest_agent_signed_dispatch_rpc_transport
+    .HttpsRpcExecutionTests`/`HttpsRpcStructuralSecurityTests`/
+    `HttpsRpcNoHiddenCallerTests` for the full wiring proof. This
+    executor implementation remains unmodified by v0.3.473. This test
+    module updates the historical no-RPC assertion to permit only the
+    reviewed signed-RPC caller; the transport tests prove that wiring."""
+
+    def test_executor_still_has_zero_bootstrap_chat_desktop_callers(self) -> None:
+        """The one authorized RPC caller aside, this executor must still
+        never be referenced by Bootstrap, CognitiveEngine, chat, or the
+        desktop."""
         forbidden = (
             "execute_guest_agent_https_header_lookup",
             "GuestAgentHttpsHeaderExecutionAdapter",
         )
         offending_files = []
         for path in SRC_DIR.rglob("*.py"):
-            if path.name == "GuestAgentHttpsHeaderExecutionAdapter.py":
+            if path.name in (
+                "GuestAgentHttpsHeaderExecutionAdapter.py",
+                "GuestAgentSignedDispatchRpcTransport.py",
+            ):
                 continue
             text = path.read_text(encoding="utf-8")
             if any(name in text for name in forbidden):
                 offending_files.append(str(path))
         self.assertEqual(offending_files, [])
 
-    def test_transport_module_does_not_import_this_executor(self) -> None:
+    def test_transport_module_now_imports_this_executor(self) -> None:
+        """Positive proof of the v0.3.473 wiring: the transport module
+        imports and calls this exact function -- never a copy, never a
+        re-derivation of the curl argv."""
         text = TRANSPORT_MODULE_FILE.read_text(encoding="utf-8")
-        self.assertNotIn("GuestAgentHttpsHeaderExecutionAdapter", text)
-        self.assertNotIn("execute_guest_agent_https_header_lookup", text)
+        self.assertIn("GuestAgentHttpsHeaderExecutionAdapter", text)
+        self.assertIn("execute_guest_agent_https_header_lookup", text)
 
 
 if __name__ == "__main__":
