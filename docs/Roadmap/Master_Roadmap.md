@@ -1194,6 +1194,18 @@ Recorded priority order:
    stays exactly `DECLINED`, and the v0.3.470 DNS RPC execution path is
    unchanged. RPC wiring for this executor is a separately authorized
    future milestone's decision, not this one's.
+   **v0.3.473 wires the hardened HTTPS executor into signed RPC**, alongside
+   DNS as exactly two explicit named branches. The complete mTLS, peer,
+   bounded-frame, signature, logical-admission, replay, preparation, readiness
+   and exact-execution-admission chain precedes either call. Old pre-hardening
+   HTTPS operation digests fail closed in normal host authorization/signing.
+   Default readiness still executes nothing. Only bounded untrusted stdout is
+   returned on process success; HTTP status text is not parsed, failures carry
+   empty output, and replay/response-write failure cannot authorize a retry.
+   No third capability, generic executor, header interpretation, evidence write,
+   Bootstrap/CognitiveEngine/chat/desktop caller or daemon deployment is added.
+   Target HTTPS/DNS traffic during development/testing remains zero. This is
+   solely the explicitly authorized HTTPS signed-RPC authority expansion.
 7. Retiring the SSH-based VMware guest path once the guest-agent transport
    is proven equivalent or stronger, not before.
 

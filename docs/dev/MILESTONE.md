@@ -10,7 +10,24 @@ Status values: planned, implementation, qa, release, ci-pending, delivered.
 "Default-branch integration"), not merely green exact-SHA CI on the
 development branch — `release`/`ci-pending` cover that intermediate state.
 
-## Current scope: v0.3.472 (implementation)
+## Current scope: v0.3.473 (release)
+
+| Field | Value |
+| --- | --- |
+| Milestone | First executable signed-dispatch RPC path for the hardened bounded HTTPS_HEADER_LOOKUP Guest-Agent capability. Exactly two explicit branches: DNS_RECORD_LOOKUP and HTTPS_HEADER_LOOKUP; unchanged hardened executors receive only exact execution admission after the complete existing authority chain. |
+| Base SHA | `58549e0120be425067ada882bf574b2eedfc0139`, standard merge of PR #453. |
+| Branch | `feature/guest-agent-https-rpc-execution-path-v0.3.473`, existing worktree `D:\hypatia-v0.3.473`. |
+| Status | Implementation inherited intact; local gates passed. Exact-SHA CI, PR-triggered CI and standard merge pending. Delivery is not claimed until ancestry/provenance verification. |
+| Validation | Inherited 9467 tests OK; nine recorded mutations reverted with exact hash equality. All three inherited changed files match final Claude snapshots. Black/Ruff/MyPy (669 source files)/diff-check rerun successfully. Independent read-only QA and Security PASS; 219 focused transport/HTTPS executor tests passed after exposing the existing OpenSSL binary on process-local PATH. QA documentary finding corrected. |
+| Boundaries | Default readiness fails closed; replay consumed before execution; one attempt, no retry on response-write failure. Process exit zero is not HTTP application success or trusted fact. Bounded stdout remains untrusted; failure output empty; no stderr/raw exception leakage or evidence/claim/source/memory writes. No generic dispatcher, third capability, Bootstrap/CognitiveEngine/chat/desktop wiring or daemon deployment. No target traffic. Authority widened only for the explicitly reviewed HTTPS signed-RPC path. v0.3.474 not started. |
+
+v0.3.472 delivery re-verified: release
+`5f70de0803ecfec22ddbfa79d299acfee0b669c4`, PR #453 MERGED, standard merge
+`58549e0120be425067ada882bf574b2eedfc0139`. Its PR Linux/Windows checks
+passed. The existing v0.3.473 worktree starts exactly at that merge.
+The previous ledger entry below records the historical pre-integration state.
+
+## Previous scope: v0.3.472 (implementation)
 
 | Field | Value |
 | --- | --- |
